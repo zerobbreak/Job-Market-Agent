@@ -12,6 +12,9 @@ class SACustomizations:
     """
 
     def __init__(self):
+        """
+        Initialize South African market customizations
+        """
         self.customizations = {
             'transport_consideration': {
                 'calculate_commute_cost': True,

@@ -1,24 +1,37 @@
-import fitz  # PyMuPDF
-import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-import json
+# Standard library imports
+import argparse
 import os
 import sys
-import argparse
+import time
 import uuid
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
+import fitz  # PyMuPDF
 from dotenv import load_dotenv
 
-# Import agents
-from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter, cover_letter_agent, interview_prep_agent
-
-# Team functionality will be implemented as method coordination
-
-# Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, knowledge_base, sa_customizations, ethical_guidelines
-
-# Import advanced scraping functions from scrapper module
+# Local imports
+from agents import (
+    ats_optimizer,
+    cover_letter_agent,
+    cv_rewriter,
+    interview_prep_agent,
+    job_matcher,
+    profile_builder,
+)
 from scrapper import scrape_all as advanced_scrape_all
+from utils import (
+    CVTailoringEngine,
+    MockInterviewSimulator,
+    discover_new_jobs,
+    ethical_guidelines,
+    jobs_collection,
+    knowledge_base,
+    match_student_to_jobs,
+    sa_customizations,
+    store_jobs_in_db,
+)
 
 # Load environment variables
 if os.path.exists('.env'):
@@ -45,8 +58,7 @@ logging.getLogger('google').setLevel(logging.WARNING)
 logging.getLogger('agno').setLevel(logging.WARNING)
 
 # Configure Gemini API for embeddings
-import google.generativeai as genai
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+# Note: Individual agents handle their own API configuration
 
 # Initialize knowledge base (this will create collections if they don't exist)
 print("🧠 Initializing Knowledge Base...")
@@ -59,6 +71,7 @@ try:
     if total_docs == 0:
         print("📚 Populating knowledge base with sample data...")
         knowledge_base.initialize_sample_data()
+    
 except Exception as e:
     print(f"⚠️ Knowledge Base initialization warning: {e}")
 
@@ -75,6 +88,13 @@ class JobMarketAnalyzer:
     """Professional Job Market Analysis System"""
 
     def __init__(self, verbose=False, quiet=False):
+        """
+        Initialize the Job Market Analyzer
+
+        Args:
+            verbose (bool): Enable verbose output
+            quiet (bool): Suppress non-essential output
+        """
         self.verbose = verbose
         self.quiet = quiet
         self.start_time = datetime.now()
@@ -518,6 +538,9 @@ class CareerBoostPlatform:
     Complete student career platform with coordinated AI agents
     """
     def __init__(self):
+        """
+        Initialize the Career Boost Platform with all AI agents
+        """
         # Initialize coordinated agents
         self.agents = {
             'profile_builder': profile_builder,

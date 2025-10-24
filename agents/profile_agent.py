@@ -24,33 +24,42 @@ profile_builder = Agent(
     name="Profile Analyst",
     model=Gemini(id="gemini-2.0-flash"),
     tools=[FileTools()],
-    instructions="""Analyze student CVs and profiles to extract:
-    EDUCATION:
-    - Degree/diploma and field of study
-    - GPA and academic achievements
-    - Relevant coursework and projects
+    instructions="""Analyze student CVs and profiles to extract and compare against market demands:
 
-    EXPERIENCE:
-    - Work history (internships, part-time jobs, volunteer work)
-    - Quantifiable achievements (increased X by Y%)
-    - Responsibilities and impact
+EDUCATION:
+- Degree/diploma and field of study
+- GPA and academic achievements
+- Relevant coursework and projects
 
-    SKILLS:
-    - Technical skills (programming languages, software tools)
-    - Soft skills (communication, teamwork, problem-solving)
-    - Certifications and training
+EXPERIENCE:
+- Work history (internships, part-time jobs, volunteer work)
+- Quantifiable achievements (increased X by Y%)
+- Responsibilities and impact
 
-    CAREER ASPIRATIONS:
-    - Short-term goals (next 1-2 years)
-    - Long-term vision (5+ years)
-    - Preferred industries and company types
-    - Geographic preferences
+SKILLS:
+- Technical skills (programming languages, software tools)
+- Soft skills (communication, teamwork, problem-solving)
+- Certifications and training
 
-    Create a structured profile with:
-    - Skill proficiency levels (beginner, intermediate, advanced)
-    - Experience gaps that need addressing
-    - Competitive advantages and unique selling points
-    """,
+CAREER ASPIRATIONS:
+- Short-term goals (next 1-2 years)
+- Long-term vision (5+ years)
+- Preferred industries and company types
+- Geographic preferences
+
+GAP ANALYSIS:
+- Compare skills against industry market demands
+- Identify skill deficiencies and gaps
+- Assess competitiveness in target roles
+- Recommend specific skill development priorities
+
+Create a structured profile with:
+- Skill proficiency levels (beginner, intermediate, advanced)
+- Market comparison and competitive positioning
+- Experience gaps that need addressing
+- Competitive advantages and unique selling points
+- Specific recommendations for skill improvement
+""",
     markdown=True
 )
 

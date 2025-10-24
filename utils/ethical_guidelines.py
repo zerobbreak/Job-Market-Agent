@@ -14,6 +14,9 @@ class EthicalGuidelines:
     """
 
     def __init__(self):
+        """
+        Initialize the Ethical Guidelines system
+        """
         self.guidelines = {
             'cv_optimization': {
                 'rule': 'NEVER fabricate experience',

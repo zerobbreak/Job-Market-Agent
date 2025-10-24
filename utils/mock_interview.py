@@ -15,6 +15,14 @@ class MockInterviewSimulator:
     Conduct realistic mock interviews with AI interviewer
     """
     def __init__(self, job_role, company, student_profile=None):
+        """
+        Initialize the Mock Interview Simulator
+
+        Args:
+            job_role (str): The job role for the interview
+            company (str): The company name
+            student_profile (dict, optional): Student profile information
+        """
         self.role = job_role
         self.company = company
         self.student_profile = student_profile or {}

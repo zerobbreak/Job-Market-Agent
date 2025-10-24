@@ -18,6 +18,9 @@ class KnowledgeBase:
     Comprehensive knowledge base with vector embeddings for job market intelligence
     """
     def __init__(self):
+        """
+        Initialize the Knowledge Base system
+        """
         self.collections = {}
         self.knowledge_sources = {
             'job_descriptions': {

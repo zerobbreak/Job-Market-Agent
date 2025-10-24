@@ -14,6 +14,13 @@ class CVTailoringEngine:
     Generate job-specific CV versions from master CV
     """
     def __init__(self, master_cv, student_profile):
+        """
+        Initialize the CV Tailoring Engine
+
+        Args:
+            master_cv (str): The original CV content
+            student_profile (dict): Student profile information
+        """
         self.master_cv = master_cv
         self.profile = student_profile
         self.cv_versions = {}
@@ -98,102 +105,80 @@ class CVTailoringEngine:
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
 
-        if format.lower() == 'pdf':
-            # Generate professional PDF
-            filename = self._create_pdf(cv_data, version_id, output_dir)
-        elif format.lower() == 'docx':
-            # Generate Word document
-            filename = self._create_docx(cv_data, version_id, output_dir)
-        elif format.lower() == 'txt':
-            # Generate plain text file
-            filename = self._create_txt(cv_data, version_id, output_dir)
-        else:
+        format_methods = {
+            'pdf': self._create_pdf,
+            'docx': self._create_docx,
+            'txt': self._create_txt
+        }
+
+        if format.lower() not in format_methods:
             raise ValueError(f"Unsupported format: {format}. Use 'pdf', 'docx', or 'txt'")
 
+        filename = format_methods[format.lower()](cv_data, version_id, output_dir)
         return filename
+
+    def _create_cv_content(self, cv_data, format_name):
+        """
+        Generate formatted CV content for export
+        """
+        header = f"{format_name.upper()} Version - Tailored CV for {cv_data['company']} - {cv_data['job_title']}\n\n"
+        separator = "=" * 80 + "\n\n"
+
+        content_parts = [
+            header,
+            separator,
+            cv_data['cv_content'],
+            "\n\n" + separator,
+            f"Generated on: {cv_data['created_at']}\n",
+            f"Job URL: {cv_data['job_url']}\n",
+            f"Match Score: {cv_data['job_match_score']}\n"
+        ]
+
+        # Add ATS analysis for text format only
+        if format_name.lower() == 'txt':
+            content_parts.append(f"ATS Analysis: {cv_data['ats_analysis']}\n")
+
+        return ''.join(content_parts)
+
+    def _create_file(self, cv_data, version_id, output_dir, extension, format_name):
+        """
+        Create a CV file with the specified extension
+        """
+        filename = f"{output_dir}/CV_{version_id}.{extension}"
+
+        try:
+            content = self._create_cv_content(cv_data, format_name)
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            print(f"{format_name.upper()} file created: {filename}")
+            return filename
+
+        except Exception as e:
+            raise Exception(f"Failed to create {format_name.upper()}: {e}")
 
     def _create_pdf(self, cv_data, version_id, output_dir):
         """
         Create PDF version of the CV (placeholder implementation)
         """
-        filename = f"{output_dir}/CV_{version_id}.pdf"
-
         # Placeholder for PDF generation
         # In a real implementation, you would use libraries like:
-        # - reportlab
-        # - fpdf
-        # - weasyprint
-        # - pdfkit
-
-        try:
-            # For now, create a simple text file with PDF extension
-            # Replace this with actual PDF generation library
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"PDF Version - Tailored CV for {cv_data['company']} - {cv_data['job_title']}\n\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(cv_data['cv_content'])
-                f.write("\n\n" + "=" * 80 + "\n")
-                f.write(f"Generated on: {cv_data['created_at']}\n")
-                f.write(f"Job URL: {cv_data['job_url']}\n")
-                f.write(f"Match Score: {cv_data['job_match_score']}\n")
-
-            print(f"PDF placeholder created: {filename}")
-            return filename
-
-        except Exception as e:
-            raise Exception(f"Failed to create PDF: {e}")
+        # - reportlab, fpdf, weasyprint, pdfkit
+        return self._create_file(cv_data, version_id, output_dir, 'pdf', 'PDF')
 
     def _create_docx(self, cv_data, version_id, output_dir):
         """
         Create DOCX version of the CV (placeholder implementation)
         """
-        filename = f"{output_dir}/CV_{version_id}.docx"
-
         # Placeholder for DOCX generation
-        # In a real implementation, you would use:
-        # - python-docx
-        # - docx
-
-        try:
-            # For now, create a text file with DOCX extension
-            # Replace this with actual DOCX generation library
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"DOCX Version - Tailored CV for {cv_data['company']} - {cv_data['job_title']}\n\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(cv_data['cv_content'])
-                f.write("\n\n" + "=" * 80 + "\n")
-                f.write(f"Generated on: {cv_data['created_at']}\n")
-                f.write(f"Job URL: {cv_data['job_url']}\n")
-                f.write(f"Match Score: {cv_data['job_match_score']}\n")
-
-            print(f"DOCX placeholder created: {filename}")
-            return filename
-
-        except Exception as e:
-            raise Exception(f"Failed to create DOCX: {e}")
+        # In a real implementation, you would use python-docx
+        return self._create_file(cv_data, version_id, output_dir, 'docx', 'DOCX')
 
     def _create_txt(self, cv_data, version_id, output_dir):
         """
         Create plain text version of the CV
         """
-        filename = f"{output_dir}/CV_{version_id}.txt"
-
-        try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"Tailored CV for {cv_data['company']} - {cv_data['job_title']}\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(cv_data['cv_content'])
-                f.write("\n\n" + "=" * 80 + "\n")
-                f.write(f"Generated on: {cv_data['created_at']}\n")
-                f.write(f"Job URL: {cv_data['job_url']}\n")
-                f.write(f"Match Score: {cv_data['job_match_score']}\n")
-                f.write(f"ATS Analysis: {cv_data['ats_analysis']}\n")
-
-            print(f"Text file created: {filename}")
-            return filename
-
-        except Exception as e:
-            raise Exception(f"Failed to create text file: {e}")
+        return self._create_file(cv_data, version_id, output_dir, 'txt', 'Text')
 
     def get_version_stats(self, version_id):
         """
@@ -253,50 +238,81 @@ class CVTailoringEngine:
         Create job-specific cover letter
         """
         try:
-            # Research company for personalization
             company_research = self._research_company(job_posting['company'])
-
-            # Use tailored CV if available, otherwise use master CV
             cv_content = tailored_cv if tailored_cv else self.master_cv
+            prompt = self._build_cover_letter_prompt(job_posting, cv_content, company_research)
 
-            # Generate cover letter
-            cover_letter = cover_letter_agent.run(f"""
-            Create cover letter for:
-
-            Student Profile: {self.profile}
-            CV Content: {cv_content}
-            Job Posting: {job_posting}
-            Company Research: {company_research}
-
-            Ensure letter is:
-            - Tailored to specific role and company
-            - Highlights 2-3 strongest qualifications
-            - Shows genuine interest and cultural fit
-            - Professional yet authentic voice
-            - 250-400 words
-            - Uses STAR method for examples
-            """)
-
-            return cover_letter.content if hasattr(cover_letter, 'content') else str(cover_letter)
+            cover_letter = cover_letter_agent.run(prompt)
+            return self._extract_content(cover_letter)
 
         except Exception as e:
             print(f"Error generating cover letter: {e}")
             return self._generate_cover_letter_fallback(job_posting, tailored_cv)
 
+    def _build_cover_letter_prompt(self, job_posting, cv_content, company_research):
+        """
+        Build the prompt for cover letter generation
+        """
+        return f"""
+        Create cover letter for:
+
+        Student Profile: {self.profile}
+        CV Content: {cv_content}
+        Job Posting: {job_posting}
+        Company Research: {company_research}
+
+        Ensure letter is:
+        - Tailored to specific role and company
+        - Highlights 2-3 strongest qualifications
+        - Shows genuine interest and cultural fit
+        - Professional yet authentic voice
+        - 250-400 words
+        - Uses STAR method for examples
+        """
+
+    def _extract_content(self, response):
+        """
+        Extract content from agent response
+        """
+        return response.content if hasattr(response, 'content') else str(response)
+
     def _research_company(self, company_name):
         """
-        Research company for personalization
+        Research company for personalization using knowledge base
         """
         try:
-            # In a real implementation, this would use web search APIs
-            # For now, return basic company information
-            return f"""
-            Company: {company_name}
-            Mission: Technology innovation and customer success
-            Values: Innovation, collaboration, excellence
-            Recent Focus: Digital transformation and AI solutions
-            Culture: Dynamic, fast-paced, employee-focused
-            """
+            # Try to get company information from knowledge base first
+            from . import knowledge_base
+
+            # Search for company-specific information
+            company_info = knowledge_base.retrieve_context(
+                f"{company_name} company information mission values culture",
+                sources=['sa_context', 'job_descriptions'],
+                n_results=2
+            )
+
+            # Extract relevant company details
+            company_details = []
+            for source, results in company_info.items():
+                for doc in results.get('documents', []):
+                    if company_name.lower() in doc.lower():
+                        company_details.append(doc[:300])  # First 300 chars
+
+            if company_details:
+                return f"""
+                Company: {company_name}
+                Research Findings: {' '.join(company_details[:2])}
+                """
+            else:
+                # Fallback to basic information
+                return f"""
+                Company: {company_name}
+                Mission: Technology innovation and customer success
+                Values: Innovation, collaboration, excellence
+                Recent Focus: Digital transformation and AI solutions
+                Culture: Dynamic, fast-paced, employee-focused
+                """
+
         except Exception as e:
             print(f"Error researching company: {e}")
             return f"Company: {company_name} - Technology company focused on innovation"
@@ -331,35 +347,39 @@ Best regards,
         Predict likely interview questions for a specific job application
         """
         try:
-            # Use tailored CV if available, otherwise use master CV
             cv_content = tailored_cv if tailored_cv else self.master_cv
+            prompt = self._build_interview_questions_prompt(job_posting, cv_content)
 
-            # Generate interview questions
-            questions = interview_prep_agent.run(f"""
-            Generate interview questions for:
-            Student Profile: {self.profile}
-            CV Content: {cv_content}
-            Job Posting: {job_posting}
-
-            Make questions realistic and role-specific across these categories:
-            - 5 Technical/Skills-based questions
-            - 5 Behavioral questions (using STAR method)
-            - 3 Company/Role-specific questions
-            - 2 Background/CV questions
-            - 3-5 Curveball/stress questions
-
-            Include South African context where relevant:
-            - Work authorization in South Africa
-            - Transportation/reliability concerns
-            - Salary expectations
-            - Location preferences
-            """)
-
-            return questions.content if hasattr(questions, 'content') else str(questions)
+            questions = interview_prep_agent.run(prompt)
+            return self._extract_content(questions)
 
         except Exception as e:
             print(f"Error generating interview questions: {e}")
             return self._generate_interview_questions_fallback(job_posting)
+
+    def _build_interview_questions_prompt(self, job_posting, cv_content):
+        """
+        Build the prompt for interview questions generation
+        """
+        return f"""
+        Generate interview questions for:
+        Student Profile: {self.profile}
+        CV Content: {cv_content}
+        Job Posting: {job_posting}
+
+        Make questions realistic and role-specific across these categories:
+        - 5 Technical/Skills-based questions
+        - 5 Behavioral questions (using STAR method)
+        - 3 Company/Role-specific questions
+        - 2 Background/CV questions
+        - 3-5 Curveball/stress questions
+
+        Include South African context where relevant:
+        - Work authorization in South Africa
+        - Transportation/reliability concerns
+        - Salary expectations
+        - Location preferences
+        """
 
     def _generate_interview_questions_fallback(self, job_posting):
         """
