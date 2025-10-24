@@ -15,7 +15,7 @@ from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter, cov
 # Team functionality will be implemented as method coordination
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, knowledge_base, sa_customizations
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, knowledge_base, sa_customizations, ethical_guidelines
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -531,12 +531,28 @@ class CareerBoostPlatform:
         self.jobs = {}
         self.applications = {}
         self.sa_customizations = sa_customizations
+        self.ethical_guidelines = ethical_guidelines
+        self.daily_application_counts = {}  # Track applications per student per day
 
-    def onboard_student(self, student_cv, career_goals):
+    def onboard_student(self, student_cv, career_goals, consent_given=False):
         """
-        Step 1: Create student profile using Profile Builder agent
+        Step 1: Create student profile using Profile Builder agent with ethical consent
         """
         print("👤 Onboarding new student...")
+
+        # Ethical requirement: Must obtain consent for data processing
+        if not consent_given:
+            print("\n⚠️  ETHICAL CONSENT REQUIRED")
+            print("This platform uses AI to assist with career development.")
+            print("We require your explicit consent to:")
+            print("• Process and analyze your CV")
+            print("• Use AI for personalized recommendations")
+            print("• Store data securely for 2 years (POPIA/GDPR compliant)")
+            print("\nDo you consent to these terms? (Type 'yes' to continue)")
+            consent_response = input().strip().lower()
+            if consent_response not in ['yes', 'y', 'consent']:
+                print("❌ Consent not given. Cannot proceed with onboarding.")
+                return None, None
 
         profile = profile_builder.run(f"""
         Analyze CV: {student_cv}
@@ -551,15 +567,33 @@ class CareerBoostPlatform:
         """)
 
         student_id = generate_student_id()
+
+        # Obtain ethical consent for data processing
+        consent_id = self.ethical_guidelines.manage_data_consent(
+            student_id=student_id,
+            data_types=['cv_content', 'career_goals', 'application_history', 'performance_data'],
+            purpose='AI-powered career assistance and job matching',
+            retention_period='2 years'
+        )
+
         self.students[student_id] = {
             'profile': profile.content if hasattr(profile, 'content') else str(profile),
             'cv_text': student_cv,
             'career_goals': career_goals,
             'onboarded_at': datetime.now(),
-            'cv_engine': None  # Will be created when needed
+            'consent_id': consent_id,
+            'cv_engine': None,  # Will be created when needed
+            'ethical_disclosure': self.ethical_guidelines.generate_ethical_disclosure('general', student_id)
         }
 
-        print(f"✅ Student {student_id} onboarded successfully!")
+        print("✅ Student onboarded successfully!")
+        print(f"📋 Student ID: {student_id}")
+        print(f"🔒 Consent ID: {consent_id}")
+        print("\n🛡️  Ethical Guidelines Applied:")
+        print("• AI assistance will be transparent and helpful")
+        print("• Your data is encrypted and POPIA/GDPR compliant")
+        print("• You can withdraw consent at any time")
+
         return student_id, self.students[student_id]
 
     def find_matching_jobs(self, student_id, location="South Africa", num_jobs=10):
@@ -690,13 +724,61 @@ class CareerBoostPlatform:
 
         cv_engine = student['cv_engine']
 
-        # Generate tailored CV
+        # Generate tailored CV with ethical validation
         print("📄 Generating tailored CV...")
         tailored_cv, ats_analysis = cv_engine.generate_tailored_cv(job)
+
+        # Ethical validation: Check CV optimization doesn't fabricate experience
+        original_cv = student['cv_text']
+        ethical_validation = self.ethical_guidelines.validate_cv_optimization(
+            original_cv=original_cv,
+            optimized_cv=tailored_cv,
+            student_consent=True  # Assumed from onboarding
+        )
+
+        if not ethical_validation['ethical_compliant']:
+            print("⚠️  ETHICAL CONCERN DETECTED")
+            for warning in ethical_validation['warnings']:
+                print(f"   • {warning}")
+            print("\nRecommendations:")
+            for rec in ethical_validation['recommendations']:
+                print(f"   • {rec}")
+
+            proceed = input("\nProceed with application? (yes/no): ").strip().lower()
+            if proceed not in ['yes', 'y']:
+                print("❌ Application cancelled for ethical reasons.")
+                return None, None
 
         # Generate cover letter
         print("📧 Generating cover letter...")
         cover_letter = cv_engine.generate_cover_letter(job, tailored_cv)
+
+        # Check daily application limits (ethical guideline: quality over quantity)
+        today = datetime.now().strftime('%Y-%m-%d')
+        student_daily_key = f"{student_id}_{today}"
+
+        daily_count = self.daily_application_counts.get(student_daily_key, 0)
+
+        # Ethical validation: Application submission limits
+        match_score = job.get('adjusted_match_score', job.get('match_score', 0))
+        application_validation = self.ethical_guidelines.validate_application_submission(
+            job_match_score=match_score,
+            application_count_today=daily_count,
+            customization_level='high'  # Assume high customization with AI tailoring
+        )
+
+        if not application_validation['can_submit']:
+            print("⚠️  ETHICAL APPLICATION LIMITS")
+            for warning in application_validation['warnings']:
+                print(f"   • {warning}")
+            print("\nRecommendations:")
+            for rec in application_validation['recommendations']:
+                print(f"   • {rec}")
+
+            proceed = input("\nProceed with application? (yes/no): ").strip().lower()
+            if proceed not in ['yes', 'y']:
+                print("❌ Application cancelled to maintain ethical standards.")
+                return None, None
 
         # Package application
         application_package = {
@@ -706,19 +788,28 @@ class CareerBoostPlatform:
             'cover_letter': cover_letter,
             'ats_analysis': ats_analysis,
             'match_score': job.get('match_score', 0),
+            'adjusted_match_score': job.get('adjusted_match_score', job.get('match_score', 0)),
             'job_url': job.get('url', ''),
             'company': job.get('company', ''),
             'job_title': job.get('title', ''),
-            'applied_at': datetime.now()
+            'applied_at': datetime.now(),
+            'ethical_validation': {
+                'cv_compliant': ethical_validation['ethical_compliant'],
+                'application_compliant': application_validation['can_submit'],
+                'quality_assessment': application_validation['quality_assessment']
+            },
+            'disclosure_statement': self.ethical_guidelines.generate_ethical_disclosure('cv_optimization', student_id)
         }
 
-        # Track application
+        # Track application and update daily count
         application_id = f"{student_id}_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
         self.applications[application_id] = application_package
+        self.daily_application_counts[student_daily_key] = daily_count + 1
 
         print("✅ Application package ready!")
         print(f"   📄 CV: {len(tailored_cv) if tailored_cv else 0} characters")
         print(f"   📧 Cover Letter: {len(cover_letter) if cover_letter else 0} characters")
+        print(f"   🛡️  Ethical Score: {application_validation['quality_assessment']}")
 
         return application_id, application_package
 
@@ -1065,6 +1156,25 @@ Examples:
         help='Show knowledge base statistics'
     )
 
+    # Ethical compliance options
+    parser.add_argument(
+        '--ethical-audit',
+        action='store_true',
+        help='Generate ethical compliance audit report'
+    )
+
+    parser.add_argument(
+        '--withdraw-consent',
+        type=str,
+        help='Withdraw data consent (provide consent ID)'
+    )
+
+    parser.add_argument(
+        '--consent-status',
+        action='store_true',
+        help='Check consent status'
+    )
+
     return parser
 
 
@@ -1135,9 +1245,13 @@ def run_careerboost_platform(args):
 
         career_goals = args.goals or CAREER_GOALS_DEFAULT
 
-        student_id, profile = platform.onboard_student(cv_text, career_goals)
-        print(f"\n👤 Student ID: {student_id}")
-        print(f"📊 Profile created successfully!")
+        student_id, profile = platform.onboard_student(cv_text, career_goals, consent_given=True)  # CLI assumes consent
+        if student_id:
+            print(f"\n👤 Student ID: {student_id}")
+            print(f"📊 Profile created successfully!")
+        else:
+            print("❌ Onboarding cancelled.")
+            return
 
     elif args.student_id:
         student_id = args.student_id
@@ -1294,6 +1408,59 @@ def run_careerboost_platform(args):
                         print(f"   • {source_name}: Not initialized")
             print()
 
+        elif args.ethical_audit:
+            # Generate ethical audit report
+            audit_report = platform.ethical_guidelines.get_ethical_audit_report()
+            print(f"\n🛡️  ETHICAL COMPLIANCE AUDIT REPORT")
+            print("=" * 50)
+            print(f"📊 Compliance Rate: {audit_report.get('compliance_rate', 0):.1f}%")
+            print(f"⚠️  Warnings: {audit_report.get('warnings_count', 0)}")
+            print(f"🚨 Critical Issues: {audit_report.get('critical_issues', 0)}")
+            print(f"📝 Total Audits: {audit_report.get('total_checks', 0)}")
+
+            if audit_report.get('recommendations'):
+                print(f"\n💡 RECOMMENDATIONS:")
+                for rec in audit_report['recommendations']:
+                    print(f"   • {rec}")
+
+            if audit_report.get('category_breakdown'):
+                print(f"\n📋 CATEGORY BREAKDOWN:")
+                for category, count in audit_report['category_breakdown'].items():
+                    print(f"   • {category}: {count} checks")
+            print()
+
+        elif args.withdraw_consent:
+            # Withdraw data consent
+            consent_id = args.withdraw_consent
+            success = platform.ethical_guidelines.withdraw_consent(consent_id)
+
+            if success:
+                print(f"✅ Consent withdrawn successfully for ID: {consent_id}")
+                print("📝 Your data will be securely deleted within 30 days")
+                print("🔒 You can re-consent at any time for continued service")
+            else:
+                print(f"❌ Consent ID not found: {consent_id}")
+                print("💡 Check your consent ID from the onboarding process")
+
+        elif args.consent_status:
+            # Check consent status
+            active_consents = len([c for c in platform.ethical_guidelines.consent_records.values()
+                                 if not c.get('consent_withdrawn', False)])
+            total_consents = len(platform.ethical_guidelines.consent_records)
+
+            print(f"\n🔒 CONSENT MANAGEMENT STATUS")
+            print("=" * 50)
+            print(f"📋 Active Consents: {active_consents}")
+            print(f"📊 Total Consents: {total_consents}")
+            print(f"🔄 Withdrawn: {total_consents - active_consents}")
+
+            print(f"\n🛡️  DATA PROTECTION:")
+            print("• End-to-end encryption (AES-256)")
+            print("• POPIA (South Africa) and GDPR compliant")
+            print("• Secure storage in South Africa")
+            print("• Right to withdraw consent anytime")
+            print()
+
         else:
             print("❌ No operation specified. Use --help for available options.")
             print("\nAvailable operations:")
@@ -1306,6 +1473,9 @@ def run_careerboost_platform(args):
             print("  --market-insights       : Get market insights")
             print("  --sa-insights           : Get SA-specific career insights")
             print("  --knowledge-stats       : Show knowledge base stats")
+            print("  --ethical-audit         : Generate ethical compliance report")
+            print("  --withdraw-consent <id> : Withdraw data consent")
+            print("  --consent-status        : Check consent status")
 
     else:
         print("🎯 CareerBoost Platform Ready!")

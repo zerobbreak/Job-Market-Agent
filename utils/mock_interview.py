@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 from .scraping import extract_job_keywords
 from agents import interview_prep_agent, interview_copilot
+from .ethical_guidelines import ethical_guidelines
 
 
 class MockInterviewSimulator:
@@ -374,7 +375,20 @@ Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             Keep it ethical: No complete answers, just helpful hints.
             """)
 
-            return copilot_response.content if hasattr(copilot_response, 'content') else str(copilot_response)
+            hint_text = copilot_response.content if hasattr(copilot_response, 'content') else str(copilot_response)
+
+            # Ethical validation: Ensure hints don't provide complete answers
+            ethical_validation = ethical_guidelines.validate_interview_assistance(question, hint_text)
+
+            if not ethical_validation['ethical_compliant']:
+                print("⚠️  Copilot hint flagged for ethical review")
+                for warning in ethical_validation['warnings'][:2]:  # Show first 2 warnings
+                    print(f"   • {warning}")
+
+                # Use fallback if ethical concerns
+                return self._fallback_copilot_hint(question)
+
+            return hint_text
 
         except Exception as e:
             print(f"Error getting copilot hint: {e}")

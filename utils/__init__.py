@@ -9,6 +9,7 @@ from .cv_tailoring import CVTailoringEngine
 from .mock_interview import MockInterviewSimulator
 from .knowledge_base import knowledge_base, KnowledgeBase
 from .sa_customizations import sa_customizations, SACustomizations
+from .ethical_guidelines import ethical_guidelines, EthicalGuidelines
 
 __all__ = [
     'jobs_collection',
@@ -26,5 +27,7 @@ __all__ = [
     'knowledge_base',
     'KnowledgeBase',
     'sa_customizations',
-    'SACustomizations'
+    'SACustomizations',
+    'ethical_guidelines',
+    'EthicalGuidelines'
 ]
