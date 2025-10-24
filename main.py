@@ -39,8 +39,22 @@ CAREER_GOALS_DEFAULT = "I want to become a software engineer in fintech"
 # Initialize Gemini client for embeddings (suppress verbose logging)
 import logging
 logging.getLogger('google.genai').setLevel(logging.WARNING)
+logging.getLogger('google').setLevel(logging.WARNING)
+logging.getLogger('agno').setLevel(logging.WARNING)
+
+# Suppress API key confirmation messages by temporarily unsetting conflicting env vars
+import os
+
+# Temporarily unset GEMINI_API_KEY to prevent the "Both keys set" message
+gemini_key_backup = os.environ.get('GEMINI_API_KEY')
+if 'GEMINI_API_KEY' in os.environ:
+    del os.environ['GEMINI_API_KEY']
 
 client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
+
+# Restore GEMINI_API_KEY if it was set
+if gemini_key_backup:
+    os.environ['GEMINI_API_KEY'] = gemini_key_backup
 
 # Vector Database for job postings
 chroma_client = chromadb.Client()
@@ -55,6 +69,11 @@ except:
     )
 
 # Profile Builder Agent
+# Temporarily unset GEMINI_API_KEY to prevent the "Both keys set" message
+gemini_key_backup = os.environ.get('GEMINI_API_KEY')
+if 'GEMINI_API_KEY' in os.environ:
+    del os.environ['GEMINI_API_KEY']
+
 profile_builder = Agent(
     name="Profile Analyst",
     model=Gemini(id="gemini-2.0-flash"),
@@ -89,7 +108,16 @@ profile_builder = Agent(
     markdown=True
 )
 
+# Restore GEMINI_API_KEY if it was set
+if gemini_key_backup:
+    os.environ['GEMINI_API_KEY'] = gemini_key_backup
+
 # Job Matcher Agent
+# Temporarily unset GEMINI_API_KEY to prevent the "Both keys set" message
+gemini_key_backup = os.environ.get('GEMINI_API_KEY')
+if 'GEMINI_API_KEY' in os.environ:
+    del os.environ['GEMINI_API_KEY']
+
 job_matcher = Agent(
     name="Job Matching Specialist",
     model=Gemini(id="gemini-2.0-flash"),
@@ -133,7 +161,16 @@ job_matcher = Agent(
     markdown=True
 )
 
+# Restore GEMINI_API_KEY if it was set
+if gemini_key_backup:
+    os.environ['GEMINI_API_KEY'] = gemini_key_backup
+
 # ATS Optimization Specialist
+# Temporarily unset GEMINI_API_KEY to prevent the "Both keys set" message
+gemini_key_backup = os.environ.get('GEMINI_API_KEY')
+if 'GEMINI_API_KEY' in os.environ:
+    del os.environ['GEMINI_API_KEY']
+
 ats_optimizer = Agent(
     name="ATS Optimization Specialist",
     model=Gemini(id="gemini-2.0-flash"),
@@ -170,6 +207,10 @@ ats_optimizer = Agent(
 
     Provide ATS compatibility score (0-100) with specific improvements"""
 )
+
+# Restore GEMINI_API_KEY if it was set
+if gemini_key_backup:
+    os.environ['GEMINI_API_KEY'] = gemini_key_backup
 
 # Semantic skill matching using Gemini embeddings
 def semantic_skill_match(student_skills, required_skills):
