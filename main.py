@@ -320,6 +320,37 @@ class JobMarketAnalyzer:
             self.print_error(f"Cover letter generation failed: {e}")
             return None
 
+    def generate_interview_questions(self, tailoring_engine, job_posting, tailored_cv=None):
+        """
+        Generate predicted interview questions for a job application
+        """
+        job_title = job_posting.get('title', 'Position')
+        company = job_posting.get('company', 'Company')
+
+        self.print_progress(f"INTERVIEW PREP for {company} - {job_title}", "GENERATING QUESTIONS")
+
+        try:
+            questions = tailoring_engine.generate_interview_questions(job_posting, tailored_cv)
+
+            if questions:
+                self.print_success(f"Interview questions generated for {company}")
+                if not self.quiet:
+                    print("\n🎯 INTERVIEW QUESTIONS PREVIEW:")
+                    print("-" * 50)
+                    # Show first part of questions
+                    lines = questions.split('\n')[:15]  # Show first 15 lines
+                    print('\n'.join(lines))
+                    if len(questions.split('\n')) > 15:
+                        print("... (truncated - full list available)")
+            else:
+                self.print_error("Failed to generate interview questions")
+
+            return questions
+
+        except Exception as e:
+            self.print_error(f"Interview questions generation failed: {e}")
+            return None
+
     def run_analysis(self, cv_path, career_goals=None):
         """Run complete analysis pipeline"""
         # Create student profile
