@@ -8,6 +8,7 @@ from .matching import match_student_to_jobs
 from .cv_tailoring import CVTailoringEngine
 from .mock_interview import MockInterviewSimulator
 from .knowledge_base import knowledge_base, KnowledgeBase
+from .sa_customizations import sa_customizations, SACustomizations
 
 __all__ = [
     'jobs_collection',
@@ -23,5 +24,7 @@ __all__ = [
     'CVTailoringEngine',
     'MockInterviewSimulator',
     'knowledge_base',
-    'KnowledgeBase'
+    'KnowledgeBase',
+    'sa_customizations',
+    'SACustomizations'
 ]

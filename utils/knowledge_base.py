@@ -261,17 +261,67 @@ class KnowledgeBase:
             }
         ]
 
-        # Sample SA context
+        # Sample SA context with youth unemployment focus
         sa_samples = [
             {
                 'id': 'sa_001',
-                'text': 'South African youth unemployment rate: 45.5% (Q4 2023). Graduate unemployment: 35%. Average time to first job: 8.2 months. Transport costs in major cities: 15-25% of salary.',
+                'text': 'South African youth unemployment rate: 45.5% (Q4 2023). Graduate unemployment: 35%. Average time to first job: 8.2 months. Transport costs in major cities: 15-25% of salary. Entry-level salaries: R8,000-R15,000/month.',
                 'metadata': {
                     'data_type': 'Employment Statistics',
                     'region': 'South Africa',
                     'source': 'Stats SA',
                     'last_updated': '2024-01',
-                    'key_insights': ['High competition', 'Transport important', 'Networking crucial']
+                    'key_insights': ['High competition', 'Transport important', 'Networking crucial', 'Realistic salary expectations']
+                }
+            },
+            {
+                'id': 'sa_transport',
+                'text': 'Transport costs in South Africa: Johannesburg CBD commute R800-1,500/month. Cape Town minibus taxis R400-800/month. Pretoria bus/train R300-600/month. 70% of youth cannot afford reliable transport to work.',
+                'metadata': {
+                    'data_type': 'Transport Economics',
+                    'region': 'Major Cities',
+                    'source': 'World Bank, Local Research',
+                    'key_insights': ['High transport costs', 'Reliability issues', 'Prioritize remote/nearby jobs']
+                }
+            },
+            {
+                'id': 'sa_learnerships',
+                'text': 'SETA Learnership Programs: Banking SETA (R3,500/month), Services SETA (R3,000/month), Manufacturing SETA (R4,000/month). YES Initiative: Youth Employment Service provides subsidized employment for graduates under 35.',
+                'metadata': {
+                    'data_type': 'Skills Development',
+                    'region': 'South Africa',
+                    'source': 'Department of Higher Education, YES Initiative',
+                    'key_insights': ['Paid training', 'Work experience', 'Government subsidized', 'Entry point for graduates']
+                }
+            },
+            {
+                'id': 'sa_internships',
+                'text': 'Graduate Internship Programs: Standard Bank YES (R8,000-12,000/month), Nedbank YES (R7,000-10,000/month), Government internships (R6,000-8,000/month). 12-24 month duration with permanent placement potential.',
+                'metadata': {
+                    'data_type': 'Graduate Programs',
+                    'region': 'South Africa',
+                    'source': 'Banking Association, Government Programs',
+                    'key_insights': ['Structured development', 'Market salary', 'Career progression', 'Permanent placement']
+                }
+            },
+            {
+                'id': 'sa_languages',
+                'text': 'South African workplace languages: English (universal), Afrikaans (Western Cape, Northern Cape), Zulu (KZN, Gauteng), Xhosa (Eastern Cape, Western Cape), Sotho (Free State, Gauteng). Code-switching common.',
+                'metadata': {
+                    'data_type': 'Language Requirements',
+                    'region': 'South Africa',
+                    'source': 'Language Policy Framework',
+                    'key_insights': ['Multilingual workplace', 'Cultural competence', 'Communication skills']
+                }
+            },
+            {
+                'id': 'sa_remote_work',
+                'text': 'Remote work adoption: 35% of South African companies offer hybrid/remote options. Tech sector leads with 60% remote-capable. Transport savings: R500-1,000/month for remote workers.',
+                'metadata': {
+                    'data_type': 'Work Arrangements',
+                    'region': 'South Africa',
+                    'source': 'World Economic Forum, Local Surveys',
+                    'key_insights': ['Remote work growing', 'Transport savings', 'Work-life balance', 'Digital skills needed']
                 }
             }
         ]

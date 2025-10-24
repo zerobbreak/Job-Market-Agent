@@ -15,7 +15,7 @@ from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter, cov
 # Team functionality will be implemented as method coordination
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, knowledge_base
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, knowledge_base, sa_customizations
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -530,6 +530,7 @@ class CareerBoostPlatform:
         self.students = {}
         self.jobs = {}
         self.applications = {}
+        self.sa_customizations = sa_customizations
 
     def onboard_student(self, student_cv, career_goals):
         """
@@ -584,20 +585,85 @@ class CareerBoostPlatform:
         # Discover new jobs
         matched_jobs = discover_new_jobs(student_profile, location, verbose=True)
 
-        # Filter and rank top matches
+        # Filter and rank top matches with SA customizations
         top_matches = []
-        for job in matched_jobs[:num_jobs]:
-            if job.get('match_score', 0) >= 50:  # Reasonable match threshold
-                job_id = f"{job.get('company', 'Unknown')}_{hash(job.get('url', ''))}"
-                self.jobs[job_id] = job
-                top_matches.append({
-                    'job_id': job_id,
-                    'job': job,
-                    'match_score': job.get('match_score', 0)
-                })
+        for job in matched_jobs[:num_jobs * 2]:  # Get more jobs to allow for SA filtering
+            base_score = job.get('match_score', 0)
 
-        print(f"✅ Found {len(top_matches)} matching jobs!")
+            # Apply SA customizations to enhance job matching
+            enhanced_job = self.sa_customizations.enhance_job_matching(job, student_profile)
+
+            # Calculate SA-adjusted score
+            sa_adjustments = enhanced_job.get('sa_score_adjustments', [])
+            total_adjustment = sum(adj.get('adjustment', 0) for adj in sa_adjustments)
+            adjusted_score = min(100, base_score + total_adjustment)  # Cap at 100
+
+            # Prioritize first job opportunities for graduates
+            if student_profile.get('is_recent_graduate', True):
+                job_title = job.get('title', '').lower()
+                if any(keyword in job_title for keyword in ['learnership', 'internship', 'graduate', 'junior', 'entry']):
+                    adjusted_score += 10  # Bonus for first job opportunities
+
+            # Apply minimum threshold with SA considerations
+            min_score = 40 if student_profile.get('is_recent_graduate', True) else 50
+
+            if adjusted_score >= min_score:
+                job_id = f"{job.get('company', 'Unknown')}_{hash(job.get('url', ''))}"
+
+                # Store enhanced job data
+                self.jobs[job_id] = enhanced_job
+
+                match_data = {
+                    'job_id': job_id,
+                    'job': enhanced_job,
+                    'base_match_score': base_score,
+                    'adjusted_match_score': adjusted_score,
+                    'sa_adjustments': sa_adjustments,
+                    'sa_recommendations': self._get_sa_job_recommendations(enhanced_job, student_profile)
+                }
+
+                top_matches.append(match_data)
+
+        # Sort by adjusted score and return top matches
+        top_matches.sort(key=lambda x: x['adjusted_match_score'], reverse=True)
+        top_matches = top_matches[:num_jobs]
+
+        print(f"✅ Found {len(top_matches)} SA-tailored job matches!")
         return top_matches
+
+    def _get_sa_job_recommendations(self, job: Dict, student_profile: Dict) -> List[str]:
+        """Generate SA-specific job recommendations"""
+        recommendations = []
+
+        # Transport considerations
+        transport_info = job.get('transport_considerations', {})
+        if transport_info.get('commute_cost'):
+            recommendations.append(f"💰 Transport cost estimate: {transport_info['commute_cost']}/month")
+
+        # Remote work
+        if job.get('remote_work') or job.get('hybrid_work'):
+            recommendations.append("🏠 Remote/hybrid opportunity - saves on transport costs")
+
+        # First job opportunities
+        job_title = job.get('title', '').lower()
+        if any(keyword in job_title for keyword in ['learnership', 'internship', 'graduate']):
+            recommendations.append("🎓 Great first job opportunity - prioritizes experience over extensive requirements")
+
+        # Salary realism
+        salary_info = job.get('salary_realism', {})
+        if salary_info.get('adjusted_range'):
+            recommendations.append(f"💵 Realistic salary range: {salary_info['adjusted_range']}")
+
+        # Skills development
+        if 'learnership' in job_title:
+            recommendations.append("📚 Learnership provides paid training and NQF qualification")
+
+        # Transport allowance
+        benefits = job.get('benefits', [])
+        if benefits and any('transport' in benefit.lower() for benefit in benefits):
+            recommendations.append("🚌 Transport allowance included in benefits")
+
+        return recommendations[:3]  # Limit to top 3 recommendations
 
     def apply_to_job(self, student_id, job_id):
         """
@@ -787,39 +853,64 @@ class CareerBoostPlatform:
 
     def get_market_insights(self, student_id: str):
         """
-        Get market insights tailored to a student's profile
+        Get comprehensive SA market insights tailored to a student's profile
         """
         if student_id not in self.students:
             raise ValueError(f"Student {student_id} not found")
 
         student = self.students[student_id]
-        profile_text = student['profile']
 
-        # Search for relevant market insights
-        insights = {
-            'salary_ranges': self.search_knowledge_base(
-                f"salary ranges for {student.get('career_goals', 'software engineer')} in South Africa",
-                sources=['sa_context', 'job_descriptions'],
+        # Extract student profile information for SA customizations
+        student_profile = {
+            'education_level': self._extract_education_level(student['profile']),
+            'preferred_regions': ['gauteng', 'western_cape'],  # Default SA regions
+            'is_recent_graduate': True,  # Assume recent graduate for SA context
+            'career_goals': student.get('career_goals', 'software engineer')
+        }
+
+        # Get comprehensive SA insights using customizations
+        sa_insights = self.sa_customizations.get_market_insights(student_profile)
+
+        # Enhance with knowledge base search for additional context
+        kb_insights = {
+            'industry_specific': self.search_knowledge_base(
+                f"{student_profile['career_goals']} jobs in South Africa",
+                sources=['job_descriptions', 'sa_context'],
                 n_results=2
             ),
-            'required_skills': self.search_knowledge_base(
-                f"required skills for {student.get('career_goals', 'software engineer')}",
-                sources=['job_descriptions', 'skills_taxonomy'],
+            'skills_requirements': self.search_knowledge_base(
+                f"skills needed for {student_profile['career_goals']} roles",
+                sources=['skills_taxonomy', 'job_descriptions'],
                 n_results=3
-            ),
-            'interview_tips': self.search_knowledge_base(
-                f"interview tips for {student.get('career_goals', 'software engineer')}",
-                sources=['interview_questions', 'successful_cvs'],
-                n_results=2
-            ),
-            'market_trends': self.search_knowledge_base(
-                "current job market trends in South Africa",
-                sources=['sa_context', 'job_descriptions'],
-                n_results=2
             )
         }
 
-        return insights
+        # Combine SA customizations with knowledge base insights
+        comprehensive_insights = {
+            **sa_insights,  # SA-specific customizations
+            'knowledge_base_insights': kb_insights,
+            'student_profile': student_profile,
+            'generated_at': datetime.now().isoformat()
+        }
+
+        return comprehensive_insights
+
+    def _extract_education_level(self, profile_text: str) -> str:
+        """Extract education level from profile text for SA customizations"""
+        profile_lower = profile_text.lower()
+
+        if any(term in profile_lower for term in ['bachelor', 'degree', 'bsc', 'ba', 'bcom', 'llb']):
+            return 'degree'
+        elif any(term in profile_lower for term in ['diploma', 'national diploma']):
+            return 'diploma'
+        elif any(term in profile_lower for term in ['certificate', 'nqf']):
+            return 'certificate'
+        elif any(term in profile_lower for term in ['matric', 'grade 12']):
+            return 'matric'
+        elif any(term in profile_lower for term in ['tvet', 'technical vocational']):
+            return 'tvet'
+
+        return 'degree'  # Default assumption
 
     def enhance_with_knowledge(self, agent_response, query_context):
         """
@@ -960,6 +1051,12 @@ Examples:
         '--market-insights',
         action='store_true',
         help='Get market insights for student'
+    )
+
+    parser.add_argument(
+        '--sa-insights',
+        action='store_true',
+        help='Get South Africa-specific career insights'
     )
 
     parser.add_argument(
@@ -1120,21 +1217,60 @@ def run_careerboost_platform(args):
             else:
                 print("❌ No results found")
 
-        elif args.market_insights:
-            # Get market insights
+        elif args.market_insights or args.sa_insights:
+            # Get comprehensive market insights
             try:
                 insights = platform.get_market_insights(student_id)
-                print(f"\n💡 MARKET INSIGHTS for {student_id}")
-                print("=" * 50)
+                print(f"\n🇿🇦 SOUTH AFRICA CAREER INSIGHTS for {student_id}")
+                print("=" * 60)
 
-                for category, data in insights.items():
-                    print(f"\n📈 {category.upper().replace('_', ' ')}:")
-                    for source, docs in data.items():
-                        if docs:
-                            print(f"   From {source}:")
-                            for doc in docs[:1]:  # Show top result
-                                print(f"   • {doc['text'][:150]}...")
-                                print()
+                # Show SA-specific insights
+                print("📊 YOUTH EMPLOYMENT REALITY:")
+                for challenge in insights.get('key_challenges', []):
+                    print(f"   • {challenge}")
+
+                print(f"\n💡 SUCCESS FACTORS:")
+                for factor in insights.get('success_factors', []):
+                    print(f"   • {factor}")
+
+                # Transport considerations
+                transport = insights.get('transport_reality', {})
+                if transport.get('general_advice'):
+                    print(f"\n🚌 TRANSPORT REALITY:")
+                    print(f"   {transport['general_advice']}")
+                    for rec in transport.get('recommendations', [])[:2]:
+                        print(f"   • {rec}")
+
+                # Salary expectations
+                salary = insights.get('salary_expectations', {})
+                if salary.get('realistic_expectations'):
+                    print(f"\n💰 SALARY REALISM:")
+                    for expectation in salary['realistic_expectations'][:3]:
+                        print(f"   • {expectation}")
+
+                # Skills development
+                skills_dev = insights.get('skills_development', {})
+                if skills_dev.get('eligible_programs'):
+                    print(f"\n🎓 SKILLS DEVELOPMENT PATHWAYS:")
+                    for program in skills_dev['eligible_programs']:
+                        salary_range = skills_dev.get('salary_expectations', {}).get(program, 'Contact provider')
+                        print(f"   • {program.title()}: {salary_range}")
+
+                # First job strategy
+                first_job = insights.get('first_job_strategy', {})
+                if first_job.get('recommended_pathways'):
+                    print(f"\n🚀 FIRST JOB STRATEGY:")
+                    print(f"   Timeline: {first_job.get('timeline', 'Varies')}")
+                    print(f"   Pathways: {', '.join(first_job['recommended_pathways'])}")
+                    for action in first_job.get('action_plan', [])[:2]:
+                        print(f"   • {action}")
+
+                # Language considerations
+                languages = insights.get('language_considerations', {})
+                if languages.get('additional_languages'):
+                    print(f"\n🗣️ WORKPLACE LANGUAGES:")
+                    print(f"   Primary: {languages.get('primary_language', 'English')}")
+                    print(f"   Additional: {', '.join(languages['additional_languages'][:3])}")
 
             except ValueError as e:
                 print(f"❌ Error: {e}")
@@ -1168,6 +1304,7 @@ def run_careerboost_platform(args):
             print("  --dashboard             : Show student dashboard")
             print("  --knowledge-search <query>: Search knowledge base")
             print("  --market-insights       : Get market insights")
+            print("  --sa-insights           : Get SA-specific career insights")
             print("  --knowledge-stats       : Show knowledge base stats")
 
     else:
@@ -1180,7 +1317,8 @@ def run_careerboost_platform(args):
         print("5. Dashboard: python main.py --platform --student-id <ID> --dashboard")
         print("6. Search knowledge: python main.py --platform --knowledge-search 'Python developer salary'")
         print("7. Market insights: python main.py --platform --student-id <ID> --market-insights")
-        print("8. Knowledge stats: python main.py --platform --knowledge-stats")
+        print("8. SA career insights: python main.py --platform --student-id <ID> --sa-insights")
+        print("9. Knowledge stats: python main.py --platform --knowledge-stats")
 
         print(f"\n🤖 AI Agents Ready: {len(platform.agents)} specialized agents")
         for i, (name, agent) in enumerate(platform.agents.items(), 1):
