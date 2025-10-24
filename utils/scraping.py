@@ -9,6 +9,38 @@ from scrapper import scrape_all
 # Initialize Gemini client
 client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
 
+# Configuration for API resilience
+API_CONFIG = {
+    'max_retries': int(os.getenv('API_MAX_RETRIES', '3')),
+    'retry_delay_base': float(os.getenv('API_RETRY_DELAY', '2.0')),
+    'timeout': int(os.getenv('API_TIMEOUT', '30')),
+}
+
+
+def check_api_status():
+    """
+    Check if the Gemini API is available and responsive
+    Returns: (is_available: bool, status_message: str)
+    """
+    try:
+        # Simple test request to check API availability
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents="Hello",
+            config={'max_output_tokens': 10}  # Minimal response
+        )
+        return True, "API is available"
+    except Exception as e:
+        error_msg = str(e)
+        if "503" in error_msg or "UNAVAILABLE" in error_msg:
+            return False, "API is overloaded (503 Service Unavailable)"
+        elif "429" in error_msg or "RATE_LIMIT" in error_msg:
+            return False, "API rate limit exceeded"
+        elif "401" in error_msg or "PERMISSION_DENIED" in error_msg:
+            return False, "API authentication failed"
+        else:
+            return False, f"API error: {error_msg}"
+
 
 def extract_skills_from_description(description):
     """
@@ -142,81 +174,267 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False):
 
 
 # Extract keywords from job description
-def extract_job_keywords(job_description):
+def extract_job_keywords(job_description, max_retries=None):
     """
     Use Gemini to identify critical keywords hiring managers look for
+    Includes retry logic for handling API overload
     """
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=f"""
-            Analyze this job description and extract:
+    import time
+    import random
 
-            1. MUST-HAVE KEYWORDS (10-15):
-               - Technical skills (programming languages, tools, methodologies)
-               - Certifications and qualifications
-               - Years of experience
-               - Industry-specific terms
+    # Use configuration values if not specified
+    if max_retries is None:
+        max_retries = API_CONFIG['max_retries']
 
-            2. NICE-TO-HAVE KEYWORDS (5-10):
-               - Soft skills (leadership, collaboration)
-               - Preferred qualifications
-               - Domain knowledge
+    retry_delay_base = API_CONFIG['retry_delay_base']
 
-            3. ACTION VERBS (5-10):
-               - Verbs used in job description (develop, manage, analyze)
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=f"""
+                Analyze this job description and extract:
 
-            4. KEYWORD VARIATIONS:
-               - Synonyms and related terms
-               - Abbreviations (AI = Artificial Intelligence)
+                1. MUST-HAVE KEYWORDS (10-15):
+                   - Technical skills (programming languages, tools, methodologies)
+                   - Certifications and qualifications
+                   - Years of experience
+                   - Industry-specific terms
 
-            Job Description:
-            {job_description}
+                2. NICE-TO-HAVE KEYWORDS (5-10):
+                   - Soft skills (leadership, collaboration)
+                   - Preferred qualifications
+                   - Domain knowledge
 
-            Return structured JSON with categorized keywords and importance weights.
-            """
-        )
+                3. ACTION VERBS (5-10):
+                   - Verbs used in job description (develop, manage, analyze)
 
-        return response.text if hasattr(response, 'text') else str(response)
+                4. KEYWORD VARIATIONS:
+                   - Synonyms and related terms
+                   - Abbreviations (AI = Artificial Intelligence)
 
-    except Exception as e:
-        print(f"Error extracting job keywords: {e}")
-        return f"Error: {e}"
+                Job Description:
+                {job_description}
+
+                Return structured JSON with categorized keywords and importance weights.
+                """
+            )
+
+            return response.text if hasattr(response, 'text') else str(response)
+
+        except Exception as e:
+            error_message = str(e)
+            if "503" in error_message or "UNAVAILABLE" in error_message:
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter using configured base
+                    wait_time = (retry_delay_base ** attempt) + random.uniform(0, 1)
+                    print(f"⚠️  API overloaded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.1f} seconds...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print("❌ API still overloaded after all retries. Using fallback keyword extraction.")
+                    return _extract_keywords_fallback(job_description)
+            else:
+                # Non-503 error, don't retry
+                print(f"❌ Error extracting job keywords: {e}")
+                return _extract_keywords_fallback(job_description)
+
+    # This should not be reached, but just in case
+    return _extract_keywords_fallback(job_description)
+
+
+def _extract_keywords_fallback(job_description):
+    """
+    Fallback keyword extraction when API is unavailable
+    Uses simple pattern matching and common keywords
+    """
+    import re
+
+    # Common technical keywords
+    common_tech_keywords = [
+        'Python', 'Java', 'JavaScript', 'C++', 'C#', 'SQL', 'NoSQL',
+        'React', 'Angular', 'Vue', 'Node.js', 'Django', 'Flask',
+        'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes',
+        'Machine Learning', 'AI', 'Data Science', 'Data Analysis',
+        'Git', 'Agile', 'Scrum', 'CI/CD', 'DevOps'
+    ]
+
+    # Common action verbs
+    action_verbs = [
+        'develop', 'design', 'implement', 'manage', 'analyze', 'create',
+        'build', 'maintain', 'optimize', 'deploy', 'test', 'collaborate',
+        'lead', 'coordinate', 'integrate', 'automate', 'document'
+    ]
+
+    # Extract found keywords
+    found_tech = []
+    found_verbs = []
+
+    desc_lower = job_description.lower()
+
+    for keyword in common_tech_keywords:
+        if keyword.lower() in desc_lower:
+            found_tech.append(keyword)
+
+    for verb in action_verbs:
+        if verb in desc_lower:
+            found_verbs.append(verb)
+
+    # Extract years of experience patterns
+    experience_patterns = re.findall(r'(\d+\+?)\s*years?\s*(?:of\s*)?experience', desc_lower, re.IGNORECASE)
+    experience = experience_patterns if experience_patterns else []
+
+    fallback_result = f"""
+{{
+  "MUST_HAVE_KEYWORDS": {{
+    "technical_skills": {found_tech[:10]},
+    "certifications_and_qualifications": [],
+    "years_of_experience": {experience},
+    "industry_specific_terms": []
+  }},
+  "NICE_TO_HAVE_KEYWORDS": {{
+    "soft_skills": [],
+    "preferred_qualifications": [],
+    "domain_knowledge": []
+  }},
+  "ACTION_VERBS": {found_verbs[:8]},
+  "KEYWORD_VARIATIONS": {{
+    "note": "This is a fallback extraction due to API unavailability. Results may be less comprehensive."
+  }}
+}}
+"""
+
+    return fallback_result
 
 
 # Match student CV against job keywords
-def keyword_gap_analysis(student_cv, job_keywords):
+def keyword_gap_analysis(student_cv, job_keywords, max_retries=None):
     """
     Identify missing keywords and suggest where to add them
+    Includes retry logic for handling API overload
     """
+    import time
+    import random
+
+    # Use configuration values if not specified
+    if max_retries is None:
+        max_retries = API_CONFIG['max_retries']
+
+    retry_delay_base = API_CONFIG['retry_delay_base']
+
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=f"""
+                Compare student CV against required job keywords:
+
+                Student CV: {student_cv}
+                Job Keywords: {job_keywords}
+
+                Provide:
+                1. Keywords PRESENT in CV (mark with ✅)
+                2. Keywords MISSING from CV (mark with ❌)
+                3. Suggestions for adding missing keywords:
+                   - Which CV section to add them (Summary, Experience, Skills)
+                   - How to incorporate naturally (provide reworded bullet points)
+                   - Semantic alternatives if exact match impossible
+
+                IMPORTANT: Never fabricate experience. Only suggest adding keywords where:
+                - Student has relevant experience but didn't mention keyword
+                - Transferable skills apply
+                - Academic projects demonstrate the skill
+
+                Return analysis in structured format.
+                """
+            )
+
+            return response.text if hasattr(response, 'text') else str(response)
+
+        except Exception as e:
+            error_message = str(e)
+            if "503" in error_message or "UNAVAILABLE" in error_message:
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter using configured base
+                    wait_time = (retry_delay_base ** attempt) + random.uniform(0, 1)
+                    print(f"⚠️  API overloaded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.1f} seconds...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print("❌ API still overloaded after all retries. Using fallback gap analysis.")
+                    return _gap_analysis_fallback(student_cv, job_keywords)
+            else:
+                # Non-503 error, don't retry
+                print(f"❌ Error in keyword gap analysis: {e}")
+                return _gap_analysis_fallback(student_cv, job_keywords)
+
+    # This should not be reached, but just in case
+    return _gap_analysis_fallback(student_cv, job_keywords)
+
+
+def _gap_analysis_fallback(student_cv, job_keywords):
+    """
+    Fallback gap analysis when API is unavailable
+    Uses simple text matching for basic keyword presence/absence
+    """
+    import re
+    import json
+
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=f"""
-            Compare student CV against required job keywords:
+        # Parse job keywords if it's JSON
+        if isinstance(job_keywords, str) and job_keywords.startswith('{'):
+            keywords_data = json.loads(job_keywords.replace('```json', '').replace('```', ''))
+        else:
+            # If not JSON, treat as plain text
+            keywords_data = {"fallback": job_keywords}
 
-            Student CV: {student_cv}
-            Job Keywords: {job_keywords}
+        cv_lower = student_cv.lower()
 
-            Provide:
-            1. Keywords PRESENT in CV (mark with ✅)
-            2. Keywords MISSING from CV (mark with ❌)
-            3. Suggestions for adding missing keywords:
-               - Which CV section to add them (Summary, Experience, Skills)
-               - How to incorporate naturally (provide reworded bullet points)
-               - Semantic alternatives if exact match impossible
+        # Extract all keywords from the job keywords structure
+        all_keywords = []
+        if "MUST_HAVE_KEYWORDS" in keywords_data:
+            for category in keywords_data["MUST_HAVE_KEYWORDS"].values():
+                if isinstance(category, list):
+                    all_keywords.extend(category)
 
-            IMPORTANT: Never fabricate experience. Only suggest adding keywords where:
-            - Student has relevant experience but didn't mention keyword
-            - Transferable skills apply
-            - Academic projects demonstrate the skill
+        if "NICE_TO_HAVE_KEYWORDS" in keywords_data:
+            for category in keywords_data["NICE_TO_HAVE_KEYWORDS"].values():
+                if isinstance(category, list):
+                    all_keywords.extend(category)
 
-            Return analysis in structured format.
-            """
-        )
+        if "ACTION_VERBS" in keywords_data:
+            if isinstance(keywords_data["ACTION_VERBS"], list):
+                all_keywords.extend(keywords_data["ACTION_VERBS"])
 
-        return response.text if hasattr(response, 'text') else str(response)
+        # Check presence of keywords
+        present_keywords = []
+        missing_keywords = []
+
+        for keyword in all_keywords:
+            if isinstance(keyword, str) and len(keyword.strip()) > 0:
+                if keyword.lower() in cv_lower:
+                    present_keywords.append(keyword)
+                else:
+                    missing_keywords.append(keyword)
+
+        fallback_result = f"""
+**Keyword Gap Analysis (Fallback Mode)**
+
+**Keywords PRESENT in CV:**
+{chr(10).join(f"✅ {kw}" for kw in present_keywords[:10])}
+
+**Keywords MISSING from CV:**
+{chr(10).join(f"❌ {kw}" for kw in missing_keywords[:10])}
+
+**Basic Suggestions:**
+• Add missing technical skills to the Skills section
+• Include relevant keywords in project descriptions
+• Consider adding keywords to your professional summary
+
+*Note: This is a simplified analysis due to API unavailability. Full AI-powered analysis provides more detailed suggestions.*
+"""
+
+        return fallback_result
 
     except Exception as e:
-        print(f"Error in keyword gap analysis: {e}")
-        return f"Error: {e}"
+        return f"Fallback analysis failed: {e}. Raw keywords: {job_keywords[:200]}..."
