@@ -95,42 +95,80 @@ job_matcher = Agent(
     model=Gemini(id="gemini-2.0-flash"),
     tools=[FileTools()],
     instructions="""Match students with job opportunities using multi-dimensional analysis:
-    
+
     SCORING METHODOLOGY:
     1. Aspiration Fit (0-100): Analyze job description, company info, growth potential
        - Does role align with student's 5-year goals?
        - Is industry/company type preferred?
        - Career advancement opportunities?
-    
+
     2. Skill Fit (0-100): Compare required vs. offered skills
        - Hard match: Exact skill matches (Python, SQL)
        - Soft match: Transferable skills (research → analysis)
        - Semantic similarity: "machine learning" ≈ "ML" ≈ "AI"
-    
+
     3. Experience Fit (0-100): Evaluate seniority and background
        - Years of experience required vs. student has
        - Educational requirements (degree, certifications)
        - Industry-specific experience
-    
+
     4. Practical Fit (0-100): Location, work arrangement, company culture
        - Commute distance and transport availability
        - Remote/hybrid options
        - Company values match student preferences
-    
+
     WEIGHTED OVERALL SCORE:
     Overall = (Aspiration × 0.40) + (Skills × 0.35) + (Experience × 0.15) + (Practical × 0.10)
-    
+
     RECOMMENDATION THRESHOLD:
     - 70+: Highly recommended (show to student)
     - 50-69: Moderate fit (show with caveats)
     - <50: Not recommended (filter out)
-    
+
     For each recommended job, provide:
     - Overall match score (0-100)
     - Breakdown of subscores
     - Reasoning for recommendation
     - Action items (skills to highlight, gaps to address)""",
     markdown=True
+)
+
+# ATS Optimization Specialist
+ats_optimizer = Agent(
+    name="ATS Optimization Specialist",
+    model=Gemini(id="gemini-2.0-flash"),
+    instructions="""Optimize resumes for Applicant Tracking Systems (ATS):
+
+    FORMATTING REQUIREMENTS:
+    ✅ DO:
+    - Use standard section headers ("Experience", "Education", "Skills")
+    - Simple, clean fonts (Arial, Calibri, Times New Roman)
+    - Standard bullet points (•, -, *)
+    - Clear date formats (MM/YYYY)
+    - Standard file format (PDF or .docx)
+
+    ❌ AVOID:
+    - Tables, text boxes, headers/footers (ATS can't parse)
+    - Images, logos, graphics
+    - Complex formatting (columns, unusual fonts)
+    - Abbreviations without spelling out first mention
+    - Creative section names ("My Journey" instead of "Experience")
+
+    CONTENT OPTIMIZATION:
+    1. Keyword Extraction: Identify exact keywords from job description
+    2. Strategic Placement: Distribute keywords naturally across sections
+    3. Avoid Keyword Stuffing: Maintain readability for humans
+    4. Exact Matches: Use exact job title and skills mentioned
+    5. Variations: Include synonyms and related terms
+       Example: "Project Management" + "Project Manager" + "PM"
+
+    ATS SCORING CRITERIA:
+    - Keyword Match: 40%
+    - Format Compliance: 25%
+    - Section Completeness: 20%
+    - Experience Relevance: 15%
+
+    Provide ATS compatibility score (0-100) with specific improvements"""
 )
 
 # Semantic skill matching using Gemini embeddings
