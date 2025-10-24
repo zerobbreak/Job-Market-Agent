@@ -372,15 +372,12 @@ def store_jobs_in_db(jobs, collection):
             # Generate unique ID if not present
             job_id = job.get('id', f"{job['source']}_{hash(job['url'])}")
 
-            # Extract skills from title and available info (since scrapper.py doesn't extract descriptions)
-            title_and_info = f"{job['title']} {job['company']} {job['location']}"
-            required_skills = extract_skills_from_description(title_and_info)
-
-            # Create description from available info
-            description = f"{job['title']} at {job['company']} in {job['location']}"
+            # Extract skills from job description
+            description = job.get('description', f"{job['title']} at {job['company']} in {job['location']}")
+            required_skills = extract_skills_from_description(description)
 
             # Create embedding from available information
-            embedding_text = f"{job['title']} {job['company']} {job['location']} {' '.join(required_skills)}"
+            embedding_text = f"{job['title']} {job['company']} {job['location']} {description} {' '.join(required_skills)}"
 
             response = client.models.embed_content(
                 model="text-embedding-004",

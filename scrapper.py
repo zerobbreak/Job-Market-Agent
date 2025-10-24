@@ -279,6 +279,30 @@ def scrape_pnet(page, job_title, location):
                     if href:
                         url = href if href.startswith("http") else f"https://www.pnet.co.za{href}"
                 
+                # Try to extract job description snippet from the card
+                description = ""
+                desc_selectors = [
+                    "[class*='description']",
+                    "[class*='summary']",
+                    "[class*='snippet']",
+                    "[class*='excerpt']",
+                    "p",
+                    "div:not([class*='title']):not([class*='company']):not([class*='location'])"
+                ]
+
+                for ds in desc_selectors:
+                    desc_els = card.query_selector_all(ds)
+                    for desc_el in desc_els:
+                        text = desc_el.inner_text().strip()
+                        if text and len(text) > 20 and not any(word in text.lower() for word in ['apply now', 'save job', 'share']):
+                            description += text + " "
+                            if len(description) > 200:  # Limit description length
+                                break
+                    if len(description) > 50:
+                        break
+
+                description = description.strip()[:500]  # Limit to 500 chars
+
                 # Only add if we have at least a title
                 if title and len(title) > 3:
                     job = {
@@ -286,6 +310,7 @@ def scrape_pnet(page, job_title, location):
                         "company": company or "N/A",
                         "location": location_text or "N/A",
                         "url": url or "N/A",
+                        "description": description or f"{title} position at {company or 'Company'} in {location_text or 'Location'}",
                         "source": "PNet"
                     }
                     jobs.append(job)
@@ -416,12 +441,38 @@ def scrape_indeed(page, job_title, location):
                     if href:
                         url = href if href.startswith("http") else f"https://za.indeed.com{href}"
                 
+                # Try to extract job description snippet from the card
+                description = ""
+                desc_selectors = [
+                    "[class*='description']",
+                    "[class*='summary']",
+                    "[class*='snippet']",
+                    "[class*='excerpt']",
+                    "[class*='job-snippet']",
+                    "p",
+                    "div:not([class*='title']):not([class*='company']):not([class*='location'])"
+                ]
+
+                for ds in desc_selectors:
+                    desc_els = card.query_selector_all(ds)
+                    for desc_el in desc_els:
+                        text = desc_el.inner_text().strip()
+                        if text and len(text) > 20 and not any(word in text.lower() for word in ['apply now', 'save job', 'share']):
+                            description += text + " "
+                            if len(description) > 200:  # Limit description length
+                                break
+                    if len(description) > 50:
+                        break
+
+                description = description.strip()[:500]  # Limit to 500 chars
+
                 if title and len(title) > 3:
                     job = {
                         "title": title,
                         "company": company or "N/A",
                         "location": location_text or "N/A",
                         "url": url or "N/A",
+                        "description": description or f"{title} position at {company or 'Company'} in {location_text or 'Location'}",
                         "source": "Indeed"
                     }
                     jobs.append(job)
@@ -516,12 +567,37 @@ def scrape_careerjunction(page, job_title, location):
                     if href:
                         url = href if href.startswith("http") else f"https://www.careerjunction.co.za{href}"
                 
+                # Try to extract job description snippet from the card
+                description = ""
+                desc_selectors = [
+                    "[class*='description']",
+                    "[class*='summary']",
+                    "[class*='snippet']",
+                    "[class*='excerpt']",
+                    "p",
+                    "div:not([class*='title']):not([class*='company']):not([class*='location'])"
+                ]
+
+                for ds in desc_selectors:
+                    desc_els = card.query_selector_all(ds)
+                    for desc_el in desc_els:
+                        text = desc_el.inner_text().strip()
+                        if text and len(text) > 20 and not any(word in text.lower() for word in ['apply now', 'save job', 'share']):
+                            description += text + " "
+                            if len(description) > 200:  # Limit description length
+                                break
+                    if len(description) > 50:
+                        break
+
+                description = description.strip()[:500]  # Limit to 500 chars
+
                 if title and len(title) > 3:
                     job = {
                         "title": title,
                         "company": company or "N/A",
                         "location": location_text or "N/A",
                         "url": url or "N/A",
+                        "description": description or f"{title} position at {company or 'Company'} in {location_text or 'Location'}",
                         "source": "CareerJunction"
                     }
                     jobs.append(job)
