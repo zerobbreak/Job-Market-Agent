@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -349,6 +349,45 @@ class JobMarketAnalyzer:
 
         except Exception as e:
             self.print_error(f"Interview questions generation failed: {e}")
+            return None
+
+    def create_mock_interview_simulator(self, job_role, company, student_profile=None):
+        """
+        Create a mock interview simulator for interview practice
+        """
+        self.print_progress("INTERVIEW SIMULATOR", "INITIALIZING")
+
+        try:
+            simulator = MockInterviewSimulator(job_role, company, student_profile)
+            self.print_success(f"Mock interview simulator created for {job_role} at {company}")
+            return simulator
+        except Exception as e:
+            self.print_error(f"Failed to create interview simulator: {e}")
+            return None
+
+    def conduct_mock_interview(self, simulator, student_name):
+        """
+        Conduct a complete mock interview session
+        """
+        try:
+            # Start the interview
+            greeting = simulator.start_interview(student_name)
+
+            # Conduct the interview
+            final_report = simulator.conduct_interview()
+
+            # Display final report
+            if final_report:
+                self.print_success("Mock interview completed!")
+                print("\n📊 FINAL PERFORMANCE REPORT:")
+                print("=" * 60)
+                print(final_report)
+                print("=" * 60)
+
+            return final_report
+
+        except Exception as e:
+            self.print_error(f"Mock interview failed: {e}")
             return None
 
     def run_analysis(self, cv_path, career_goals=None):
