@@ -1,6 +1,7 @@
 import fitz  # PyMuPDF
 import time
 from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
 import json
 import os
 import sys
@@ -14,7 +15,7 @@ from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter, cov
 # Team functionality will be implemented as method coordination
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, knowledge_base
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -42,6 +43,24 @@ import logging
 logging.getLogger('google.genai').setLevel(logging.WARNING)
 logging.getLogger('google').setLevel(logging.WARNING)
 logging.getLogger('agno').setLevel(logging.WARNING)
+
+# Configure Gemini API for embeddings
+import google.generativeai as genai
+genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+
+# Initialize knowledge base (this will create collections if they don't exist)
+print("🧠 Initializing Knowledge Base...")
+try:
+    kb_stats = knowledge_base.get_all_stats()
+    total_docs = sum(stats['document_count'] if stats else 0 for stats in kb_stats.values())
+    print(f"✅ Knowledge Base ready with {total_docs} documents across {len(kb_stats)} sources")
+
+    # Initialize with sample data if collections are empty
+    if total_docs == 0:
+        print("📚 Populating knowledge base with sample data...")
+        knowledge_base.initialize_sample_data()
+except Exception as e:
+    print(f"⚠️ Knowledge Base initialization warning: {e}")
 
 # Agent coordination will be handled in CareerBoostPlatform class
 
@@ -736,6 +755,115 @@ class CareerBoostPlatform:
 
         return dashboard
 
+    def search_knowledge_base(self, query: str, sources: List[str] = None, n_results: int = 3):
+        """
+        Search the knowledge base for relevant context
+
+        Args:
+            query: Search query
+            sources: List of knowledge sources to search
+            n_results: Number of results per source
+        """
+        try:
+            context = knowledge_base.retrieve_context(query, sources, n_results)
+
+            # Format results for easy consumption
+            formatted_results = {}
+            for source, results in context.items():
+                formatted_results[source] = []
+                for i, doc in enumerate(results['documents']):
+                    formatted_results[source].append({
+                        'text': doc,
+                        'metadata': results['metadatas'][i],
+                        'similarity_score': 1 - results['distances'][i],  # Convert distance to similarity
+                        'id': results['ids'][i]
+                    })
+
+            return formatted_results
+
+        except Exception as e:
+            print(f"❌ Error searching knowledge base: {e}")
+            return {}
+
+    def get_market_insights(self, student_id: str):
+        """
+        Get market insights tailored to a student's profile
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+
+        student = self.students[student_id]
+        profile_text = student['profile']
+
+        # Search for relevant market insights
+        insights = {
+            'salary_ranges': self.search_knowledge_base(
+                f"salary ranges for {student.get('career_goals', 'software engineer')} in South Africa",
+                sources=['sa_context', 'job_descriptions'],
+                n_results=2
+            ),
+            'required_skills': self.search_knowledge_base(
+                f"required skills for {student.get('career_goals', 'software engineer')}",
+                sources=['job_descriptions', 'skills_taxonomy'],
+                n_results=3
+            ),
+            'interview_tips': self.search_knowledge_base(
+                f"interview tips for {student.get('career_goals', 'software engineer')}",
+                sources=['interview_questions', 'successful_cvs'],
+                n_results=2
+            ),
+            'market_trends': self.search_knowledge_base(
+                "current job market trends in South Africa",
+                sources=['sa_context', 'job_descriptions'],
+                n_results=2
+            )
+        }
+
+        return insights
+
+    def enhance_with_knowledge(self, agent_response, query_context):
+        """
+        Enhance agent responses with knowledge base context
+        """
+        try:
+            # Search for relevant context
+            context = self.search_knowledge_base(query_context, n_results=2)
+
+            # Combine agent response with knowledge base insights
+            enhanced_response = {
+                'agent_response': agent_response,
+                'knowledge_context': context,
+                'enhancement_type': 'retrieval_augmented'
+            }
+
+            return enhanced_response
+
+        except Exception as e:
+            print(f"⚠️ Could not enhance with knowledge: {e}")
+            return agent_response
+
+    def get_knowledge_stats(self):
+        """
+        Get comprehensive knowledge base statistics
+        """
+        try:
+            stats = knowledge_base.get_all_stats()
+
+            # Calculate totals
+            total_docs = sum(s['document_count'] if s else 0 for s in stats.values())
+            sources_count = len([s for s in stats.values() if s])
+
+            return {
+                'total_documents': total_docs,
+                'active_sources': sources_count,
+                'sources': stats,
+                'last_updated': datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            print(f"❌ Error getting knowledge stats: {e}")
+            return {'error': str(e)}
+
 
 def create_parser():
     """Create command line argument parser"""
@@ -819,6 +947,25 @@ Examples:
         '--dashboard',
         action='store_true',
         help='Show student dashboard'
+    )
+
+    # Knowledge Base options
+    parser.add_argument(
+        '--knowledge-search',
+        type=str,
+        help='Search the knowledge base (provide query)'
+    )
+
+    parser.add_argument(
+        '--market-insights',
+        action='store_true',
+        help='Get market insights for student'
+    )
+
+    parser.add_argument(
+        '--knowledge-stats',
+        action='store_true',
+        help='Show knowledge base statistics'
     )
 
     return parser
@@ -956,6 +1103,61 @@ def run_careerboost_platform(args):
             except ValueError as e:
                 print(f"❌ Error: {e}")
 
+        elif args.knowledge_search:
+            # Search knowledge base
+            query = args.knowledge_search
+            print(f"🔍 Searching knowledge base for: '{query}'")
+
+            results = platform.search_knowledge_base(query)
+            if results:
+                for source, docs in results.items():
+                    if docs:
+                        print(f"\n📚 {source.upper()}:")
+                        for i, doc in enumerate(docs[:2], 1):  # Show top 2 per source
+                            print(f"   {i}. {doc['text'][:100]}...")
+                            print(f"     Similarity: {doc['similarity_score']:.2f}")
+                            print()
+            else:
+                print("❌ No results found")
+
+        elif args.market_insights:
+            # Get market insights
+            try:
+                insights = platform.get_market_insights(student_id)
+                print(f"\n💡 MARKET INSIGHTS for {student_id}")
+                print("=" * 50)
+
+                for category, data in insights.items():
+                    print(f"\n📈 {category.upper().replace('_', ' ')}:")
+                    for source, docs in data.items():
+                        if docs:
+                            print(f"   From {source}:")
+                            for doc in docs[:1]:  # Show top result
+                                print(f"   • {doc['text'][:150]}...")
+                                print()
+
+            except ValueError as e:
+                print(f"❌ Error: {e}")
+
+        elif args.knowledge_stats:
+            # Show knowledge base statistics
+            stats = platform.get_knowledge_stats()
+            print(f"\n🧠 KNOWLEDGE BASE STATISTICS")
+            print("=" * 50)
+            print(f"📊 Total Documents: {stats.get('total_documents', 0)}")
+            print(f"📚 Active Sources: {stats.get('active_sources', 0)}")
+            print(f"🕒 Last Updated: {stats.get('last_updated', 'Unknown')}")
+
+            if 'sources' in stats:
+                print(f"\n📋 SOURCES:")
+                for source_name, source_stats in stats['sources'].items():
+                    if source_stats:
+                        print(f"   • {source_name}: {source_stats['document_count']} documents")
+                        print(f"     {source_stats['description']}")
+                    else:
+                        print(f"   • {source_name}: Not initialized")
+            print()
+
         else:
             print("❌ No operation specified. Use --help for available options.")
             print("\nAvailable operations:")
@@ -964,6 +1166,9 @@ def run_careerboost_platform(args):
             print("  --apply <job_id>        : Apply to specific job")
             print("  --interview-prep <job_id>: Prepare for interview")
             print("  --dashboard             : Show student dashboard")
+            print("  --knowledge-search <query>: Search knowledge base")
+            print("  --market-insights       : Get market insights")
+            print("  --knowledge-stats       : Show knowledge base stats")
 
     else:
         print("🎯 CareerBoost Platform Ready!")
@@ -973,6 +1178,9 @@ def run_careerboost_platform(args):
         print("3. Apply: python main.py --platform --student-id <ID> --apply <job_id>")
         print("4. Interview prep: python main.py --platform --student-id <ID> --interview-prep <job_id>")
         print("5. Dashboard: python main.py --platform --student-id <ID> --dashboard")
+        print("6. Search knowledge: python main.py --platform --knowledge-search 'Python developer salary'")
+        print("7. Market insights: python main.py --platform --student-id <ID> --market-insights")
+        print("8. Knowledge stats: python main.py --platform --knowledge-stats")
 
         print(f"\n🤖 AI Agents Ready: {len(platform.agents)} specialized agents")
         for i, (name, agent) in enumerate(platform.agents.items(), 1):

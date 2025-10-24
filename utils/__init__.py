@@ -7,6 +7,7 @@ from .scraping import extract_skills_from_description, semantic_skill_match, dis
 from .matching import match_student_to_jobs
 from .cv_tailoring import CVTailoringEngine
 from .mock_interview import MockInterviewSimulator
+from .knowledge_base import knowledge_base, KnowledgeBase
 
 __all__ = [
     'jobs_collection',
@@ -20,5 +21,7 @@ __all__ = [
     'check_api_status',
     'API_CONFIG',
     'CVTailoringEngine',
-    'MockInterviewSimulator'
+    'MockInterviewSimulator',
+    'knowledge_base',
+    'KnowledgeBase'
 ]
