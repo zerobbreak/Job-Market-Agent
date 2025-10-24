@@ -292,6 +292,34 @@ class JobMarketAnalyzer:
             self.print_error(f"CV tailoring failed: {e}")
             return None, None
 
+    def generate_cover_letter(self, tailoring_engine, job_posting, tailored_cv=None):
+        """
+        Generate a personalized cover letter for a job application
+        """
+        job_title = job_posting.get('title', 'Position')
+        company = job_posting.get('company', 'Company')
+
+        self.print_progress(f"COVER LETTER for {company} - {job_title}", "GENERATING")
+
+        try:
+            cover_letter = tailoring_engine.generate_cover_letter(job_posting, tailored_cv)
+
+            if cover_letter:
+                self.print_success(f"Cover letter generated for {company}")
+                if not self.quiet:
+                    print("\n📝 COVER LETTER PREVIEW:")
+                    print("-" * 50)
+                    preview = cover_letter[:600] + "..." if len(cover_letter) > 600 else cover_letter
+                    print(preview)
+            else:
+                self.print_error("Failed to generate cover letter")
+
+            return cover_letter
+
+        except Exception as e:
+            self.print_error(f"Cover letter generation failed: {e}")
+            return None
+
     def run_analysis(self, cv_path, career_goals=None):
         """Run complete analysis pipeline"""
         # Create student profile

@@ -6,7 +6,7 @@ Generate job-specific CV versions from master CV using AI optimization
 import os
 from datetime import datetime
 from .scraping import extract_job_keywords
-from agents import ats_optimizer, cv_rewriter
+from agents import ats_optimizer, cv_rewriter, cover_letter_agent
 
 
 class CVTailoringEngine:
@@ -247,3 +247,81 @@ class CVTailoringEngine:
         }
 
         return comparison
+
+    def generate_cover_letter(self, job_posting, tailored_cv=None):
+        """
+        Create job-specific cover letter
+        """
+        try:
+            # Research company for personalization
+            company_research = self._research_company(job_posting['company'])
+
+            # Use tailored CV if available, otherwise use master CV
+            cv_content = tailored_cv if tailored_cv else self.master_cv
+
+            # Generate cover letter
+            cover_letter = cover_letter_agent.run(f"""
+            Create cover letter for:
+
+            Student Profile: {self.profile}
+            CV Content: {cv_content}
+            Job Posting: {job_posting}
+            Company Research: {company_research}
+
+            Ensure letter is:
+            - Tailored to specific role and company
+            - Highlights 2-3 strongest qualifications
+            - Shows genuine interest and cultural fit
+            - Professional yet authentic voice
+            - 250-400 words
+            - Uses STAR method for examples
+            """)
+
+            return cover_letter.content if hasattr(cover_letter, 'content') else str(cover_letter)
+
+        except Exception as e:
+            print(f"Error generating cover letter: {e}")
+            return self._generate_cover_letter_fallback(job_posting, tailored_cv)
+
+    def _research_company(self, company_name):
+        """
+        Research company for personalization
+        """
+        try:
+            # In a real implementation, this would use web search APIs
+            # For now, return basic company information
+            return f"""
+            Company: {company_name}
+            Mission: Technology innovation and customer success
+            Values: Innovation, collaboration, excellence
+            Recent Focus: Digital transformation and AI solutions
+            Culture: Dynamic, fast-paced, employee-focused
+            """
+        except Exception as e:
+            print(f"Error researching company: {e}")
+            return f"Company: {company_name} - Technology company focused on innovation"
+
+    def _generate_cover_letter_fallback(self, job_posting, tailored_cv=None):
+        """
+        Fallback cover letter generation when API is unavailable
+        """
+        cv_content = tailored_cv if tailored_cv else self.master_cv
+        company = job_posting.get('company', 'Company')
+        role = job_posting.get('title', 'Position')
+
+        fallback_letter = f"""
+Dear Hiring Manager,
+
+I am writing to express my strong interest in the {role} position at {company}. As a dedicated technology professional with a passion for innovation, I am excited about the opportunity to contribute to your team's success.
+
+With my background in software development and experience in modern web technologies, I am confident in my ability to make meaningful contributions to {company}'s projects. My technical skills in programming languages, database management, and agile development methodologies align well with the requirements of this role.
+
+I am particularly drawn to {company} because of your commitment to technological excellence and innovative solutions. I would welcome the opportunity to discuss how my skills and enthusiasm can contribute to your continued success.
+
+Thank you for considering my application. I look forward to the possibility of speaking with you about this exciting opportunity.
+
+Best regards,
+{self.profile.get('name', 'Applicant')}
+"""
+
+        return fallback_letter
