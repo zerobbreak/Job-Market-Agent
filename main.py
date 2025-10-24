@@ -457,13 +457,15 @@ class JobMarketAnalyzer:
         try:
             # Read CV
             cv_text = ""
+            num_pages = 0
             with fitz.open(cv_path) as doc:
+                num_pages = len(doc)
                 for page_num, page in enumerate(doc, 1):
                     cv_text += page.get_text()
                     if not self.quiet:
-                        print(f"   📄 Reading page {page_num}/{len(doc)}", end='\r')
+                        print(f"   📄 Reading page {page_num}/{num_pages}", end='\r')
             if not self.quiet:
-                print(f"   📄 CV loaded: {len(cv_text)} characters from {len(doc)} pages")
+                print(f"   📄 CV loaded: {len(cv_text)} characters from {num_pages} pages")
 
             # AI Analysis
             if not self.quiet:
