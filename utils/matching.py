@@ -16,8 +16,10 @@ def match_student_to_jobs(student_profile):
     Match a student profile to jobs in the ChromaDB collection
     """
     from agents import job_matcher
+    from .scraping import extract_job_keywords, keyword_gap_analysis
 
     student_skills = student_profile.get('skills', [])
+    student_cv_text = student_profile.get('cv_text', '')  # Full CV text for keyword analysis
 
     try:
         # Create embedding for the student profile summary
@@ -47,6 +49,19 @@ def match_student_to_jobs(student_profile):
             # Perform semantic skill matching
             skill_matches, match_score = semantic_skill_match(student_skills, required_skills)
 
+            # Extract job keywords using AI
+            job_description = job_metadata.get('description', '')
+            if job_description:
+                job_keywords = extract_job_keywords(job_description)
+
+                # Perform keyword gap analysis if we have CV text
+                gap_analysis = ""
+                if student_cv_text:
+                    gap_analysis = keyword_gap_analysis(student_cv_text, job_keywords)
+            else:
+                job_keywords = "No job description available"
+                gap_analysis = "No job description available for keyword analysis"
+
             # Use the agent to perform detailed analysis
             analysis = job_matcher.run(f"""
             Analyze this job match:
@@ -58,13 +73,18 @@ def match_student_to_jobs(student_profile):
             Skill Match Score: {match_score:.1f}%
             Skill Matches: {skill_matches}
 
-            Provide a comprehensive match analysis with scores.
+            Job Keywords: {job_keywords}
+            Keyword Gap Analysis: {gap_analysis}
+
+            Provide a comprehensive match analysis with scores, including keyword optimization suggestions.
             """)
 
             matched_jobs.append({
                 'job_id': job_id,
                 'match_score': match_score,
-                'analysis': analysis.content
+                'analysis': analysis.content,
+                'job_keywords': job_keywords,
+                'keyword_gaps': gap_analysis
             })
 
         return matched_jobs

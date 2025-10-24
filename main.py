@@ -216,6 +216,7 @@ class JobMarketAnalyzer:
         # Create profile for matching (simplified)
         student_profile = {
             'summary': cv_text[:500],
+            'cv_text': cv_text,  # Full CV text for keyword analysis
             'skills': ['Python', 'Java', 'SQL', 'Machine Learning', 'React', 'Node.js'],
             'desired_role': 'Software Engineer',
             'industry': 'fintech',

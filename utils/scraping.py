@@ -139,3 +139,84 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False):
     matched_jobs = match_student_to_jobs(student_profile)
 
     return matched_jobs
+
+
+# Extract keywords from job description
+def extract_job_keywords(job_description):
+    """
+    Use Gemini to identify critical keywords hiring managers look for
+    """
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=f"""
+            Analyze this job description and extract:
+
+            1. MUST-HAVE KEYWORDS (10-15):
+               - Technical skills (programming languages, tools, methodologies)
+               - Certifications and qualifications
+               - Years of experience
+               - Industry-specific terms
+
+            2. NICE-TO-HAVE KEYWORDS (5-10):
+               - Soft skills (leadership, collaboration)
+               - Preferred qualifications
+               - Domain knowledge
+
+            3. ACTION VERBS (5-10):
+               - Verbs used in job description (develop, manage, analyze)
+
+            4. KEYWORD VARIATIONS:
+               - Synonyms and related terms
+               - Abbreviations (AI = Artificial Intelligence)
+
+            Job Description:
+            {job_description}
+
+            Return structured JSON with categorized keywords and importance weights.
+            """
+        )
+
+        return response.text if hasattr(response, 'text') else str(response)
+
+    except Exception as e:
+        print(f"Error extracting job keywords: {e}")
+        return f"Error: {e}"
+
+
+# Match student CV against job keywords
+def keyword_gap_analysis(student_cv, job_keywords):
+    """
+    Identify missing keywords and suggest where to add them
+    """
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=f"""
+            Compare student CV against required job keywords:
+
+            Student CV: {student_cv}
+            Job Keywords: {job_keywords}
+
+            Provide:
+            1. Keywords PRESENT in CV (mark with ✅)
+            2. Keywords MISSING from CV (mark with ❌)
+            3. Suggestions for adding missing keywords:
+               - Which CV section to add them (Summary, Experience, Skills)
+               - How to incorporate naturally (provide reworded bullet points)
+               - Semantic alternatives if exact match impossible
+
+            IMPORTANT: Never fabricate experience. Only suggest adding keywords where:
+            - Student has relevant experience but didn't mention keyword
+            - Transferable skills apply
+            - Academic projects demonstrate the skill
+
+            Return analysis in structured format.
+            """
+        )
+
+        return response.text if hasattr(response, 'text') else str(response)
+
+    except Exception as e:
+        print(f"Error in keyword gap analysis: {e}")
+        return f"Error: {e}"
