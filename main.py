@@ -8,7 +8,7 @@ import argparse
 from dotenv import load_dotenv
 
 # Import agents
-from agents import profile_builder, job_matcher, ats_optimizer
+from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter
 
 # Import utilities
 from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs
@@ -205,6 +205,49 @@ class JobMarketAnalyzer:
         except Exception as e:
             self.print_error(f"Job matching failed: {e}")
             return []
+
+    def rewrite_cv_for_job(self, cv_text, job_description, job_title="Target Position"):
+        """Rewrite CV content optimized for a specific job"""
+        self.print_progress(f"CV REWRITING for {job_title}", "OPTIMIZING")
+
+        try:
+            # Use the CV rewriter agent to optimize content
+            rewritten_cv = cv_rewriter.run(f"""
+            Original CV Content:
+            {cv_text}
+
+            Target Job Description:
+            {job_description}
+
+            Job Title: {job_title}
+
+            Please rewrite the CV content following these rules:
+            1. Use strong action verbs
+            2. Quantify achievements where possible
+            3. Show impact, not just tasks
+            4. Tailor language to match job description keywords
+            5. Reorder experiences by relevance to this job
+            6. Maintain authenticity - never fabricate experience
+
+            Provide the rewritten CV in this structure:
+            - Professional Summary (3-4 lines)
+            - Experience (reordered and rewritten)
+            - Skills (categorized)
+            - Education (highlighting relevant coursework)
+            - Projects (if applicable)
+            """)
+
+            self.print_success("CV rewritten for maximum impact")
+            if not self.quiet:
+                print("\n📄 OPTIMIZED CV:")
+                print("-" * 50)
+                print(rewritten_cv.content[:1000] + "..." if len(rewritten_cv.content) > 1000 else rewritten_cv.content)
+
+            return rewritten_cv.content
+
+        except Exception as e:
+            self.print_error(f"CV rewriting failed: {e}")
+            return None
 
     def run_analysis(self, cv_path, career_goals=None):
         """Run complete analysis pipeline"""
