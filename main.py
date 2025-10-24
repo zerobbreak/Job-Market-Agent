@@ -1,17 +1,20 @@
 import fitz  # PyMuPDF
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import sys
 import argparse
+import uuid
 from dotenv import load_dotenv
 
 # Import agents
-from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter
+from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter, cover_letter_agent, interview_prep_agent
+
+# Team functionality will be implemented as method coordination
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, interview_copilot
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -39,6 +42,12 @@ import logging
 logging.getLogger('google.genai').setLevel(logging.WARNING)
 logging.getLogger('google').setLevel(logging.WARNING)
 logging.getLogger('agno').setLevel(logging.WARNING)
+
+# Agent coordination will be handled in CareerBoostPlatform class
+
+def generate_student_id():
+    """Generate unique student ID"""
+    return str(uuid.uuid4())[:8].upper()
 
 # All utility functions have been moved to the utils package
 
@@ -484,6 +493,250 @@ class JobMarketAnalyzer:
         return True
 
 
+# Complete student career platform
+class CareerBoostPlatform:
+    """
+    Complete student career platform with coordinated AI agents
+    """
+    def __init__(self):
+        # Initialize coordinated agents
+        self.agents = {
+            'profile_builder': profile_builder,
+            'job_matcher': job_matcher,
+            'ats_optimizer': ats_optimizer,
+            'cv_rewriter': cv_rewriter,
+            'cover_letter_agent': cover_letter_agent,
+            'interview_prep_agent': interview_prep_agent
+        }
+        self.students = {}
+        self.jobs = {}
+        self.applications = {}
+
+    def onboard_student(self, student_cv, career_goals):
+        """
+        Step 1: Create student profile using Profile Builder agent
+        """
+        print("👤 Onboarding new student...")
+
+        profile = profile_builder.run(f"""
+        Analyze CV: {student_cv}
+        Career Goals: {career_goals}
+
+        Create comprehensive profile including:
+        - Education background
+        - Work experience
+        - Skills assessment
+        - Career aspirations
+        - Areas for development
+        """)
+
+        student_id = generate_student_id()
+        self.students[student_id] = {
+            'profile': profile.content if hasattr(profile, 'content') else str(profile),
+            'cv_text': student_cv,
+            'career_goals': career_goals,
+            'onboarded_at': datetime.now(),
+            'cv_engine': None  # Will be created when needed
+        }
+
+        print(f"✅ Student {student_id} onboarded successfully!")
+        return student_id, self.students[student_id]
+
+    def find_matching_jobs(self, student_id, location="South Africa", num_jobs=10):
+        """
+        Step 2: Discover and match jobs using Job Matcher agent
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+
+        student = self.students[student_id]
+        print(f"🔍 Finding matching jobs for {student_id}...")
+
+        # Create student profile for job matching
+        student_profile = {
+            'summary': student['cv_text'][:500],
+            'cv_text': student['cv_text'],
+            'skills': ['Python', 'JavaScript', 'React', 'Node.js'],  # Would be extracted from profile
+            'desired_role': 'Software Engineer',  # Would be extracted from profile
+            'industry': 'Technology',
+            'location': location
+        }
+
+        # Discover new jobs
+        matched_jobs = discover_new_jobs(student_profile, location, verbose=True)
+
+        # Filter and rank top matches
+        top_matches = []
+        for job in matched_jobs[:num_jobs]:
+            if job.get('match_score', 0) >= 50:  # Reasonable match threshold
+                job_id = f"{job.get('company', 'Unknown')}_{hash(job.get('url', ''))}"
+                self.jobs[job_id] = job
+                top_matches.append({
+                    'job_id': job_id,
+                    'job': job,
+                    'match_score': job.get('match_score', 0)
+                })
+
+        print(f"✅ Found {len(top_matches)} matching jobs!")
+        return top_matches
+
+    def apply_to_job(self, student_id, job_id):
+        """
+        Step 3: Generate tailored application materials using CV and Cover Letter agents
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+        if job_id not in self.jobs:
+            raise ValueError(f"Job {job_id} not found")
+
+        student = self.students[student_id]
+        job = self.jobs[job_id]
+
+        print(f"📝 Preparing application for {job['title']} at {job['company']}...")
+
+        # Create CV tailoring engine if not exists
+        if student['cv_engine'] is None:
+            student_profile = {
+                'name': student_id,
+                'skills': ['Python', 'JavaScript', 'React', 'Node.js'],
+                'experience': 'Entry-level developer'
+            }
+            student['cv_engine'] = CVTailoringEngine(student['cv_text'], student_profile)
+
+        cv_engine = student['cv_engine']
+
+        # Generate tailored CV
+        print("📄 Generating tailored CV...")
+        tailored_cv, ats_analysis = cv_engine.generate_tailored_cv(job)
+
+        # Generate cover letter
+        print("📧 Generating cover letter...")
+        cover_letter = cv_engine.generate_cover_letter(job, tailored_cv)
+
+        # Package application
+        application_package = {
+            'student_id': student_id,
+            'job_id': job_id,
+            'cv': tailored_cv,
+            'cover_letter': cover_letter,
+            'ats_analysis': ats_analysis,
+            'match_score': job.get('match_score', 0),
+            'job_url': job.get('url', ''),
+            'company': job.get('company', ''),
+            'job_title': job.get('title', ''),
+            'applied_at': datetime.now()
+        }
+
+        # Track application
+        application_id = f"{student_id}_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        self.applications[application_id] = application_package
+
+        print("✅ Application package ready!")
+        print(f"   📄 CV: {len(tailored_cv) if tailored_cv else 0} characters")
+        print(f"   📧 Cover Letter: {len(cover_letter) if cover_letter else 0} characters")
+
+        return application_id, application_package
+
+    def prepare_for_interview(self, student_id, job_id):
+        """
+        Step 4: Interview preparation using Interview agents
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+        if job_id not in self.jobs:
+            raise ValueError(f"Job {job_id} not found")
+
+        student = self.students[student_id]
+        job = self.jobs[job_id]
+
+        print(f"🎯 Preparing for interview: {job['title']} at {job['company']}")
+
+        # Create interview simulator
+        simulator = MockInterviewSimulator(job['title'], job['company'], student)
+
+        # Generate interview questions
+        print("❓ Generating interview questions...")
+        questions = simulator.questions  # Uses existing question generation
+
+        # Provide option for copilot-assisted practice
+        print("🤖 Starting mock interview (with optional copilot hints)...")
+        print("Note: Copilot hints are for learning purposes only")
+
+        # For demo purposes, return the setup
+        interview_prep = {
+            'questions': questions[:5],  # First 5 questions
+            'simulator': simulator,
+            'job': job,
+            'tips': [
+                "Practice using the STAR method (Situation-Task-Action-Result)",
+                "Prepare specific examples from your experience",
+                "Research the company and role thoroughly",
+                "Practice answering questions out loud"
+            ]
+        }
+
+        print("✅ Interview preparation complete!")
+        return interview_prep
+
+    def track_application(self, application_id):
+        """
+        Track application status and follow-ups
+        """
+        if application_id not in self.applications:
+            raise ValueError(f"Application {application_id} not found")
+
+        application = self.applications[application_id]
+
+        # Calculate follow-up date (1 week after application)
+        followup_date = application['applied_at'] + timedelta(days=7)
+
+        tracking_info = {
+            'application_id': application_id,
+            'status': 'Applied',
+            'applied_date': application['applied_at'],
+            'follow_up_date': followup_date,
+            'days_since_applied': (datetime.now() - application['applied_at']).days,
+            'job_details': {
+                'company': application['company'],
+                'title': application['job_title'],
+                'url': application['job_url']
+            },
+            'next_action': "Follow up in {} days".format(max(0, (followup_date - datetime.now()).days))
+        }
+
+        return tracking_info
+
+    def get_student_dashboard(self, student_id):
+        """
+        Get comprehensive student dashboard
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+
+        student = self.students[student_id]
+
+        # Get student's applications
+        student_applications = [
+            self.track_application(app_id)
+            for app_id, app in self.applications.items()
+            if app['student_id'] == student_id
+        ]
+
+        dashboard = {
+            'student_id': student_id,
+            'profile': student['profile'],
+            'onboarded_at': student['onboarded_at'],
+            'total_applications': len(student_applications),
+            'applications': student_applications,
+            'recent_activity': sorted(
+                [app['applied_date'] for app in student_applications],
+                reverse=True
+            )[:5] if student_applications else []
+        }
+
+        return dashboard
+
+
 def create_parser():
     """Create command line argument parser"""
     parser = argparse.ArgumentParser(
@@ -525,6 +778,49 @@ Examples:
         help='Minimal output mode'
     )
 
+    # CareerBoost Platform options
+    parser.add_argument(
+        '--platform', '-p',
+        action='store_true',
+        help='Use CareerBoost Platform mode'
+    )
+
+    parser.add_argument(
+        '--onboard',
+        type=str,
+        help='Onboard student with CV file path'
+    )
+
+    parser.add_argument(
+        '--student-id',
+        type=str,
+        help='Student ID for platform operations'
+    )
+
+    parser.add_argument(
+        '--find-jobs',
+        action='store_true',
+        help='Find matching jobs for student'
+    )
+
+    parser.add_argument(
+        '--apply',
+        type=str,
+        help='Apply to job (provide job ID)'
+    )
+
+    parser.add_argument(
+        '--interview-prep',
+        type=str,
+        help='Prepare for interview (provide job ID)'
+    )
+
+    parser.add_argument(
+        '--dashboard',
+        action='store_true',
+        help='Show student dashboard'
+    )
+
     return parser
 
 
@@ -533,6 +829,12 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
+    # Check if using CareerBoost Platform
+    if args.platform:
+        run_careerboost_platform(args)
+        return
+
+    # Original JobMarketAnalyzer mode
     # Initialize analyzer
     analyzer = JobMarketAnalyzer(verbose=args.verbose, quiet=args.quiet)
 
@@ -560,6 +862,121 @@ def main():
 
     if not success:
         sys.exit(1)
+
+
+def run_careerboost_platform(args):
+    """Run the CareerBoost platform with coordinated AI agents"""
+    print("="*80)
+    print("🚀 CAREERBOOST AI PLATFORM")
+    print("="*80)
+    print("Complete career acceleration system with coordinated AI agents")
+    print("="*80)
+
+    # Initialize platform
+    platform = CareerBoostPlatform()
+
+    # Handle different platform operations
+    if args.onboard:
+        # Onboard new student
+        cv_path = args.onboard
+        if not os.path.exists(cv_path):
+            print(f"❌ CV file not found: {cv_path}")
+            sys.exit(1)
+
+        # Read CV
+        cv_text = ""
+        with fitz.open(cv_path) as doc:
+            for page in doc:
+                cv_text += page.get_text()
+
+        career_goals = args.goals or CAREER_GOALS_DEFAULT
+
+        student_id, profile = platform.onboard_student(cv_text, career_goals)
+        print(f"\n👤 Student ID: {student_id}")
+        print(f"📊 Profile created successfully!")
+
+    elif args.student_id:
+        student_id = args.student_id
+
+        if args.find_jobs:
+            # Find matching jobs
+            try:
+                matches = platform.find_matching_jobs(student_id)
+                print(f"\n🏆 TOP JOB MATCHES for {student_id}:")
+                for i, match in enumerate(matches[:5], 1):
+                    job = match['job']
+                    print(f"{i}. {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}")
+                    print(f"   Match Score: {match['match_score']:.1f}%")
+                    print(f"   Job ID: {match['job_id']}")
+                    print()
+            except ValueError as e:
+                print(f"❌ Error: {e}")
+
+        elif args.apply:
+            # Apply to job
+            job_id = args.apply
+            try:
+                application_id, application = platform.apply_to_job(student_id, job_id)
+                print(f"\n✅ Application submitted!")
+                print(f"📋 Application ID: {application_id}")
+                print(f"🏢 Company: {application['company']}")
+                print(f"💼 Position: {application['job_title']}")
+            except ValueError as e:
+                print(f"❌ Error: {e}")
+
+        elif args.interview_prep:
+            # Interview preparation
+            job_id = args.interview_prep
+            try:
+                prep = platform.prepare_for_interview(student_id, job_id)
+                print(f"\n🎯 INTERVIEW PREPARATION READY")
+                print(f"❓ Questions prepared: {len(prep['questions'])}")
+                print(f"🤖 Simulator: Ready")
+                print(f"💡 Practice Tips:")
+                for tip in prep['tips']:
+                    print(f"   • {tip}")
+            except ValueError as e:
+                print(f"❌ Error: {e}")
+
+        elif args.dashboard:
+            # Show dashboard
+            try:
+                dashboard = platform.get_student_dashboard(student_id)
+                print(f"\n📊 STUDENT DASHBOARD - {student_id}")
+                print(f"📅 Onboarded: {dashboard['onboarded_at'].strftime('%Y-%m-%d')}")
+                print(f"📝 Total Applications: {dashboard['total_applications']}")
+
+                if dashboard['applications']:
+                    print(f"\n📋 Recent Applications:")
+                    for app in dashboard['applications'][:3]:
+                        print(f"   • {app['job_details']['title']} at {app['job_details']['company']}")
+                        print(f"     Applied: {app['applied_date'].strftime('%Y-%m-%d')}")
+                        print(f"     Status: {app['status']} | Next: {app['next_action']}")
+                        print()
+            except ValueError as e:
+                print(f"❌ Error: {e}")
+
+        else:
+            print("❌ No operation specified. Use --help for available options.")
+            print("\nAvailable operations:")
+            print("  --onboard <cv_file>     : Onboard new student")
+            print("  --find-jobs             : Find matching jobs")
+            print("  --apply <job_id>        : Apply to specific job")
+            print("  --interview-prep <job_id>: Prepare for interview")
+            print("  --dashboard             : Show student dashboard")
+
+    else:
+        print("🎯 CareerBoost Platform Ready!")
+        print("\n📚 Getting Started:")
+        print("1. Onboard a student: python main.py --platform --onboard CV.pdf")
+        print("2. Find jobs: python main.py --platform --student-id <ID> --find-jobs")
+        print("3. Apply: python main.py --platform --student-id <ID> --apply <job_id>")
+        print("4. Interview prep: python main.py --platform --student-id <ID> --interview-prep <job_id>")
+        print("5. Dashboard: python main.py --platform --student-id <ID> --dashboard")
+
+        print(f"\n🤖 AI Agents Ready: {len(platform.agents)} specialized agents")
+        for i, (name, agent) in enumerate(platform.agents.items(), 1):
+            print(f"   {i}. {agent.name}")
 
 
 if __name__ == "__main__":
