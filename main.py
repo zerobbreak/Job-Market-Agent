@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -248,6 +248,49 @@ class JobMarketAnalyzer:
         except Exception as e:
             self.print_error(f"CV rewriting failed: {e}")
             return None
+
+    def create_cv_tailoring_engine(self, cv_text, student_profile):
+        """
+        Create a CV tailoring engine for generating job-specific CV versions
+        """
+        self.print_progress("CV TAILORING", "INITIALIZING ENGINE")
+
+        try:
+            tailoring_engine = CVTailoringEngine(cv_text, student_profile)
+            self.print_success("CV tailoring engine created successfully")
+            return tailoring_engine
+        except Exception as e:
+            self.print_error(f"Failed to create CV tailoring engine: {e}")
+            return None
+
+    def tailor_cv_for_job_application(self, tailoring_engine, job_posting):
+        """
+        Generate a tailored CV for a specific job application
+        """
+        job_title = job_posting.get('title', 'Position')
+        company = job_posting.get('company', 'Company')
+
+        self.print_progress(f"CV TAILORING for {company} - {job_title}", "GENERATING")
+
+        try:
+            tailored_cv, ats_analysis = tailoring_engine.generate_tailored_cv(job_posting)
+
+            if tailored_cv:
+                self.print_success(f"Tailored CV generated for {company}")
+                if not self.quiet:
+                    print("\n📄 TAILORED CV PREVIEW:")
+                    print("-" * 50)
+                    preview = tailored_cv[:500] + "..." if len(tailored_cv) > 500 else tailored_cv
+                    print(preview)
+                    print(f"\n📊 ATS Analysis: {ats_analysis[:200]}..." if len(ats_analysis) > 200 else ats_analysis)
+            else:
+                self.print_error("Failed to generate tailored CV")
+
+            return tailored_cv, ats_analysis
+
+        except Exception as e:
+            self.print_error(f"CV tailoring failed: {e}")
+            return None, None
 
     def run_analysis(self, cv_path, career_goals=None):
         """Run complete analysis pipeline"""
