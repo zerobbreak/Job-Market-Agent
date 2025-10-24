@@ -170,7 +170,7 @@ class JobMarketAnalyzer:
             return []
 
         try:
-            matched_jobs = match_student_to_jobs(student_profile, jobs_collection)
+            matched_jobs = match_student_to_jobs(student_profile)
 
             if matched_jobs:
                 self.print_success(f"Found {len(matched_jobs)} job matches")
