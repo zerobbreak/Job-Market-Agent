@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from agents import profile_builder, job_matcher, ats_optimizer, cv_rewriter
 
 # Import utilities
-from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator
+from utils import jobs_collection, store_jobs_in_db, discover_new_jobs, match_student_to_jobs, CVTailoringEngine, MockInterviewSimulator, interview_copilot
 
 # Import advanced scraping functions from scrapper module
 from scrapper import scrape_all as advanced_scrape_all
@@ -388,6 +388,66 @@ class JobMarketAnalyzer:
 
         except Exception as e:
             self.print_error(f"Mock interview failed: {e}")
+            return None
+
+    def conduct_mock_interview_with_copilot(self, simulator, student_name, enable_copilot=True):
+        """
+        Conduct a mock interview with Interview Copilot hints enabled
+        """
+        try:
+            # Start the interview
+            greeting = simulator.start_interview(student_name)
+
+            if enable_copilot:
+                print("\n⚠️  INTERVIEW COPILOT ENABLED")
+                print("   🤖 You will receive subtle hints after each question")
+                print("   📝 Use these as reminders, not complete answers")
+                print("   🎯 Focus on your own experiences and authentic responses")
+                print("="*80)
+
+            # Conduct the interview with copilot enabled
+            final_report = simulator.conduct_interview(enable_copilot=enable_copilot)
+
+            # Display final report
+            if final_report:
+                self.print_success("Mock interview with copilot completed!")
+                print("\n📊 FINAL PERFORMANCE REPORT:")
+                print("=" * 60)
+                print(final_report)
+                print("=" * 60)
+
+                if enable_copilot:
+                    print("\n🤖 INTERVIEW COPILOT NOTE:")
+                    print("   The hints provided were designed to help you remember key points")
+                    print("   and structure your answers better. In real interviews, you would")
+                    print("   not have access to these hints - practice building confidence")
+                    print("   to answer questions independently.")
+
+            return final_report
+
+        except Exception as e:
+            self.print_error(f"Mock interview with copilot failed: {e}")
+            return None
+
+    def get_interview_copilot_hint(self, question, student_profile=None):
+        """
+        Get a copilot hint for a specific question (for standalone use)
+        """
+        try:
+            # Create a temporary simulator to access the copilot method
+            temp_simulator = MockInterviewSimulator("Temp", "Temp", student_profile)
+            hint = temp_simulator.get_interview_copilot_hint(question, student_profile)
+
+            print("\n🤖 Interview Copilot Hint:")
+            print("-" * 40)
+            print(hint)
+            print("-" * 40)
+            print("💡 Remember: Use as subtle reminders, not complete answers")
+
+            return hint
+
+        except Exception as e:
+            self.print_error(f"Failed to get copilot hint: {e}")
             return None
 
     def run_analysis(self, cv_path, career_goals=None):

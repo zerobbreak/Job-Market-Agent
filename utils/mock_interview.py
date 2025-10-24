@@ -6,7 +6,7 @@ Conduct realistic mock interviews with AI interviewer and real-time feedback
 import os
 from datetime import datetime
 from .scraping import extract_job_keywords
-from agents import interview_prep_agent
+from agents import interview_prep_agent, interview_copilot
 
 
 class MockInterviewSimulator:
@@ -45,9 +45,10 @@ class MockInterviewSimulator:
 
         return greeting
 
-    def conduct_interview(self, get_response_callback=None):
+    def conduct_interview(self, get_response_callback=None, enable_copilot=False):
         """
         Conduct the full interview session
+        enable_copilot: If True, shows subtle interview hints after each question
         """
         if not get_response_callback:
             # Default to console input
@@ -56,6 +57,13 @@ class MockInterviewSimulator:
         for i, question in enumerate(self.questions, 1):
             print(f"\n🎯 Question {i}/{len(self.questions)}:")
             print(f"   {question}")
+
+            # Show copilot hint if enabled
+            if enable_copilot:
+                print("\n🤖 Interview Copilot Hints:")
+                hint = self.get_interview_copilot_hint(question, self.student_profile)
+                print(f"   {hint}")
+                print("   (Remember: Use these as subtle reminders, not complete answers)")
 
             # Get student response
             response = get_response_callback(question)
@@ -339,3 +347,70 @@ Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
 
         return report
+
+    def get_interview_copilot_hint(self, question, student_profile=None):
+        """
+        Provide subtle interview guidance (use responsibly)
+        """
+        try:
+            # Create context from student profile if available
+            context = ""
+            if student_profile:
+                skills = student_profile.get('skills', [])
+                experience = student_profile.get('experience', '')
+                context = f"Student has skills: {', '.join(skills)}. Experience: {experience[:200]}"
+
+            # Get copilot guidance
+            copilot_response = interview_copilot.run(f"""
+            Question: {question}
+            Context: {context}
+
+            Provide 3-5 bullet points of subtle guidance:
+            - STAR method structure reminders
+            - Key talking points to include
+            - Relevant keywords from student's background
+            - Confidence-building nudges
+
+            Keep it ethical: No complete answers, just helpful hints.
+            """)
+
+            return copilot_response.content if hasattr(copilot_response, 'content') else str(copilot_response)
+
+        except Exception as e:
+            print(f"Error getting copilot hint: {e}")
+            return self._fallback_copilot_hint(question)
+
+    def _fallback_copilot_hint(self, question):
+        """
+        Fallback copilot hints when API is unavailable
+        """
+        question_lower = question.lower()
+
+        hints = []
+
+        if any(word in question_lower for word in ['team', 'collaborate', 'group', 'worked with']):
+            hints.extend([
+                "• STAR method: Situation-Task-Action-Result",
+                "• Mention team size and your specific role",
+                "• Highlight communication and conflict resolution"
+            ])
+        elif any(word in question_lower for word in ['challenge', 'difficult', 'problem', 'overcome']):
+            hints.extend([
+                "• Describe the challenge clearly",
+                "• Explain your approach step-by-step",
+                "• Focus on what you learned"
+            ])
+        elif any(word in question_lower for word in ['project', 'experience', 'work']):
+            hints.extend([
+                "• Use specific examples from your background",
+                "• Quantify results where possible",
+                "• Connect to job requirements"
+            ])
+        else:
+            hints.extend([
+                "• Structure answer clearly",
+                "• Include specific examples",
+                "• Show enthusiasm for the role"
+            ])
+
+        return "\n".join(hints[:4])  # Return up to 4 hints
