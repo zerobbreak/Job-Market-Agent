@@ -1,0 +1,1156 @@
+"id","site","job_url","job_url_direct","title","company","location","date_posted","job_type","salary_source","interval","min_amount","max_amount","currency","is_remote","job_level","job_function","listing_type","emails","description","company_industry","company_url","company_logo","company_url_direct","company_addresses","company_num_employees","company_revenue","company_description","skills","experience_range","company_rating","company_reviews_count","vacancy_count","work_from_home_type"
+"in-5b371ec251139552","indeed","https://www.indeed.com/viewjob?jk=5b371ec251139552","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200624059-0836&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200624059-0836%2Fsenior-ml-software-engineer-apple-watch%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D25cba846-b235-11f0-84f8-1d9b20d55bff%26rx_job%3D200624059-0836%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DMLAI","Senior ML Software Engineer - Apple Watch","Apple","Cupertino, CA, US","2025-10-26","","direct_data","yearly",181100.0,272100.0,"USD",False,"","","","","Imagine what you could do here. At Apple, new ideas have a way of becoming great products, services, and customer experiences very quickly. Bring passion and dedication to your job and there's no telling what you could accomplish! Our team is working toward a future where our devices are aware of us and our environment, they directly support our health and wellbeing, and they nudge us to be more thoughtful, present, and inspired human beings. We believe there is huge opportunity to improve lives and the world by understanding people, our activities, connections, and the environments we live in using sensing and machine learning on our devices. Our team works with cross\\-functional partners across Apple to create high\\-impact features and new ways to interact on Apple Watch, home products, and new hardware. We prototype new experiences, develop and ship products, and publish our work. We are a creative, multi\\-disciplinary, optimistic, and collaborative team. Come join us and build the future!  
+
+  
+
+**Description**  
+
+  
+
+The team you will join is responsible for creating the technologies that power new, innovative product features for Apple Watch, like DoubleTap, AssistiveTouch, Handwashing, and Raise to Speak. We are highly collaborative and partner with a variety of research and product teams across Apple to explore novel experiences and ship features. We are looking for a versatile Machine Learning Software Engineer who is passionate about developing innovative, ML\\-driven product features that push the boundaries of sensing and human\\-computer interaction, and who can work across disciplines \\- from training advanced models to rapid on\\-device prototyping and full\\-scale productization. In this hybrid role, you’ll collaborate closely with designers, ML engineers, and software experts to transform ambitious, loosely defined ideas into next\\-generation sensing experiences that reach millions of Apple Watch users worldwide. Your responsibilities will include: \\- Develop and optimize ML algorithms leveraging multimodal sensor data \\- like motion and audio \\- to detect user activities and contextual situations that enhance our understanding of real\\-world behavior \\- Integrate and deploy ML models on\\-device, building power\\-efficient frameworks that encapsulate models, interface seamlessly with sensors, and communicate effectively with UX layers \\- Drive innovation from concept to deployment, ensuring promising research ideas evolve into high\\-impact, user\\-facing features \\- Design and implement tools, analytics, and processes to perform in\\-depth, hands\\-on analysis for validating and quantifying algorithm performance both offline and on\\-device  
+
+  
+
+**Minimum Qualifications**  
+
+* M.S. or Ph.D. in Machine Learning, Computer Science, or a related field
+* Solid knowledge of machine learning methods, statistical analysis, and predictive modeling using time\\-series data
+* Strong Python skills with experience writing production\\-quality code and working with deep learning frameworks such as PyTorch or TensorFlow
+* Experience with Swift or Objective\\-C and developing on Apple platforms
+* Excellent communication and collaboration skills, with ability to work independently or in small teams
+
+  
+
+**Preferred Qualifications**  
+
+* Proficient in the full ML development cycle: data collection, model training and optimization, defining metrics, evaluation, performing failure analysis, and model deployment to resource constrained devices
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $272,100, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-2917a9ecf36d233e","indeed","https://www.indeed.com/viewjob?jk=2917a9ecf36d233e","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200628079-3956&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200628079-3956%2Fcompiler-engineer-computer-vision%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D28429b96-b235-11f0-84f8-f5c4e2b2bc3b%26rx_job%3D200628079-3956%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DMLAI","Compiler Engineer - Computer Vision","Apple","Sunnyvale, CA, US","2025-10-26","","direct_data","yearly",181100.0,318400.0,"USD",False,"","","","","Here at Apple, we welcome passionate individuals who are excited to tackle challenges and play a key role in shaping the future of computer vision! Our team is developing and optimizing a groundbreaking Domain\\-Specific Language (DSL) designed specifically for vision tasks running on Apple hardware, including iPhone and VisionPro. Our team pushes the boundaries of optimization, working on complex computer vision pipelines that are accelerated through a series of sophisticated optimization techniques. We are looking for a compiler engineer that will bring a passion for compiler technology, a strong understanding of computer vision, and the creativity to design innovative solutions that deliver real\\-world impact. Are you ready to leave an enduring mark on the world of technology? Join us to create a direct impact on the efficiency and scalability of next\\-generation computer vision systems across Apple devices!  
+
+  
+
+**Description**  
+
+  
+
+Our team is seeking a skilled compiler engineer to help design and enhance a Domain\\-Specific Language (DSL) tailored for computer vision. In this role, you will be empowered to: • Drive the creation of advanced compiler passes that transform high\\-level DSL code into highly optimized, performance\\-boosted low\\-level implementations • Refine high\\-level code into optimized, high\\-performance implementations and accelerating computer vision pipelines through advanced techniques • Collaborate closely with teams who rely on this technology, to ensure the solutions meet the needs of those using the system, delivering impactful results  
+
+  
+
+**Minimum Qualifications**  
+
+* High level C\\+\\+ programming expertise and experience working in a large and complex software stack
+* Background in compiler backend development and/or optimizations including LLVM and/or MLIR
+* Bachelor’s degree in a related field with 10 years of experience
+
+  
+
+**Preferred Qualifications**  
+
+* Familiarity with Nonlinear Optimization and Computer Vision algorithms
+* Ability to analyze and optimize program execution paths
+* Expertise in differentiable programming and automatic differentiation, with a deep understanding of its applications in optimization
+* A passion for simplifying complex systems and empowering users through technology
+* Master's or PhD degree, especially in Compiler Theory or Compiler Design
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-144946e8bc7718f5","indeed","https://www.indeed.com/viewjob?jk=144946e8bc7718f5","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200628044-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200628044-3401%2Fplatform-software-engineer-mso%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D24e121ea-b235-11f0-84f8-77f58da92159%26rx_job%3D200628044-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","Platform Software Engineer (MSO)","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",181100.0,272100.0,"USD",False,"","","","","Our ever\\-evolving suite of Heath and Wellness products for iPhone and Watch are helping our users live more active, healthier lives. Be ready to make something great when you come here. Dynamic, inspiring people and innovative, industry\\-defining technologies are the norm at Apple. The people who work here have reinvented and defined entire industries with our products and services. The same dedication to innovation also applies to our business practices \\- strengthening our commitment to leave the world better than we found it. AC Wellness Network LLC is a subsidiary of Apple Inc. and is the dedicated management services organization (MSO) for AC Wellness, a dedicated independent medical group that serves Apple Wellness Centers in Santa Clara Valley. Our mission is to deliver the world’s best healthcare experiences for Apple employees. The MSO is looking for an extraordinary Platform Software Engineer with a background in data engineering and large scale engineering projects. You will enjoy building services that Data Science and Application developers will leverage to shape exceptional experiences for our employees and customers.  
+
+  
+
+**Description**  
+
+  
+
+As a Platform Software Engineer, you are ready to tackle big problems, enjoy working in an agile and dynamic multi\\-functional team, love data, and want to make a big impact in health. Some of your characteristics include: • Passion for data and ML • Comfortable handling service and ML infrastructure • Eager to develop new applications and novel product features This is a site\\-based role.  
+
+  
+
+**Minimum Qualifications**  
+
+* 5 years of experience developing software
+* Experience in programming using Go, Python, Java or Kotlin.
+* AWS admin experience (preferably its ETL and ML toolset)
+* Proven understanding of database technologies including NoSQL and SQL.
+* Consistent track record of shipping services in production environments for consumer facing products
+
+  
+
+**Preferred Qualifications**  
+
+* Excellent communication skills
+* Works well in and across teams
+* Successful in a self directed environment
+* Comfortable with weekly on\\-call rotation
+* Reliable and responsive to support the team’s needs
+* Nice to have experience handling Pen Testing and Secure Applications
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $272,100, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-31f6c025d8c8d261","indeed","https://www.indeed.com/viewjob?jk=31f6c025d8c8d261","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200628046-0836&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200628046-0836%2Fios-os-platform-developer-find-my-team%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D28db80ce-b235-11f0-84f8-4937b93d2443%26rx_job%3D200628046-0836%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","iOS/OS Platform Developer - Find My Team","Apple","Cupertino, CA, US","2025-10-26","","direct_data","yearly",126800.0,220900.0,"USD",False,"","","","","The Find My Team deeply cares about helping you keep track of the things that you deeply care about. We are a group of highly motivated engineers building innovative solutions to help you find your devices, items, and friends. We are seeking a hardworking developer to help us bring together and create scalable technologies which are used daily by hundreds of millions of people. Join us and help craft new app platforms and technologies that are foundational to Apple’s growing ecosystem.  
+
+  
+
+**Description**  
+
+  
+
+As a member of our team, you’ll be a core creator, contributor, and inventor. You’ll build new system UI and features from our healthy roadmap, make steady improvements to our existing foundations, and build out new ideas and innovations. You’ll harness existing foundations, fill in the gaps with innovation and creativity, and build beautiful user interfaces that are backed by powerful frameworks and daemons. Join our team of individuals with a deep passion for building phenomenal products\\- we can’t wait to meet you!  
+
+  
+
+**Responsibilities**  
+
+* Work on existing and new UI's and features across the Apple ecosystem.
+* Incorporate safety, security, and privacy into everything you build.
+* Produce code which is accurate, maintainable, and reusable.
+* Work with engineers, product managers, and others across the team and Apple ecosystems, providing accurate updates, data, presentations, or whatever information is needed to support your projects.
+
+  
+
+**Minimum Qualifications**  
+
+* BS or MS in Computer Science or related field
+* Intern or post\\-graduate experience building apps and/or other related software solutions
+* Swift or Objective\\-C development skills
+* Exposure and knowledge of SwiftUI
+* Strong computer science fundamentals, including data structures and algorithms
+* Passionate about and experienced with UI development
+* Ability to produce readable and maintainable code, keeping performance, security, and privacy in mind
+* Detail\\-oriented with a proactive approach to potential challenges
+
+  
+
+**Preferred Qualifications**  
+
+* Experience with building cross\\-platform UI for one or more of the following: (watchOS, tvOS, iOS, Mac Catalyst, native macOS)
+* Passionate about learning new skills and technologies quickly and independently
+* Motivated by solving complex challenges
+* Good understanding of the software development lifecycle
+* Strong time management and multitasking skills
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $126,800 and $220,900, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-77c77fc3f593b0c9","indeed","https://www.indeed.com/viewjob?jk=77c77fc3f593b0c9","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627425-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627425-3401%2Faiml-senior-machine-learning-engineer-machine-learning-platform-technologies%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D26db6aa8-b235-11f0-84f8-c33547136cee%26rx_job%3D200627425-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DMLAI","AIML - Senior Machine Learning Engineer, Machine Learning Platform Technologies","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",181100.0,318400.0,"USD",False,"","","","","Imagine what you could do here. At Apple, great ideas have a way of becoming great products, services, and customer experiences very quickly. Bring passion and dedication to your job and there’s no telling what you could accomplish. At Apple, imagination and ambition come together to shape what’s next. Every product we build, every service we design, and every experience we deliver is born from collaboration\\-making each other’s ideas stronger and more impactful. We believe in thinking differently, challenging the status quo, and pushing the boundaries of technology and intelligence to create products that bring joy and change lives for the better. Our strength comes from the diversity of our people and perspectives, and when everyone is included, we do the best work of our lives. If you’re bold, curious, and passionate about building best\\-in\\-class technology, Apple is the place to not just join something\\-but to add something. As part of this group, you will develop GenAI search and recommendation application end to end and partner with a lot of engineering teams across Apple.  
+
+  
+
+**Description**  
+
+  
+
+The Partner Adoption team, part of the Machine Learning Platform Technologies organization, is the backbone of onboarding applications to Apple’s world\\-class search and recommendation platform. In this role, you’ll work end\\-to\\-end on feature and product design across a broad range of Apple services\\-including Apple Music, TV\\+, App Store, Books, Games, Podcasts, Siri, and more. As a key member of the team, you’ll design and build large\\-scale server\\-side functionality while also exploring and delivering cutting\\-edge GenAI applications and features powered by large language models. You’ll partner closely with product, platform, and design teams to bring innovations to life\\-reaching millions, and even billions, of users worldwide with the reliability and excellence Apple is known for.  
+
+  
+
+**Minimum Qualifications**  
+
+* Bachelor’s degree or higher in Computer Science or related technical field.
+* 5 year\\+ industry experience in distributed system and ML Modeling (Search, Recommendation, NLP, Ads, Statistics).
+* Experience with high throughput services particularly at supercomputing scale.
+* Proficient with running applications on Cloud (AWS / Azure or equivalent) using Kubernetes, Docker etc.
+* Proficient in building and maintaining systems written in modern languages (eg: Golang, Rust, Python)
+
+  
+
+**Preferred Qualifications**  
+
+* Familiar with GenAI Applications and popular agentic framework like Langchain and Langgraph
+* Familiar with embedding model and llm serving like Nvidia TensorRT\\-LLM, vLLLM, DeepSpeed, Nvidia Triton Server etc.
+* Familiar with very large scale serving system
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-7c509f2ea70e66f2","indeed","https://www.indeed.com/viewjob?jk=7c509f2ea70e66f2","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627923-0836&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627923-0836%2Fserdes-micro-architect%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D266b6a7a-b235-11f0-84f8-8dd60db32c1b%26rx_job%3D200627923-0836%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DHRDWR","SerDes Micro Architect","Apple","Cupertino, CA, US","2025-10-26","","direct_data","yearly",181100.0,318400.0,"USD",False,"","","","","Analog Mixed\\-Signal (AMS) Team is seeking a self\\-motivated SERDES Micro Architect to drive the definition of our next generation IPs. The SERDES IPs will be used in Apple silicon offering breakthrough power and performance for iPhone, iPad, Mac, and Apple Watch.  
+
+  
+
+**Description**  
+
+  
+
+You will define the Micro Architecture of analog mixed\\-signal IPs with emphasis on SERDES design. You will review firmware code, analog and digital circuits and will verify that the design meets performance requirements. You will work with silicon evaluation and design verification teams to define expected behavior. You would lead the debug effort in system bring up and factory test. You will work with signal integrity engineers to determine system requirements.  
+
+  
+
+**Minimum Qualifications**  
+
+* BS degree in technical discipline with minimum 10 years of relevant experience.
+
+  
+
+**Preferred Qualifications**  
+
+* Experience leading the definition of high\\-speed SERDES receiver, transmitter, and clocking blocks
+* Deep understanding of adaptation and optimization algorithms
+* Deep understanding of communications and information theory
+* Proficiency in equalizers, timing recovery and system identification
+* Proficiency in DSP concepts and applications
+* Familiarity with mixed\\-signal modeling in Python/MATLAB/C/C\\+\\+
+* Experience in system design and performance tradeoff
+* Familiarity with simulation tools for analog, digital, and/ or mixed\\-signal circuits
+* Familiarity with Machine Learning concepts
+* Experience in firmware or embedded software development is a plus
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-b0d6d4923adb20c7","indeed","https://www.indeed.com/viewjob?jk=b0d6d4923adb20c7","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627013-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627013-3401%2Fsoftware-platform-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D26cec04e-b235-11f0-84f8-e9b5c9190249%26rx_job%3D200627013-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","Software Platform Engineer","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",181100.0,318400.0,"USD",False,"","","","","Apple is where individual imaginations gather together, committing to the values that lead to great work. Every new product we build, service we create, or Apple Store experience we deliver is the result of us making each other’s ideas stronger. That happens because every one of us shares a belief that we can make something wonderful and share it with the world, changing lives for the better. It’s the diversity of our people and their thinking that inspires the innovation that runs through everything we do. When we bring everybody in, we can do the best work of our lives. Here, you’ll do more than join something \\- you’ll add something. Join the Final Cut Pro engineering team \\- Apple’s flagship professional video editing suite used by major Hollywood studios and millions of creators worldwide\\- and drive the technical evolution of core data infrastructure that enables professional creative workflows.  
+
+  
+
+**Description**  
+
+  
+
+As a Senior Platform Engineer, you’ll help drive the modernization of persistence systems that must handle multi\\-gigabyte projects with real\\-time responsiveness. You will be a technical contributor within the team while collaborating across Apple’s creative applications ecosystem. This is a hands\\-on engineering role for someone who thrives on solving complex problems at the intersection of high\\-performance computing and creative technology  
+
+  
+
+**Responsibilities**  
+
+* Develop and enhance the data model \\& persistence infrastructure in Final Cut Pro.
+* Contribute to the migration of legacy Objective\\-C systems to modern Swift using best practices for maintainability and testability.
+* Implement features and improvements using Swift’s structured concurrency model and Grand Central Dispatch, with attention to thread safety and performance.
+* Collaborate closely with product and platform teams to deliver foundational improvements that enable seamless workflows across Apple’s creative suite.
+* Identify and resolve complex bottlenecks in multi\\-threaded, latency\\-sensitive environments processing large media files.
+* Write clean, testable, and well\\-documented code following modern architectural principles.
+* Participate in code reviews, design discussions and technical investigations while contributing to engineering excellence standards
+
+  
+
+**Minimum Qualifications**  
+
+* 5\\+ years of experience in application or platform\\-level development, with a focus on persistence frameworks and system design.
+* Deep experience with Core Data or similar persistence technologies, including schema migrations and domain modeling.
+* Mastery of Swift concurrency patterns and seamless Objective\\-C interoperability.
+* Solid understanding of multi\\-threaded programming, synchronization, and memory management in modern Apple environments.
+* Experience with unit testing, continuous integration, and engineering best practices.
+* Strong communication skills, with the ability to articulate technical ideas clearly and work collaboratively in a multi\\-functional team.
+* BS or MS in Computer Science, Engineering, or equivalent experience.
+
+  
+
+**Preferred Qualifications**  
+
+* Familiarity with media applications, graphics applications, video editing tools, or creative software workflows.
+* Understanding of Apple frameworks such as AVFoundation, Core Animation, AppKit/UIKit.
+* Experience working in large, legacy codebases with incremental modernization goals.
+* Experience with Micro Services Architecture and Distributed Systems.
+* Knowledge of data migration strategies and performance tuning for I/O\\-bound systems.
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-e13c3c6c8fd01905","indeed","https://www.indeed.com/viewjob?jk=e13c3c6c8fd01905","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200626854-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200626854-3401%2Fwireless-rf-phy-fw-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D1fe753b4-b235-11f0-84f8-a3f7c20fbfeb%26rx_job%3D200626854-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DHRDWR","Wireless RF PHY FW Engineer","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",126800.0,190900.0,"USD",False,"","","","","Would you like to join Apple’s growing Wireless Connectivity Silicon team? Our wireless System on a Chip (SoC) organization is responsible for all aspects of wireless silicon development with a particular emphasis on highly energy efficient design and new technologies that transform the user experience at the product level, all of which is driven by a world\\-class vertically integrated engineering team spanning RF/Analog architecture and design, Systems/PHY/MAC architecture and design, VLSI/RTL design and integration, Emulation, Design Verification, Test and Validation, and FW/SW engineering. In this highly visible role, you will be at the center of a silicon design group with a critical impact on getting functional wireless products to hundreds of millions of customers! Responsible for crafting and implementing embedded firmware for SoC bring up and wireless connectivity enablement. You will work closely with product software and manufacturing teams to enable RF and PHY calibrations, algorithms and testing to enable productization of the silicon / system.  
+
+  
+
+**Description**  
+
+  
+
+As an Embedded FW Engineer, the individual will be a core member of a Wireless SoC firmware team, with emphasis on radio and PHY bring up, RF calibrations, signal processing algorithm implementation and performance tuning.  
+
+  
+
+**Responsibilities**  
+
+* Work closely with product SW and manufacturing teams to provide system\\-level API and firmware functionality to meet productization needs. Develop SoC test and calibration capabilities for wafer, module, and system factories.
+* Collaborate with RF/Radio design, DVT, PHY and System engineering teams to architect, define and implement innovative algorithms, calibrations and protocols.
+* Debug realtime systems with limited visibility, working hands\\-on with development boards and lab equipment.
+* Support pre\\-silicon validation efforts, including simulation, emulation, and FPGA prototyping.
+* Support post\\-silicon bringup, validation, performance characterization, system integration and debug.
+
+  
+
+**Minimum Qualifications**  
+
+* Minimum requirement of a bachelors degree.
+
+  
+
+**Preferred Qualifications**  
+
+* Strong background in embedded FW development using C and assembly languages, familiarity with ARM CPUs and its internals.
+* Good understanding of embedded wireless communication systems, Radio and PHY fundamentals and key RF performance metrics. Familiarity with digital signal processing algorithms.
+* Experience with low\\-level hardware interfaces, register and interrupt programming, bare\\-metal software development, clock and power management.
+* Solid understanding of basic embedded concepts such as RTOS, concurrency, multi\\-processor systems.
+* Fluency in using lab equipment such as logic analyzers, oscilloscopes, network analyzers, spectrum analyzers, signal generators, power meters.
+* Experience implementing diagnostics, manufacturing tests, and protocol compliance software.
+* Knowledgeable of industry standards for wireless communications such as Bluetooth, WLAN, Zigbee, or UWB.
+* Proficient in at least one of the scripting languages such as Python, Perl, or Tcl.
+* Excellent communication skills \\- both written and oral.
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $126,800 and $190,900, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-e876b09cef3043ae","indeed","https://www.indeed.com/viewjob?jk=e876b09cef3043ae","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200626855-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200626855-3401%2Fwireless-rf-phy-fw-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D207da0a2-b235-11f0-84f8-e5b9c4b5cd5a%26rx_job%3D200626855-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DHRDWR","Wireless RF PHY FW Engineer","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",147400.0,272100.0,"USD",False,"","","","","Would you like to join Apple’s growing Wireless Connectivity Silicon team? Our wireless System on a Chip (SoC) organization is responsible for all aspects of wireless silicon development with a particular emphasis on highly energy efficient design and new technologies that transform the user experience at the product level, all of which is driven by a world\\-class vertically integrated engineering team spanning RF/Analog architecture and design, Systems/PHY/MAC architecture and design, VLSI/RTL design and integration, Emulation, Design Verification, Test and Validation, and FW/SW engineering. In this highly visible role, you will be at the center of a silicon design group with a critical impact on getting functional wireless products to hundreds of millions of customers! Responsible for crafting and implementing embedded firmware for SoC bring up and wireless connectivity enablement. You will work closely with product software and manufacturing teams to enable RF and PHY calibrations, algorithms and testing to enable productization of the silicon / system.  
+
+  
+
+**Description**  
+
+  
+
+As an Embedded FW Engineer, the individual will be a core member of a Wireless SoC firmware team, with emphasis on radio and PHY bring up, RF calibrations, signal processing algorithm implementation and performance tuning.  
+
+  
+
+**Responsibilities**  
+
+* Work closely with product SW and manufacturing teams to provide system\\-level API and firmware functionality to meet productization needs. Develop SoC test and calibration capabilities for wafer, module, and system factories.
+* Collaborate with RF/Radio design, DVT, PHY and System engineering teams to architect, define and implement innovative algorithms, calibrations and protocols.
+* Debug realtime systems with limited visibility, working hands\\-on with development boards and lab equipment.
+* Support pre\\-silicon validation efforts, including simulation, emulation, and FPGA prototyping.
+* Support post\\-silicon bringup, validation, performance characterization, system integration and debug.
+
+  
+
+**Minimum Qualifications**  
+
+* BS and 3\\+ years of relevant industry experience.
+
+  
+
+**Preferred Qualifications**  
+
+* Strong background in embedded FW development using C and assembly languages, familiarity with ARM CPUs and its internals.
+* Good understanding of embedded wireless communication systems, Radio and PHY fundamentals and key RF performance metrics.
+* Familiarity with digital signal processing algorithms.
+* Experience with low\\-level hardware interfaces, register and interrupt programming, bare\\-metal software development, clock and power management.
+* Solid understanding of basic embedded concepts such as RTOS, concurrency, multi\\-processor systems.
+* Fluency in using lab equipment such as logic analyzers, oscilloscopes, network analyzers, spectrum analyzers, signal generators, power meters.
+* Experience implementing diagnostics, manufacturing tests, and protocol compliance software.
+* Knowledgeable of industry standards for wireless communications such as Bluetooth, WLAN, Zigbee, or UWB.
+* Proficient in at least one of the scripting languages such as Python, Perl, or Tcl
+* Excellent communication skills \\- both written and oral.
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $147,400 and $272,100, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-14a36233d5e7d9e4","indeed","https://www.indeed.com/viewjob?jk=14a36233d5e7d9e4","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200626853-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200626853-3401%2Fwireless-rf-phy-fw-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D2094d1a2-b235-11f0-84f8-d7ebeffb00f1%26rx_job%3D200626853-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DHRDWR","Wireless RF PHY FW Engineer","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",181100.0,318400.0,"USD",False,"","","","","Would you like to join Apple’s growing Wireless Connectivity Silicon team? Our wireless System on a Chip (SoC) organization is responsible for all aspects of wireless silicon development with a particular emphasis on highly energy efficient design and new technologies that transform the user experience at the product level, all of which is driven by a world\\-class vertically integrated engineering team spanning RF/Analog architecture and design, Systems/PHY/MAC architecture and design, VLSI/RTL design and integration, Emulation, Design Verification, Test and Validation, and FW/SW engineering. In this highly visible role, you will be at the center of a silicon design group with a critical impact on getting functional wireless products to hundreds of millions of customers! Responsible for crafting and implementing embedded firmware for SoC bring up and wireless connectivity enablement. You will work closely with product software and manufacturing teams to enable RF and PHY calibrations, algorithms and testing to enable productization of the silicon / system.  
+
+  
+
+**Description**  
+
+  
+
+As an Embedded FW Engineer, the individual will be a core member of a Wireless SoC firmware team, with emphasis on radio and PHY bring up, RF calibrations, signal processing algorithm implementation and performance tuning.  
+
+  
+
+**Responsibilities**  
+
+* Work closely with product SW and manufacturing teams to provide system\\-level API and firmware functionality to meet productization needs. Develop SoC test and calibration capabilities for wafer, module, and system factories.
+* Collaborate with RF/Radio design, DVT, PHY and System engineering teams to architect, define and implement innovative algorithms, calibrations and protocols.
+* Debug realtime systems with limited visibility, working hands\\-on with development boards and lab equipment.
+* Support pre\\-silicon validation efforts, including simulation, emulation, and FPGA prototyping.
+* Support post\\-silicon bringup, validation, performance characterization, system integration and debug.
+
+  
+
+**Minimum Qualifications**  
+
+* BS and 10\\+ years of relevant industry experience.
+
+  
+
+**Preferred Qualifications**  
+
+* Strong background in embedded FW development using C and assembly languages, familiarity with ARM CPUs and its internals.
+* Good understanding of embedded wireless communication systems, Radio and PHY fundamentals and key RF performance metrics.
+* Familiarity with digital signal processing algorithms.
+* Experience with low\\-level hardware interfaces, register and interrupt programming, bare\\-metal software development, clock and power management.
+* Solid understanding of basic embedded concepts such as RTOS, concurrency, multi\\-processor systems.
+* Fluency in using lab equipment such as logic analyzers, oscilloscopes, network analyzers, spectrum analyzers, signal generators, power meters.
+* Experience implementing diagnostics, manufacturing tests, and protocol compliance software.
+* Knowledgeable of industry standards for wireless communications such as Bluetooth, WLAN, Zigbee, or UWB.
+* Proficient in at least one of the scripting languages such as Python, Perl, or Tcl
+* Excellent communication skills \\- both written and oral.
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-d2216455f343c3cb","indeed","https://www.indeed.com/viewjob?jk=d2216455f343c3cb","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627829-0836&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627829-0836%2Fmachine-learning-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D26c487e0-b235-11f0-84f8-7110a658868e%26rx_job%3D200627829-0836%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DHRDWR","Machine Learning Engineer","Apple","Cupertino, CA, US","2025-10-26","","direct_data","yearly",126800.0,190900.0,"USD",False,"","","","","At Apple, we are constantly pushing the boundaries of what is possible, driven by our belief in the transformative power of new ideas. We are seeking a highly motivated and talented machine learning (ML) engineer to join our All\\-Scale Modeling (ASM) team. You will work at the forefront of development, contributing to the creation of differentiating technologies for products that will delight and inspire millions of Apple customers.  
+
+  
+
+**Description**  
+
+  
+
+Design and build ML systems that solve challenging real\\-world problems for hardware technologies. Implement and integrate state\\-of\\-the\\-art algorithms, ensuring optimal model performance and delivering actionable insights. Opportunities to collaborate with world\\-class teams.  
+
+  
+
+**Minimum Qualifications**  
+
+* Expertise in ML algorithms and applications.
+* B.S. degree in Computer Science, Electrical Engineering or a related field.
+
+  
+
+**Preferred Qualifications**  
+
+* Strong analytical and problem\\-solving skills.
+* Expertise in advanced mathematics and optimization.
+* Proficiency in Python and ML libraries such as PyTorch.
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $126,800 and $190,900, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-8a997013a5eb3ce9","indeed","https://www.indeed.com/viewjob?jk=8a997013a5eb3ce9","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627178-3577&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627178-3577%2Fsystems-software-engineer-compute%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D2a965060-b235-11f0-84f8-ab2d0e071494%26rx_job%3D200627178-3577%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","Systems Software Engineer, Compute","Apple","San Francisco, CA, US","2025-10-26","","direct_data","yearly",147400.0,272100.0,"USD",False,"","","","","Apple is looking for a Software Development Engineer to work on its internal device cloud, supporting all of Apple’s hardware, software \\& services. Your work will help Apple ship entirely new products and features, as well as providing critical infrastructure to ensure existing ones continue to meet a high standard.  
+
+  
+
+**Description**  
+
+  
+
+You will join a high\\-performing software development team within the Services engineering organization building lifecycle management software providing the core provisioning functionality for our device cloud. The engineers on our team possess a broad variety of expertise ranging from low\\-level kernel debugging including USB, virtualization, power, and networking subsystems, to high\\-level system design and nuanced understanding of end\\-user experience. This broad and ambitious role will allow you to work with all of Apple’s hardware from the earliest phases of prototypes all the way through to their launch date; You will have exposure to the latest and greatest software features from their initial concepts on Apple’s iOS, watchOS, tvOS, visionOS, and macOS platforms and work on integrating our software with features in these operating systems. You will get to collaborate with teams across the globe from nearly all engineering organizations at Apple in this role with broad cross\\-functional exposure.  
+
+  
+
+**Minimum Qualifications**  
+
+* Languages: Familiarity with a programming language well suited to systems programming; like C, C\\+\\+, Rust, or Swift (for Servers)
+* Programming, Networking (HTTP, TCP/UDP, DNS, TLS), Distributed System Design
+* Resourcefulness: Excellent analytical, problem\\-solving, and debugging skills
+* End\\-to\\-end ownership: management of projects from low\\-level technical design up to the interface and user experience
+* Bachelor’s or Master’s Degree in an engineering\\-related field (or equivalent industry experience)
+
+  
+
+**Preferred Qualifications**  
+
+* Knowledge: Strong foundation in a few of Operating System Fundamentals, Systems
+* Curiosity: Desire and ability to learn and be in the details
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $147,400 and $272,100, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-931062327a7b12a0","indeed","https://www.indeed.com/viewjob?jk=931062327a7b12a0","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627957-0836&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627957-0836%2Fisp-driver-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D2aa320f2-b235-11f0-84f8-e90714be30bf%26rx_job%3D200627957-0836%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DHRDWR","ISP Driver Engineer","Apple","Cupertino, CA, US","2025-10-26","","direct_data","yearly",147400.0,272100.0,"USD",False,"","","","","Apple's Camera ISP team is looking for an extraordinary engineer to drive groundbreaking technologies for Apple products! As part of the team, you will work on core camera and ISP technologies, including Apple designed ISP pipeline and HW components. You will have the chance to define the way that Apple develops, tests and manufactures all of its products. Our close\\-knit team champions an environment of product innovation, rapid product iteration and collaboration at both team and multi\\-functional levels with a liberating amount of autonomy. This role involves developing camera software across many layers, including firmware, kernel and user space. You will be responsible for helping to design, implement, and test new camera features across all Apple products.  
+
+  
+
+**Description**  
+
+  
+
+In this role you will implement and maintain camera and ISP features, including: \\- Develop firmware and drivers (kernel/userspace) for sophisticated image processing pipelines in embedded systems for the latest SoC blocks and chipsets in Apple. \\- Work with algorithm team to design and develop algorithms to control CMOS image sensors, ISP pipeline and machine learning pipeline. \\- Design and implement camera features in embedded systems for Apple products. You will work with other teams to define features and communication protocols and detail the requirements clearly with implementation specifications. \\- Work on HW validation and provide firmware support to factory testing. You will also implement features to support hardware testing and diagnosis. \\- Collaborate closely with various teams, such as Silicon Design, Camera Hardware, QA, and the Media Frameworks team  
+
+  
+
+**Minimum Qualifications**  
+
+* BS and a minimum of 3 years relevant industry experience
+* Proficiency in C/C\\+
+* Proficiency in development of multithreaded software in embedded environments
+
+  
+
+**Preferred Qualifications**  
+
+* 4\\+ years experience in low level software development
+* Familiarity with image sensors, image processing techniques, and camera pipelines
+* Experience with macOS or iOS driver development
+* Strong communication and interpersonal skills
+* Be able to adapt and excel in a fast paced environment
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $147,400 and $272,100, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-83f49a5fd5e85aac","indeed","https://www.indeed.com/viewjob?jk=83f49a5fd5e85aac","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627708-0836&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627708-0836%2Fcamera-software-qa-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D29d4d430-b235-11f0-84f8-3193a148df0c%26rx_job%3D200627708-0836%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","Camera Software QA Engineer","Apple","Cupertino, CA, US","2025-10-26","","direct_data","yearly",126800.0,220900.0,"USD",False,"","","","","As a QA Engineer on the Camera Software team, you will be responsible for testing and validating new camera features across iPhone, iPad, and Mac. You will design and execute detailed test plans, identify and document issues, and work closely with software and hardware teams to ensure the highest image quality and reliability.  
+
+  
+
+**Description**  
+
+  
+
+As a QA Engineer on the Camera Software team, you will work hands\\-on with the camera features that shape the way millions of people capture photos and videos every day. You will explore and test new imaging capabilities, evaluate user experience and reliability, and help ensure that every release delivers the seamless quality and creativity Apple users expect. This role involves close collaboration with software engineers, as well as opportunities to influence product quality from the earliest stages of development. If you’re passionate about photography, technology, and delivering exceptional user experiences, this role offers a front\\-row seat to innovation in one of Apple’s most iconic technologies.  
+
+  
+
+**Responsibilities**  
+
+* Work with engineering leads to develop test plans to validate new Camera features.
+* Write test plans to cover pre\\-submission testing.
+* Run existing test plans to validate various camera features and technologies.
+* Document and report failures and issues observed.
+* Track reported issues to make sure they are resolved on time and validate the fixes.
+* Compile test reports for other testers and managers to review.
+
+  
+
+**Minimum Qualifications**  
+
+* Working knowledge of QA testing methodologies and strategy.
+* Working knowledge of Photo and Video formats and technologies.
+* Working knowledge of test tracking and reporting tools.
+
+  
+
+**Preferred Qualifications**  
+
+* Familiarity with Media metadata information and interpretation.
+* Scripting language (working knowledge).
+* Automation and command line tools (working knowledge)
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $126,800 and $220,900, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-14af6a86e5124c1e","indeed","https://www.indeed.com/viewjob?jk=14af6a86e5124c1e","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627955-3956&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627955-3956%2Fqa-engineer-health-software%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D254fe8a2-b235-11f0-84f8-dd58f24c9fc9%26rx_job%3D200627955-3956%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","QA Engineer - Health Software","Apple","Sunnyvale, CA, US","2025-10-26","","direct_data","yearly",101200.0,197500.0,"USD",False,"","","","","Health is a diverse, hardworking, and passionate team striving to help people live healthier lives while keeping their data safe, private, and secure. We create amazing applications that enrich peoples’ lives in a tangible way, and provide APIs and SDKs to 3rd party developers so that their devices and applications can seamlessly integrate into Apple’s ecosystem. We are looking for a Software QA Engineer to help ensure our Health experience is rock\\-solid and customer\\-focused. We're looking for critical thinkers who would like to play a key role qualifying critical software and the frameworks that support it during all stages of software development. We practice nimble, fast\\-paced development that relies heavily on a tight relationship between Engineering, Project Management, and QA.  
+
+  
+
+**Description**  
+
+  
+
+As a Quality Assurance Engineer you’ll have the opportunity to have a direct hand in crafting the next advancements in Apple’s health software ecosystem. We work on the Health app \\- a platform for Health and Fitness efforts across Apple \\- as well as the Research App and related features and experiences that broaden the definition of what our platform can do. You will work with experienced engineers, designers, and medical experts to qualify and refine features that delight users as well as form a solid technical foundation for future development. In this position, you will need to be self\\-directed, creative, and comfortable with change and ambiguity. Strong technical and interpersonal skills are all essential.  
+
+  
+
+**Responsibilities**  
+
+* Functional testing of Health Software features on Apple’s OS platforms, often across concurrent release vectors
+* Execution of automated test scripts and analysis of their results alongside focused, creative manual testing
+* Design and implementation of test plans and test cases
+* Risk analysis, cross\\-functional testing coordination, and integration testing across the system
+* Maintain a qualitative, high level understanding of your areas of responsibility
+* Investigation and debugging on Unix based systems to triage difficult problems and work towards resolutions
+
+  
+
+**Minimum Qualifications**  
+
+* Experience working in Software Quality Assurance on iOS or similar
+* Independent thinker with the ability to proactively triage, investigate, and debug difficult technical and UX problems autonomously as well as collaboratively
+* Excellent written and verbal communication skills to facilitate close interaction with development teams, management, and other organizations within Apple
+* Passion for quality assurance in software, including developing, extending and maintaining test plans, methodologies, as well as automation libraries
+* Bachelors degree in Computer Science, Software Engineering or equivalent experience
+
+  
+
+**Preferred Qualifications**  
+
+* An enthusiasm for user\\-focused design and shipping high\\-quality technology
+* Creative thinker and strong problem solver with meticulous attention to detail
+* Proven experience creating test plans for new products and features
+* Passion for debugging difficult problems and driving results with multi\\-functional teams
+* Excellent written and verbal communication skills to facilitate close interaction with development teams, management, and other organizations within Apple
+* A passion for health and health\\-related technology
+* Previous work with regulated medical devices is a plus
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $101,200 and $197,500, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-334083a56bda0bb7","indeed","https://www.indeed.com/viewjob?jk=334083a56bda0bb7","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627688-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627688-3401%2Fsenior-media-software-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D22e30716-b235-11f0-84f8-93441283e56f%26rx_job%3D200627688-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","Senior Media Software Engineer","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",212000.0,318400.0,"USD",False,"","","","","Apple is where individual imaginations gather together, committing to the values that lead to great work. Every new product we build, service we create, or Apple Store experience we deliver is the result of us making each other’s ideas stronger. That happens because every one of us shares a belief that we can make something wonderful and share it with the world, changing lives for the better. It’s the diversity of our people and their thinking that inspires the innovation that runs through everything we do. When we bring everybody in, we can do the best work of our lives. Here, you’ll do more than join something \\- you’ll add something. Apple Vision Pro is a revolutionary spatial computer that seamlessly blends digital content with your physical space. It will allow us to do the things we love in ways never before possible \\- all while staying connected to the people around us. The Vision Products Group (VPG) is looking for a senior Media Software Engineer to help us push the limits of the next generation of spatial media. This team works on key technologies and frameworks that enables spatial media experiences on Vision Pro and future AR/VR products. As a member of our creative organization, you will have the uniquely rewarding opportunity to craft future products that will delight and inspire millions of people every single day.  
+
+  
+
+**Description**  
+
+  
+
+We are looking for a Video/Imaging Software Engineer to join our team of media processing specialists. Your mission will be to work on the next generation media technologies, design, develop, and implement media processing pipeline and frameworks that powers exciting media experiences on Apple Vision Pro. We need your passion, knowledge, and creativity to solve complex technical challenges. You will have a unique and direct opportunity to create products that will inspire millions of Apple’s customers as a core member of our fast\\-paced group.  
+
+  
+
+**Responsibilities**  
+
+* Innovate and pioneer cutting\\-edge technologies that redefine how we experience and consume media
+* Design and develop media processing software frameworks and SDKs for Apple Vision Pro and new AR/VR products
+* Optimize media processing pipelines by minimizing utilization of critical hardware resources(GPU, CPU, memory, etc)
+* Analyze software issues, and develop fixes for software anomalies
+* Collaborate closely with cross\\-functional teams(software, hardware, algorithms and UX) to create ground breaking technologies and systems
+* Present results clearly and discuss design and implementation effectively
+
+  
+
+**Minimum Qualifications**  
+
+* B.S. or higher in Computer Science, Electrical Engineering OR equivalent degree OR equivalent experience
+* 10\\+ years of experience with software development
+* Experience with image and video processing, media processing pipelines
+* Excellent programming skills and proficient with one of the programming languages: C/C\\+\\+, Objective\\-C, and Swift
+* Strong problem solving and analytical thinking skills
+* A strong focus on end user experience
+* Creative and collaborative approach to problem solving, and a drive to build products that surprise and delight.
+
+  
+
+**Preferred Qualifications**  
+
+* Success shipping media products involving image and video processing, video capture/playback, or media processing pipeline is a plus
+* Familiarity with AR/VR technologies
+* Experience with iOS / macOS development
+* Experience with developing media SDKs, frameworks and customer facing APIs
+* Hands\\-on experience with core machine learning algorithms and tools
+* Experience with media formats (HEVC, H264, JPEG, etc).
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $212,000 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-8e7c1a4616708788","indeed","https://www.indeed.com/viewjob?jk=8e7c1a4616708788","https://jsv3.recruitics.com/redirect?rx_cid=3427&rx_jobId=200627853-3401&rx_url=https%3A%2F%2Fjobs.apple.com%2Fen-us%2Fdetails%2F200627853-3401%2Fvideo-imaging-software-engineer%3Fboard_id%3DJB001%26rx_campaign%3Dindeed0%26rx_ch%3Djobp4p%26rx_group%3D122365%26rx_id%3D24e23260-b235-11f0-84f8-b1efd91612e3%26rx_job%3D200627853-3401%26rx_medium%3Dcpc%26rx_r%3Dnone%26rx_source%3Dindeed%26rx_ts%3D20251026T163806Z%26rx_vp%3Dcpc%26team%3DSFTWR","Video/Imaging Software Engineer","Apple","San Francisco Bay Area, CA, US","2025-10-26","","direct_data","yearly",181100.0,318400.0,"USD",False,"","","","","Apple is where individual imaginations gather together, committing to the values that lead to great work. Every new product we build, service we create, or Apple Store experience we deliver is the result of us making each other’s ideas stronger. That happens because every one of us shares a belief that we can make something wonderful and share it with the world, changing lives for the better. It’s the diversity of our people and their thinking that inspires the innovation that runs through everything we do. When we bring everybody in, we can do the best work of our lives. Here, you’ll do more than join something \\- you’ll add something. Apple Vision Pro is a revolutionary spatial computer that seamlessly blends digital content with your physical space. It will allow us to do the things we love in ways never before possible \\- all while staying connected to the people around us.  
+
+  
+
+**Description**  
+
+  
+
+We are looking for a Video/Imaging Software Engineer to join our team of media processing specialists. Your mission will be to design, develop, and implement the next\\-generation media processing pipeline and framework that powers exciting experiences on Apple Vision Pro. We need your passion, knowledge, and creativity to solve complex technical challenges. You will have a unique and direct opportunity to create products that will inspire millions of Apple’s customers as a core member of our fast\\-paced group.  
+
+  
+
+**Responsibilities**  
+
+* Design and develop media processing software frameworks and SDKs for Apple Vision Pro and new AR/VR products
+* Optimize media processing pipelines by minimizing utilization of critical hardware resources(GPU, CPU, memory, etc)
+* Analyze software issues, and develop fixes for software anomalies
+* Collaborate closely with cross\\-functional teams(software, hardware, algorithms and UX) to create ground breaking technologies and systems
+* Present results clearly and discuss design and implementation effectively
+
+  
+
+**Minimum Qualifications**  
+
+* Bachelor degree in CS/EE, or similar fields
+* 7\\+ years experience with software development
+* Experience with image and video processing
+* Excellent programming skills and proficient with one of the programming languages: C/C\\+\\+, Objective\\-C, and Swift
+* Excellent communication and collaboration skills
+* Strong problem solving and analytical thinking skills
+
+  
+
+**Preferred Qualifications**  
+
+* Master degree in CS/EE, or similar fields
+* Experience with media formats(HEVC, H264, JPEG, etc).
+* Experience with video capture/playback, or media processing pipeline
+* Experience with developing media SDKs, frameworks and customer facing APIs
+
+  
+
+**Pay \\& Benefits**  
+
+  
+
+At Apple, base pay is one part of our total compensation package and is determined within a range. This provides the opportunity to progress as you grow and develop within a role. The base pay range for this role is between $181,100 and $318,400, and your base pay will depend on your skills, qualifications, experience, and location.  
+
+  
+
+Apple employees also have the opportunity to become an Apple shareholder through participation in Apple’s discretionary employee stock programs. Apple employees are eligible for discretionary restricted stock unit awards, and can purchase Apple stock at a discount if voluntarily participating in Apple’s Employee Stock Purchase Plan. You’ll also receive benefits including: Comprehensive medical and dental coverage, retirement benefits, a range of discounted products and free services, and for formal education related to advancing your career at Apple, reimbursement for certain educational expenses \\- including tuition. Additionally, this role might be eligible for discretionary bonuses or commission payments as well as relocation. Learn more about Apple Benefits.  
+
+  
+
+Note: Apple benefit, compensation and employee stock programs are subject to eligibility requirements and other terms of the applicable plan or program.  
+
+  
+
+Apple is an equal opportunity employer that is committed to inclusion and diversity. We seek to promote equal opportunity for all applicants without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, Veteran status, or other legally protected characteristics. Learn more about your EEO rights as an applicant .  
+
+  
+
+Submit Resume","","https://www.indeed.com/cmp/Apple","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/60c39b87a9a4eaa4df878c716840f84d","http://www.apple.com","Cupertino, CA","10,000+","more than $10B (USD)","This is where you can do the best work of your life.","","","","","",""
+"in-8ae50c64d78e1513","indeed","https://www.indeed.com/viewjob?jk=8ae50c64d78e1513","https://ats.rippling.com/rippling/jobs/aa83e605-5cc1-401a-8166-1ffcb0122032?jobSite=Indeed","Software Engineer II - Corporate Cards (Fullstack Backend Leaning)","Rippling","San Francisco, CA, US","2025-10-26","fulltime","direct_data","yearly",135000.0,236250.0,"USD",False,"","","","accomodations@rippling.com","**About Rippling**
+------------------
+
+
+Rippling gives businesses one place to run HR, IT, and Finance. It brings together all of the workforce systems that are normally scattered across a company, like payroll, expenses, benefits, and computers. For the first time ever, you can manage and automate every part of the employee lifecycle in a single system.
+
+  
+
+Take onboarding, for example. With Rippling, you can hire a new employee anywhere in the world and set up their payroll, corporate card, computer, benefits, and even third\\-party apps like Slack and Microsoft 365—all within 90 seconds.
+
+  
+
+Based in San Francisco, CA, Rippling has raised $1\\.4B\\+ from the world’s top investors—including Kleiner Perkins, Founders Fund, Sequoia, Greenoaks, and Bedrock—and was named one of America's best startup employers by Forbes.
+
+  
+
+We prioritize candidate safety. Please be aware that all official communication will only be sent from @Rippling.com addresses.
+
+**About the role**
+------------------
+
+  
+
+You would be joining the Corporate Cards team, which gives companies unprecedented control and visibility over how employees spend money without needing to duct tape together disconnected card providers, expense tools, and policy systems.
+
+
+We’ve built corporate cards that are deeply integrated with the rest of Rippling—from employee roles and departments to spend policies and accounting categories. With Rippling, admins can issue cards in seconds and automatically enforce policy rules based on employee context.
+
+
+The team has seen explosive customer adoption since launching just over a year ago, and we’re scaling rapidly as we prepare for transaction volumes to grow from millions to billions of dollars monthly. As a Full Stack Engineer (Backend\\-leaning), you’ll play a key role in building and scaling the infrastructure that powers every transaction, policy enforcement, and real time alerting. You’ll also be building backend features that power our web \\+mobile apps,, while also contributing to our frontend systems when needed
+
+
+We’re looking for someone who is energized by working across the stack, and is excited to tackle hard engineering problems in the context of financial systems.
+
+**What you will do**
+--------------------
+
+* Take ownership of projects, guiding them from initial product requirements through to launch, benefiting all Spend Management customers.
+* Maintain a relentless commitment to elevating engineering standards within both the team and the organization as a whole.
+* Develop resilient, scalable solutions that adhere to strict latency criteria.
+* Provide mentorship to junior engineers, nurturing their professional growth and success.
+* Identify inefficiencies within the team and drive process and system enhancements that will support scaling the team.
+
+**What you will need**
+----------------------
+
+* 3\\+ years of professional work experience using Python and JavaScript
+* Strong grasp of computer science fundamentals, providing you with a solid foundation to tackle complex technical problems and drive innovation.
+* Proficiency in managing the complete project lifecycle, transforming intricate ideas into successful launches.
+* Demonstrate a keen product sense that advocates for delivering exceptional customer experiences.
+* Outstanding capacity to convey intricate technical concepts clearly and precisely, both in written and verbal communication, while collaborating effectively across diverse functional teams.
+* Experience with React is a plus but not required
+
+**Additional Information**
+--------------------------
+
+
+Rippling is an equal opportunity employer. We are committed to building a diverse and inclusive workforce and do not discriminate based on race, religion, color, national origin, ancestry, physical disability, mental disability, medical condition, genetic information, marital status, sex, gender, gender identity, gender expression, age, sexual orientation, veteran or military status, or any other legally protected characteristics, Rippling is committed to providing reasonable accommodations for candidates with disabilities who need assistance during the hiring process. To request a reasonable accommodation, please email accomodations@rippling.com
+
+  
+
+Rippling highly values having employees working in\\-office to foster a collaborative work environment and company culture. For office\\-based employees (employees who live within a defined radius of a Rippling office), Rippling considers working in the office, at least three days a week under current policy, to be an essential function of the employee's role.
+
+  
+
+This role will receive a competitive salary \\+ benefits \\+ equity. The salary for US\\-based employees will be aligned with one of the ranges below based on location; see which tier applies to your location here.
+
+  
+
+A variety of factors are considered when determining someone’s compensation–including a candidate’s professional background, experience, and location. Final offer amounts may vary from the amounts listed below.
+
+ **The pay range for this role is:**  
+
+135,000 \\- 236,250 USD per year(US Tier 1\\)","","https://www.indeed.com/cmp/Rippling","https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/d621ada17bcc71d13a5817834303263d","http://www.rippling.com","San Francisco","51 to 200","","","","","","","",""
+"in-1bd2110460e99945","indeed","https://www.indeed.com/viewjob?jk=1bd2110460e99945","http://www.indeed.com/job/software-engineer-iii-medical-device-c-windows-algorithm-development-1bd2110460e99945","Software Engineer III – Medical Device (C#, Windows, Algorithm Development)","TYG Consultant's","Pleasanton, CA, US","2025-10-26","contract","","hourly","","","USD",False,"","","","","**No C2C please!!!!!!!!No C2C please!!!!!!!!No C2C please!!!!!!!!No C2C please!!!!!!!!**
+
+**Software Engineer III – Medical Device (C\\#, Windows, Algorithm Development)**
+
+We’re looking for an experienced **Software Engineer** to develop and enhance software for **medical devices**.
+
+This role focuses on **Windows\\-based software** (C\\#/.NET) that interfaces with **embedded hardware, patient\\-facing GUIs**, and **cloud connectivity via Azure**. The ideal candidate has hands\\-on experience developing software in a **regulated medical device environment** and understands **design controls** and **software lifecycle processes (IEC 62304\\).**
+
+**Key Responsibilities**
+
+* Design, develop, and maintain **Windows and embedded Windows applications** for medical devices.
+* Develop and refine **control algorithms** to enhance product performance.
+* Support existing systems from **manufacturing transfer through end\\-of\\-life**, with focus on reliability and continuous improvement.
+* Collaborate cross\\-functionally with **electrical, mechanical, research, and quality teams**.
+* Troubleshoot, integrate, and debug **software\\-hardware interactions**.
+* Contribute to **requirements, architecture, and design documentation** under design control.
+* Ensure all work complies with **FDA QSR, ISO 13485**, and international medical device regulations.
+
+**Top Skills \\& Experience**
+
+* **C\\#/.NET development** on **Windows and embedded Windows platforms**.
+* **Medical device software development** experience (required).
+* **Algorithm design and optimization**.
+* **Cloud connectivity (Azure)** and device communication protocols (RS232, SPI, USB).
+* Strong understanding of **software design patterns**, **multi\\-threaded applications**, and **PID control**.
+
+**Qualifications**
+
+* **Bachelor’s degree** in Software Engineering, Computer Engineering, or related field (Master’s preferred).
+* **8\\+ years** of engineering design experience, including **5\\+ years** in C\\#/.NET Windows development.
+* **3\\+ years** developing software in a **regulated medical device environment** or equivalent.
+* Working knowledge of **IEC 62304** and **design control documentation**.
+* Strong analytical, communication, and teamwork skills.
+* Self\\-motivated and results\\-driven, with proven ability to deliver on time.
+
+Job Type: Contract
+
+Pay: $60\\.57 per hour
+
+Expected hours: 40 per week
+
+Work Location: In person","","https://www.indeed.com/cmp/Tyg-Consultant's","","","","","","","","","","","",""
+"in-11c50b592a34ee19","indeed","https://www.indeed.com/viewjob?jk=11c50b592a34ee19","http://www.indeed.com/job/software-engineer-11c50b592a34ee19","Software Engineer","Dataing","San Francisco Bay Area, CA, US","2025-10-26","fulltime","direct_data","yearly",103240.0,124332.0,"USD",True,"","","","","**Job Summary**  
+We are seeking a talented and motivated Software Engineer to join our dynamic team. The ideal candidate will have a strong background in software development, with experience in various programming languages and frameworks. You will be responsible for designing, developing, and maintaining software applications that meet the needs of our clients while ensuring high performance and responsiveness. This role requires a collaborative mindset, as you will work closely with cross\\-functional teams to deliver innovative solutions.
+
+**Duties**
+
+* Design, develop, and implement software applications using Ruby on Rails, JavaScript, Python, C\\#, and Java.
+* Collaborate with product managers and UX/UI designers to define application requirements and specifications.
+* Develop RESTful APIs and integrate third\\-party APIs to enhance application functionality.
+* Participate in Agile development processes, including sprint planning, daily stand\\-ups, and retrospectives.
+* Conduct code reviews and maintain version control using GitHub and SVN.
+* Ensure the quality of the software through unit testing and debugging.
+* Optimize applications for maximum speed and scalability across various platforms.
+* Work with databases such as MySQL and SQL Server to manage data effectively.
+* Stay current with emerging technologies and industry trends to continuously improve development practices.
+
+**Requirements**
+
+* Bachelor’s degree in Computer Science or a related field or equivalent experience.
+* Proficiency in multiple programming languages including Ruby on Rails, JavaScript, Python, C\\#, Java, C\\+\\+, and VBA.
+* Experience with web development frameworks such as React Express and .NET.
+* Familiarity with cloud services like AWS and Azure for application deployment.
+* Strong understanding of IT infrastructure concepts including Linux environments.
+* Knowledge of Agile methodologies for software development processes.
+* Experience with RBAC (Role\\-Based Access Control) for secure application design.
+* Ability to work collaboratively in a team\\-oriented environment while also being self\\-motivated.
+* Excellent problem\\-solving skills and attention to detail. Join us in building cutting\\-edge software solutions that drive innovation!
+
+Job Type: Full\\-time
+
+Pay: $103,240\\.52 \\- $124,332\\.66 per year
+
+Work Location: Remote","","https://www.indeed.com/cmp/Dataing-1","","","","","","","","","","","",""
+"li-4289334142","linkedin","https://www.linkedin.com/jobs/view/4289334142","","Software Engineer - Platform","Plaid","San Francisco, CA","2025-10-25","","","","","","",False,"","","","","","","https://www.linkedin.com/company/plaid-","","","","","","","","","","","",""
+"li-4310488505","linkedin","https://www.linkedin.com/jobs/view/4310488505","","Software Engineer, Backend","Calm","San Francisco, CA","2025-10-25","","","","","","",False,"","","","","","","https://www.linkedin.com/company/calm-com","","","","","","","","","","","",""
+"li-4276814807","linkedin","https://www.linkedin.com/jobs/view/4276814807","","Frontend Engineer | All Levels","Ramp","San Francisco, CA","2025-10-25","","","","","","",False,"","","","","","","https://www.linkedin.com/company/ramp","","","","","","","","","","","",""
+"li-4278552077","linkedin","https://www.linkedin.com/jobs/view/4278552077","","Software Engineer, Datastore","Notion","San Francisco, CA","2025-10-25","","","","","","",False,"","","","","","","https://www.linkedin.com/company/notionhq","","","","","","","","","","","",""
+"li-4278551507","linkedin","https://www.linkedin.com/jobs/view/4278551507","","Software Engineer, Cloud Infrastructure","Notion","San Francisco, CA","2025-10-25","","","","","","",False,"","","","","","","https://www.linkedin.com/company/notionhq","","","","","","","","","","","",""
+"li-4331355254","linkedin","https://www.linkedin.com/jobs/view/4331355254","","Software Engineer 1","Intuit","Mountain View, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/intuit","","","","","","","","","","","",""
+"li-4276096791","linkedin","https://www.linkedin.com/jobs/view/4276096791","","Software Engineer, Developer Experience","Notion","San Francisco, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/notionhq","","","","","","","","","","","",""
+"li-4307261950","linkedin","https://www.linkedin.com/jobs/view/4307261950","","Full Stack Software Engineer, Growth","OpenAI","San Francisco, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/openai","","","","","","","","","","","",""
+"li-4318364345","linkedin","https://www.linkedin.com/jobs/view/4318364345","","Software Engineer","Morgan Stanley","Menlo Park, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/morgan-stanley","","","","","","","","","","","",""
+"li-4317203065","linkedin","https://www.linkedin.com/jobs/view/4317203065","","Software Engineer","PayPal","San Jose, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/paypal","","","","","","","","","","","",""
+"li-4323961452","linkedin","https://www.linkedin.com/jobs/view/4323961452","","Software Engineer (Backend)","Artisan","San Francisco, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/artisanai","","","","","","","","","","","",""
+"li-4278382831","linkedin","https://www.linkedin.com/jobs/view/4278382831","","Backend Engineer - Grok Chat","xAI","Palo Alto, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/xai","","","","","","","","","","","",""
+"li-4297496012","linkedin","https://www.linkedin.com/jobs/view/4297496012","","Software Engineer (L5) - Internal Tooling","Netflix","Los Gatos, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/netflix","","","","","","","","","","","",""
+"li-4323977796","linkedin","https://www.linkedin.com/jobs/view/4323977796","","Software Engineer Apprentice","Clever Inc.","San Francisco, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/clever-inc-","","","","","","","","","","","",""
+"li-4316797412","linkedin","https://www.linkedin.com/jobs/view/4316797412","","Front End Engineer ($200k + Equity) at Fast-Growing AI Startup","Jack and Jill","San Francisco, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/jackjill","","","","","","","","","","","",""
+"li-4331318530","linkedin","https://www.linkedin.com/jobs/view/4331318530","","Software Engineer - Intern","Kognitos","Mountain View, CA","2025-10-24","","","","","","",False,"","","","","","","https://www.linkedin.com/company/kognitos","","","","","","","","","","","",""
+"li-4316700731","linkedin","https://www.linkedin.com/jobs/view/4316700731","","Software Engineer II - Member Engagement","Uber","San Francisco, CA","2025-10-23","","","","","","",False,"","","","","","","https://www.linkedin.com/company/uber-com","","","","","","","","","","","",""
+"li-4098166100","linkedin","https://www.linkedin.com/jobs/view/4098166100","","Software Engineer, Frontend (All Levels)","Zip","San Francisco, CA","","","","","","","",False,"","","","","","","https://www.linkedin.com/company/theziphq","","","","","","","","","","","",""
+"li-4223669951","linkedin","https://www.linkedin.com/jobs/view/4223669951","","Software Engineer I- Ad Demand","Twitch","San Francisco, CA","","","","","","","",False,"","","","","","","https://www.linkedin.com/company/twitch-tv","","","","","","","","","","","",""
+"li-4289439367","linkedin","https://www.linkedin.com/jobs/view/4289439367","","Software Engineer - New Grad","Together AI","San Francisco, CA","","","","","","","",False,"","","","","","","https://www.linkedin.com/company/togethercomputer","","","","","","","","","","","",""

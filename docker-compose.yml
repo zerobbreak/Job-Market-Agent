@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  job-market-analyzer:
+    build: .
+    container_name: job-market-analyzer
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - CV_FILE_PATH=/app/CV.pdf
+      # Add other environment variables as needed
+    volumes:
+      - ./CV.pdf:/app/CV.pdf:ro  # Mount CV file read-only
+      - ./job_cache:/app/job_cache:rw  # Mount cache directory
+      - ./.env:/app/.env:ro  # Mount environment file read-only
+    networks:
+      - job-market-network
+    restart: unless-stopped
+    # Override default command if needed
+    # command: ["python", "main.py", "--verbose"]
+
+networks:
+  job-market-network:
+    driver: bridge
+
+# For development with hot reload (if we add web interface later)
+# volumes:
+#   - .:/app
+#   - /app/venv  # Don't mount venv for performance

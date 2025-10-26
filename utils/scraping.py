@@ -4,7 +4,8 @@ Scraping utilities for job data extraction and processing
 
 import google.genai as genai
 import os
-from scrapper import scrape_all
+from scrapper import scrape_all_advanced
+from tqdm import tqdm
 
 # Initialize Gemini client
 client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
@@ -141,18 +142,55 @@ def semantic_skill_match(student_skills, required_skills):
         return [], 0
 
 
-def discover_new_jobs(student_profile, location="Johannesburg", verbose=False):
+def discover_new_jobs(student_profile, location="Johannesburg", verbose=False, max_jobs=20):
     """
     Scrape job boards for new opportunities using advanced Playwright-based scraping
     """
-    desired_role = student_profile.get('desired_role', 'software engineer')
+    # Use multiple search terms if available, otherwise fall back to desired_role
+    search_terms = student_profile.get('search_terms', [])
+    if not search_terms:
+        desired_role = student_profile.get('desired_role', 'software engineer')
+        search_terms = [desired_role]
 
     if verbose:
-        print("🔄 Starting advanced job scraping with Playwright...")
-        print(f"   🎯 Searching for: {desired_role} in {location}")
+        print(f"🔄 Starting advanced job scraping with search terms: {search_terms}")
+        print(f"   🎯 Location: {location}")
 
-    # Use the advanced scraping from scrapper.py
-    all_jobs = scrape_all(desired_role, location)
+    all_jobs = []
+
+    # Use progress bar for multiple search terms
+    if len(search_terms) > 1:
+        search_iterator = tqdm(search_terms, desc="🔍 Scraping job sites", unit="search")
+    else:
+        search_iterator = search_terms
+
+    for search_term in search_iterator:
+        if verbose and len(search_terms) == 1:
+            print(f"   🔍 Scraping for: '{search_term}' in {location}")
+
+        # Use the advanced scraping from scrapper.py
+        term_jobs = scrape_all_advanced(search_term, location, results_wanted=max_jobs)
+
+        # Add search term info to jobs for tracking
+        for job in term_jobs:
+            job['searched_with'] = search_term
+
+        all_jobs.extend(term_jobs)
+
+        if verbose and len(search_terms) == 1:
+            print(f"   📊 Found {len(term_jobs)} jobs for '{search_term}'")
+        elif len(search_terms) > 1:
+            # Update progress bar description
+            search_iterator.set_postfix({"jobs_found": len(term_jobs), "total": len(all_jobs)})
+
+        # Small delay between searches to be respectful
+        if len(search_terms) > 1:
+            import time
+            time.sleep(1)
+
+    # Close progress bar if it was used
+    if len(search_terms) > 1:
+        search_iterator.close()
 
     if verbose:
         print(f"📊 Scraped {len(all_jobs)} total jobs")

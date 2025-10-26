@@ -1,0 +1,36 @@
+[
+  {
+    "title": "Full Stack Java Developer",
+    "company": "Alite Healthcare Solutions",
+    "location": "California City, CA, US",
+    "url": "https://www.indeed.com/viewjob?jk=9510fb351f973097",
+    "description": "**Job Summary**  \nWe are seeking a skilled Full Stack Developer to join our dynamic team. The ideal candidate will have a strong background in both front\\-end and back\\-end development, with the ability to work across various technologies and platforms. This role involves designing, developing, and maintaining web applications while ensuring optimal performance and user experience. The successful candidate will be proficient in multiple programming languages and frameworks, demonstrating expertise in software development practices.\n\n**Responsibilities**\n\n* Develop and maintain web applications using Ruby on Rails, JavaScript, React, and Express.\n* Collaborate with cross\\-functional teams to define, design, and ship new features.\n* Implement RESTful APIs for seamless integration between front\\-end and back\\-end systems.\n* Conduct code reviews and maintain version control using GitHub and SVN.\n* Optimize applications for maximum speed and scalability.\n* Troubleshoot and debug applications to enhance functionality.\n* Participate in Agile development processes, including sprint planning and daily stand\\-ups.\n* Ensure application security by implementing RBAC (Role\\-Based Access Control) measures.\n* Work with cloud services such as AWS and Azure for application deployment and management.\n* Engage in continuous learning to stay updated with emerging technologies relevant to web development.\n\n**Qualifications**\n\n* Proficiency in front\\-end development technologies including HTML, CSS, JavaScript, and frameworks such as React.\n* Strong experience with back\\-end technologies including Ruby on Rails, Python, Java, C\\#, C\\+\\+, and .NET.\n* Familiarity with database management systems like MySQL and SQL.\n* Knowledge of IT infrastructure principles and application development best practices.\n* Experience working with RESTful APIs and web services integration.\n* Understanding of Agile methodologies for software development processes.\n* Familiarity with Linux operating systems for application deployment.\n* Knowledge of Quantum engineering concepts is a plus but not required.\n* Strong problem\\-solving skills with the ability to work independently or as part of a team. We encourage candidates who are passionate about technology and eager to contribute to innovative projects to apply. Join us in shaping the future of web development!\n\nJob Type: Contract\n\nPay: $52\\.93 \\- $63\\.74 per hour\n\nWork Location: In person",
+    "source": "indeed",
+    "date_posted": "2025-10-24",
+    "salary_info": {
+      "salary_min": 5,
+      "salary_max": 2,
+      "salary_currency": "USD",
+      "salary_period": "yearly"
+    },
+    "skills": [
+      "React",
+      "Javascript",
+      "Java",
+      "Ai",
+      "Mysql",
+      "C\\+\\+",
+      "Linux",
+      "Ruby",
+      "Azure",
+      "Sql",
+      "Python",
+      "Git",
+      "Agile",
+      "Aws"
+    ],
+    "relevance_score": 0.0,
+    "processed_at": "2025-10-27T00:14:12.369364",
+    "job_hash": "b78f3f34a7057d427829544735a9b044"
+  }
+]

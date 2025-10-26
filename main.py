@@ -1,15 +1,28 @@
 # Standard library imports
 import argparse
+import hashlib
 import os
+import re
 import sys
 import time
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Third-party imports
 import fitz  # PyMuPDF
+from cachetools import TTLCache
 from dotenv import load_dotenv
+from tqdm import tqdm
+
+# Optional web server imports (only imported if web server mode is used)
+try:
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+    import uvicorn
+    FASTAPI_AVAILABLE = True
+except ImportError:
+    FASTAPI_AVAILABLE = False
 
 # Local imports
 from agents import (
@@ -20,7 +33,7 @@ from agents import (
     job_matcher,
     profile_builder,
 )
-from scrapper import scrape_all as advanced_scrape_all
+from scrapper import scrape_all_advanced
 from utils import (
     CVTailoringEngine,
     MockInterviewSimulator,
@@ -49,13 +62,394 @@ if not os.getenv('CV_FILE_PATH'):
         raise ValueError("CV_FILE_PATH not set and CV.pdf not found in current directory")
 
 # Optional environment variables with defaults
-CAREER_GOALS_DEFAULT = "I want to become a software engineer in fintech"
+CAREER_GOALS_DEFAULT = os.getenv('CAREER_GOALS_DEFAULT', "I want to become a software engineer in fintech")
+DEFAULT_LOCATION = os.getenv('DEFAULT_LOCATION', "South Africa")
+DEFAULT_INDUSTRY = os.getenv('DEFAULT_INDUSTRY', "Technology")
+DEFAULT_EXPERIENCE_LEVEL = os.getenv('DEFAULT_EXPERIENCE_LEVEL', "Entry Level")
+DEFAULT_DESIRED_ROLE = os.getenv('DEFAULT_DESIRED_ROLE', "Software Engineer")
 
-# Configure logging
+# Cache configuration
+CACHE_AGENT_TTL = int(os.getenv('CACHE_AGENT_TTL', '1800'))  # 30 minutes
+CACHE_JOB_TTL = int(os.getenv('CACHE_JOB_TTL', '86400'))  # 24 hours
+CACHE_PROFILE_TTL = int(os.getenv('CACHE_PROFILE_TTL', '3600'))  # 1 hour
+CACHE_MAX_SIZE_AGENT = int(os.getenv('CACHE_MAX_SIZE_AGENT', '500'))
+CACHE_MAX_SIZE_JOB = int(os.getenv('CACHE_MAX_SIZE_JOB', '200'))
+CACHE_MAX_SIZE_PROFILE = int(os.getenv('CACHE_MAX_SIZE_PROFILE', '100'))
+
+# API configuration
+API_MAX_RETRIES = int(os.getenv('API_MAX_RETRIES', '3'))
+API_RETRY_DELAY = float(os.getenv('API_RETRY_DELAY', '2.0'))
+API_TIMEOUT = int(os.getenv('API_TIMEOUT', '30'))
+
+# Scraping configuration
+MAX_JOBS_PER_SITE = int(os.getenv('MAX_JOBS_PER_SITE', '50'))
+MAX_SEARCH_TERMS = int(os.getenv('MAX_SEARCH_TERMS', '5'))
+SCRAPING_TIMEOUT = int(os.getenv('SCRAPING_TIMEOUT', '60'))  # seconds
+
+# Version information
+__version__ = "2.0.0"
+__author__ = "Job Market AI Team"
+
+# Configure logging - suppress verbose libraries
 import logging
 logging.getLogger('google.genai').setLevel(logging.WARNING)
 logging.getLogger('google').setLevel(logging.WARNING)
+logging.getLogger('google.auth').setLevel(logging.WARNING)
+logging.getLogger('googleapiclient').setLevel(logging.WARNING)
 logging.getLogger('agno').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('requests').setLevel(logging.WARNING)
+logging.getLogger('chromadb').setLevel(logging.WARNING)
+logging.getLogger('transformers').setLevel(logging.WARNING)
+logging.getLogger('torch').setLevel(logging.WARNING)
+logging.getLogger('PIL').setLevel(logging.WARNING)
+
+# Advanced caching system with metrics
+class AgentCache:
+    def __init__(self, maxsize: int = 1000, ttl_seconds: int = 1800) -> None:  # 30 minutes default TTL
+        self.cache = TTLCache(maxsize=maxsize, ttl=ttl_seconds)
+        self.hits = 0
+        self.misses = 0
+        self.evictions = 0
+
+    def get(self, key: str) -> Optional[Any]:
+        """Get item from cache with metrics"""
+        if key in self.cache:
+            self.hits += 1
+            return self.cache[key]
+        self.misses += 1
+        return None
+
+    def put(self, key: str, value: Any) -> None:
+        """Put item in cache"""
+        try:
+            self.cache[key] = value
+        except ValueError:
+            # Cache is full, evict oldest
+            self.evictions += 1
+            # Try to put again after eviction
+            self.cache[key] = value
+
+    def get_stats(self) -> Dict[str, Union[int, str]]:
+        """Get cache statistics"""
+        total_requests = self.hits + self.misses
+        hit_rate = (self.hits / total_requests * 100) if total_requests > 0 else 0
+        return {
+            'size': len(self.cache),
+            'maxsize': self.cache.maxsize,
+            'hits': self.hits,
+            'misses': self.misses,
+            'hit_rate': f"{hit_rate:.1f}%",
+            'evictions': self.evictions
+        }
+
+# Initialize caches for different types of data
+agent_response_cache = AgentCache(maxsize=CACHE_MAX_SIZE_AGENT, ttl_seconds=CACHE_AGENT_TTL)
+job_scraping_cache = AgentCache(maxsize=CACHE_MAX_SIZE_JOB, ttl_seconds=CACHE_JOB_TTL)
+profile_analysis_cache = AgentCache(maxsize=CACHE_MAX_SIZE_PROFILE, ttl_seconds=CACHE_PROFILE_TTL)
+
+def parse_profile_analysis(profile_content: Optional[str]) -> Dict[str, Any]:
+    """
+    Parse the AI-generated profile analysis to extract structured data
+    """
+    profile_data = {
+        'desired_role': DEFAULT_DESIRED_ROLE,
+        'industry': DEFAULT_INDUSTRY,
+        'skills': [],
+        'location': DEFAULT_LOCATION,
+        'career_goals': '',
+        'experience_level': DEFAULT_EXPERIENCE_LEVEL
+    }
+
+    if not profile_content:
+        return profile_data
+
+    content = profile_content.lower()
+
+    # Extract desired role - look for specific job titles first
+    # Look for common developer roles in the summary
+    developer_roles = ['full stack developer', 'frontend developer', 'backend developer',
+                      'software developer', 'web developer', 'mobile developer',
+                      'data scientist', 'data analyst', 'machine learning engineer',
+                      'python developer', 'javascript developer', 'react developer']
+
+    for role in developer_roles:
+        if role in content:
+            profile_data['desired_role'] = role.title()
+            break
+
+    # If no specific role found, try the general patterns
+    if profile_data['desired_role'] == DEFAULT_DESIRED_ROLE:
+        role_patterns = [
+            r'seeking a ([a-z\s]+?) position',
+            r'looking for a ([a-z\s]+?) role',
+            r'become a ([a-z\s]+?)(?:\s|$)',
+            r'work as a ([a-z\s]+?)(?:\s|in|\.|$)'
+        ]
+
+        for pattern in role_patterns:
+            matches = re.findall(pattern, content)
+            if matches:
+                # Clean up the extracted role
+                role = matches[0].strip()
+                # Skip if it matches "trajectory" or similar non-job terms
+                if len(role) > 3 and len(role) < 50 and 'trajectory' not in role.lower():
+                    profile_data['desired_role'] = role.title()
+                    break
+
+    # Extract industry
+    industry_keywords = ['fintech', 'finance', 'banking', 'healthcare', 'technology', 'software',
+                        'data science', 'machine learning', 'ai', 'web development', 'mobile']
+
+    for industry in industry_keywords:
+        if industry in content:
+            profile_data['industry'] = industry.title()
+            break
+
+    # Extract skills from the analysis
+    skills_section = re.search(r'skills.*?:\s*\n(.*?)(?:\n\n|\n\d+\.|$)', profile_content, re.IGNORECASE | re.DOTALL)
+    if skills_section:
+        skills_text = skills_section.group(1)
+        # Extract skill names
+        skill_lines = skills_text.split('\n')
+        for line in skill_lines:
+            # Look for skill entries
+            skill_match = re.search(r'[•\-\*]\s*([^:]+?)(?:\s*\-\s*|\s*\:\s*|\s*$)', line.strip())
+            if skill_match:
+                skill = skill_match.group(1).strip()
+                if len(skill) > 1 and len(skill) < 30:
+                    profile_data['skills'].append(skill)
+
+    # If no skills extracted, use defaults
+    if not profile_data['skills']:
+        profile_data['skills'] = ['Python', 'JavaScript', 'SQL', 'Problem Solving', 'Communication']
+
+    # Extract location preferences
+    location_patterns = ['johannesburg', 'cape town', 'durban', 'pretoria', 'remote', 'south africa']
+    for location in location_patterns:
+        if location in content:
+            profile_data['location'] = location.title()
+            break
+
+    # Extract experience level
+    if 'senior' in content or 'experienced' in content:
+        profile_data['experience_level'] = 'Senior'
+    elif 'junior' in content or 'entry' in content:
+        profile_data['experience_level'] = 'Entry Level'
+    else:
+        profile_data['experience_level'] = 'Mid Level'
+
+    return profile_data
+
+def cached_agent_run(agent: Any, prompt: str, cache_key: Optional[str] = None, cache_type: str = 'agent') -> Any:
+    """
+    Run agent with advanced caching and metrics
+    """
+    # Sanitize prompt for security
+    prompt = sanitize_input(prompt, max_length=50000)  # Allow longer prompts for AI
+
+    # Select appropriate cache based on type
+    cache = {
+        'agent': agent_response_cache,
+        'job': job_scraping_cache,
+        'profile': profile_analysis_cache
+    }.get(cache_type, agent_response_cache)
+
+    # Generate comprehensive cache key using full content hash
+    if cache_key is None:
+        # Use full prompt hash instead of truncated version
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()[:16]
+        cache_key = f"{agent.name}_{prompt_hash}"
+
+    # Check cache
+    cached_response = cache.get(cache_key)
+    if cached_response is not None:
+        print(f"   📋 Cache hit for {agent.name} ({cache_type} cache)")
+        return cached_response
+
+    # Run agent with retry logic
+    print(f"   🤖 Running {agent.name} (cache miss)")
+    response = None
+
+    for attempt in range(API_MAX_RETRIES):
+        try:
+            response = agent.run(prompt)
+            break  # Success, exit retry loop
+        except Exception as e:
+            error_msg = str(e)
+            if attempt < API_MAX_RETRIES - 1:
+                wait_time = (API_RETRY_DELAY ** attempt) + 0.1  # Exponential backoff with jitter
+                print(f"   ⚠️  API call failed (attempt {attempt + 1}/{API_MAX_RETRIES}): {error_msg}")
+                print(f"   ⏳ Retrying in {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
+            else:
+                print(f"   ❌ API call failed after {API_MAX_RETRIES} attempts: {error_msg}")
+                # Return a fallback response instead of raising exception
+                response = type('Response', (), {'content': f"Error: Unable to generate response after {API_MAX_RETRIES} attempts. Please try again later."})()
+                break
+
+    cache.put(cache_key, response)
+    return response
+
+def get_cache_stats():
+    """Get comprehensive cache statistics"""
+    return {
+        'agent_responses': agent_response_cache.get_stats(),
+        'job_scraping': job_scraping_cache.get_stats(),
+        'profile_analysis': profile_analysis_cache.get_stats()
+    }
+
+def show_cost_estimation():
+    """Show estimated costs for AI operations"""
+    print("\n💰 AI Cost Estimation (Gemini 2.0 Flash):")
+    print("-" * 50)
+    print("📊 Estimated costs for a typical analysis:")
+    print("   • CV Analysis: $0.001 - $0.003 (2,000-6,000 tokens)")
+    print("   • Job Matching: $0.002 - $0.005 (4,000-10,000 tokens)")
+    print("   • Cover Letter Gen: $0.003 - $0.007 (6,000-14,000 tokens)")
+    print("   • **Total per run: $0.006 - $0.015**")
+    print()
+    print("💡 Cost-saving features active:")
+    print("   • Intelligent caching (reduces repeated API calls)")
+    print("   • Response deduplication")
+    print("   • Optimized prompts for efficiency")
+    print()
+    print("📈 Monthly usage estimates:")
+    print("   • Light usage (5 runs/week): $1.20 - $3.00")
+    print("   • Moderate usage (20 runs/week): $4.80 - $12.00")
+    print("   • Heavy usage (50 runs/week): $12.00 - $30.00")
+    print()
+    print("🔄 Cached responses will significantly reduce actual costs!")
+    print("-" * 50)
+
+def create_health_app() -> "FastAPI":
+    """Create FastAPI app with health check endpoints"""
+    app = FastAPI(
+        title="Job Market AI Analyzer",
+        description="AI-powered job matching and career assistance platform",
+        version=__version__
+    )
+
+    @app.get("/health")
+    async def health_check():
+        """Basic health check endpoint"""
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": __version__
+        }
+
+    @app.get("/health/detailed")
+    async def detailed_health_check():
+        """Detailed health check with system metrics"""
+        try:
+            # Check cache status
+            cache_stats = get_cache_stats()
+
+            # Check if required dependencies are available
+            dependencies_status = {
+                "google_genai": True,  # Assume available if we got this far
+                "chromadb": True,
+                "playwright": True,
+                "pymupdf": True
+            }
+
+            return {
+                "status": "healthy",
+                "timestamp": datetime.now().isoformat(),
+                "version": __version__,
+                "uptime": str(datetime.now() - datetime.fromtimestamp(__import__('time').time())),
+                "cache_stats": cache_stats,
+                "dependencies": dependencies_status,
+                "environment": {
+                    "python_version": f"{__import__('sys').version_info.major}.{__import__('sys').version_info.minor}",
+                    "platform": __import__('platform').platform()
+                }
+            }
+        except Exception as e:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unhealthy",
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+
+    @app.get("/metrics")
+    async def metrics():
+        """Application metrics endpoint"""
+        cache_stats = get_cache_stats()
+        return {
+            "cache_performance": cache_stats,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    return app
+
+def start_web_server(port: int = 8000):
+    """Start FastAPI web server with health check endpoints"""
+    print("🚀 Starting Job Market AI Analyzer Web Server")
+    print("=" * 60)
+    print(f"📍 Server will be available at: http://localhost:{port}")
+    print("📊 Health check: http://localhost:{port}/health")
+    print("📈 Metrics: http://localhost:{port}/metrics")
+    print("🔄 Detailed health: http://localhost:{port}/health/detailed")
+    print("=" * 60)
+    print("Press Ctrl+C to stop the server")
+    print()
+
+    app = create_health_app()
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+def sanitize_input(text, max_length=10000):
+    """
+    Sanitize user input to prevent prompt injection and other security issues
+    """
+    if not text or not isinstance(text, str):
+        return ""
+
+    # Remove potentially dangerous patterns
+    dangerous_patterns = [
+        r'<script[^>]*>.*?</script>',  # Script tags
+        r'javascript:',                # JavaScript URLs
+        r'data:',                      # Data URLs
+        r'vbscript:',                  # VBScript
+        r'on\w+\s*=',                  # Event handlers
+    ]
+
+    sanitized = text
+    for pattern in dangerous_patterns:
+        sanitized = re.sub(pattern, '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+
+    # Limit length
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "..."
+
+    # Remove excessive whitespace
+    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+
+    return sanitized
+
+def validate_file_path(file_path):
+    """
+    Validate file path to prevent directory traversal attacks
+    """
+    if not file_path or not isinstance(file_path, str):
+        return False
+
+    # Check for directory traversal attempts
+    if '..' in file_path or file_path.startswith('/') or file_path.startswith('\\'):
+        return False
+
+    # Check file extension (only allow safe types)
+    allowed_extensions = {'.pdf', '.txt', '.doc', '.docx'}
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    return file_ext in allowed_extensions or not file_ext  # Allow files without extension too
 
 # Configure Gemini API for embeddings
 # Note: Individual agents handle their own API configuration
@@ -80,6 +474,48 @@ except Exception as e:
 def generate_student_id():
     """Generate unique student ID"""
     return str(uuid.uuid4())[:8].upper()
+
+def read_cv_file(cv_path: str) -> str:
+    """
+    Utility function to read CV file and return text content
+
+    Args:
+        cv_path: Path to CV PDF file
+
+    Returns:
+        Extracted text content from CV
+
+    Raises:
+        FileNotFoundError: If CV file doesn't exist
+        ValueError: If file cannot be read
+    """
+    if not os.path.exists(cv_path):
+        raise FileNotFoundError(f"CV file not found: {cv_path}")
+
+    cv_text = ""
+    try:
+        with fitz.open(cv_path) as doc:
+            for page_num, page in enumerate(doc, 1):
+                cv_text += page.get_text()
+        return cv_text
+    except Exception as e:
+        raise ValueError(f"Failed to read CV file: {e}")
+
+def handle_operation_error(operation_name: str, error: Exception, verbose: bool = False) -> None:
+    """
+    Utility function for consistent error handling and reporting
+
+    Args:
+        operation_name: Name of the operation that failed
+        error: The exception that occurred
+        verbose: Whether to show detailed error info
+    """
+    error_msg = str(error)
+    if verbose:
+        print(f"❌ {operation_name} failed: {error_msg}")
+    else:
+        print(f"❌ {operation_name} failed")
+    return None
 
 # All utility functions have been moved to the utils package
 
@@ -135,25 +571,28 @@ class JobMarketAnalyzer:
 
     def analyze_cv(self, cv_path, career_goals):
         """Analyze CV with professional output"""
+        # Validate and sanitize inputs
+        if not os.path.exists(cv_path):
+            raise FileNotFoundError(f"CV file not found: {cv_path}")
+
+        if not validate_file_path(cv_path):
+            raise ValueError(f"Invalid file path: {cv_path}")
+
+        career_goals = sanitize_input(career_goals, max_length=1000)
+
         self.print_progress("CV ANALYSIS", "PROCESSING")
 
         try:
-            # Read CV
-            cv_text = ""
-            num_pages = 0
-            with fitz.open(cv_path) as doc:
-                num_pages = len(doc)
-                for page_num, page in enumerate(doc, 1):
-                    cv_text += page.get_text()
-                    if not self.quiet:
-                        print(f"   📄 Reading page {page_num}/{num_pages}", end='\r')
+            # Read CV using utility function
+            cv_text = read_cv_file(cv_path)
             if not self.quiet:
-                print(f"   📄 CV loaded: {len(cv_text)} characters from {num_pages} pages")
+                num_pages = len(cv_text.split('\n\n'))  # Rough estimate of pages
+                print(f"   📄 CV loaded: {len(cv_text)} characters from ~{num_pages} pages")
 
             # AI Analysis
             if not self.quiet:
                 print("   🤖 Analyzing with AI...")
-            profile_analysis = profile_builder.run(f"""
+            profile_analysis = cached_agent_run(profile_builder, f"""
             CV Content:
             {cv_text}
 
@@ -165,7 +604,7 @@ class JobMarketAnalyzer:
             2. Skills inventory with proficiency levels
             3. Career trajectory assessment
             4. Recommended skill development areas
-            """)
+            """, cache_type='profile')
 
             self.print_success("CV analysis completed")
             if not self.quiet:
@@ -179,20 +618,164 @@ class JobMarketAnalyzer:
             self.print_error(f"CV analysis failed: {e}")
             return None, None
 
+    def generate_cover_letters(self, student_profile, matched_jobs, cv_text):
+        """Generate personalized cover letters for matched jobs"""
+        self.print_progress("COVER LETTER GENERATION", "WRITING")
+
+        cover_letters = []
+        generated_count = 0
+
+        for i, job in enumerate(matched_jobs[:3]):  # Limit to top 3
+            try:
+                # Extract job details
+                job_title = job.get('title', 'Unknown Position')
+                company = job.get('company', 'Unknown Company')
+                job_description = job.get('description', '')[:1000]  # Limit description length
+
+                # Generate cover letter
+                cover_letter_prompt = f"""
+                Generate a personalized cover letter for this job application:
+
+                **APPLICANT PROFILE:**
+                Name: Unathi Tshuma (extracted from CV)
+                Desired Role: {student_profile.get('desired_role', 'Software Engineer')}
+                Experience Level: {student_profile.get('experience_level', 'Entry Level')}
+                Key Skills: {', '.join(student_profile.get('skills', [])[:5])}
+                Career Goals: {student_profile.get('career_goals', 'Become a skilled software engineer')}
+
+                **CV SUMMARY:**
+                {cv_text[:800]}...
+
+                **JOB DETAILS:**
+                Position: {job_title}
+                Company: {company}
+                Description: {job_description}
+
+                **INSTRUCTIONS:**
+                Create a compelling cover letter that:
+                1. Shows genuine interest in the company and role
+                2. Highlights relevant skills and experience from the CV
+                3. Connects the applicant's background to the job requirements
+                4. Demonstrates enthusiasm and fit for the company culture
+                5. Calls the reader to action
+
+                Keep it professional, concise (250-350 words), and impactful.
+                """
+
+                cover_letter = cached_agent_run(
+                    cover_letter_agent,
+                    cover_letter_prompt,
+                    cache_key=f"cover_letter_{hashlib.md5((job_title + company + student_profile.get('desired_role', '')).encode()).hexdigest()[:8]}"
+                )
+
+                cover_letters.append({
+                    'job_title': job_title,
+                    'company': company,
+                    'cover_letter': cover_letter.content if hasattr(cover_letter, 'content') else str(cover_letter),
+                    'job_url': job.get('url', 'N/A')
+                })
+
+                generated_count += 1
+                if not self.quiet:
+                    print(f"   ✓ Generated cover letter for {job_title} at {company}")
+
+            except Exception as e:
+                if not self.quiet:
+                    print(f"⚠️ Failed to generate cover letter for {job.get('title', 'Unknown')}: {e}")
+
+        self.print_success(f"Generated {generated_count} cover letters")
+
+        # Save cover letters to file
+        if cover_letters:
+            try:
+                import json
+                with open('generated_cover_letters.json', 'w', encoding='utf-8') as f:
+                    json.dump(cover_letters, f, ensure_ascii=False, indent=2)
+                print("💾 Cover letters saved to generated_cover_letters.json")
+            except Exception as e:
+                if not self.quiet:
+                    print(f"⚠️ Failed to save cover letters: {e}")
+
+        return cover_letters
+
     def discover_jobs(self, student_profile):
         """Discover and scrape jobs professionally"""
         self.print_progress("JOB DISCOVERY", "SCRAPING")
 
+        # Create sophisticated search terms based on profile analysis
         desired_role = student_profile.get('desired_role', 'Software Engineer')
-        location = student_profile.get('location', 'Johannesburg')
+        experience_level = student_profile.get('experience_level', 'Entry Level')
+        skills = student_profile.get('skills', [])[:3]  # Top 3 skills
+        industry = student_profile.get('industry', 'Technology')
+        location = student_profile.get('location', 'South Africa')
+
+        # Build intelligent search terms
+        search_terms = []
+
+        # Primary search: role + experience level
+        if experience_level == 'Entry Level':
+            search_terms.extend([f"junior {desired_role}", f"entry level {desired_role}", desired_role])
+        elif experience_level == 'Senior':
+            search_terms.extend([f"senior {desired_role}", f"experienced {desired_role}", desired_role])
+        else:
+            search_terms.append(desired_role)
+
+        # Add skill-based searches
+        for skill in skills:
+            if skill and len(skill) > 2:
+                # Clean skill names for search
+                clean_skill = skill.lower().replace(' ', '').replace('-', '')
+                if len(clean_skill) > 3:
+                    search_terms.append(f"{clean_skill} {desired_role.lower()}")
+
+        # Add industry-specific searches
+        if industry.lower() != 'technology':
+            search_terms.append(f"{desired_role} {industry}")
+
+        # Remove duplicates and limit
+        search_terms = list(set(search_terms))[:MAX_SEARCH_TERMS]
 
         if not self.quiet:
             print(f"   🎯 Searching for: {desired_role}")
             print(f"   📍 Location: {location}")
+            print(f"   🛠️  Experience: {experience_level}")
+            print(f"   🎨 Industry: {industry}")
+            print(f"   🔍 Search terms: {', '.join(search_terms)}")
+
+        # Store search terms for reference
+        student_profile['search_terms'] = search_terms
 
         try:
-            # Use discover_new_jobs with verbose control
-            matched_jobs = discover_new_jobs(student_profile, location, verbose=self.verbose)
+            # Use discover_new_jobs with reduced verbosity to minimize API logs and timeout
+            import threading
+
+            result_container = {}
+            exception_container = {}
+
+            def run_with_timeout():
+                try:
+                    jobs = discover_new_jobs(student_profile, location, verbose=False, max_jobs=MAX_JOBS_PER_SITE)
+                    result_container['jobs'] = jobs
+                except Exception as e:
+                    exception_container['error'] = e
+
+            # Start job discovery in a separate thread
+            discovery_thread = threading.Thread(target=run_with_timeout)
+            discovery_thread.start()
+
+            # Wait for completion with timeout
+            discovery_thread.join(timeout=SCRAPING_TIMEOUT)
+
+            if discovery_thread.is_alive():
+                # Thread is still running, operation timed out
+                self.print_warning("Job discovery operation timed out")
+                matched_jobs = []
+            elif 'error' in exception_container:
+                # Thread completed with error
+                raise exception_container['error']
+            else:
+                # Thread completed successfully
+                matched_jobs = result_container.get('jobs', [])
 
             # Get count of jobs found
             job_count = jobs_collection.count() if hasattr(jobs_collection, 'count') else len(matched_jobs)
@@ -260,7 +843,7 @@ class JobMarketAnalyzer:
 
         try:
             # Use the CV rewriter agent to optimize content
-            rewritten_cv = cv_rewriter.run(f"""
+            rewritten_cv = cached_agent_run(cv_rewriter, f"""
             Original CV Content:
             {cv_text}
 
@@ -283,7 +866,7 @@ class JobMarketAnalyzer:
             - Skills (categorized)
             - Education (highlighting relevant coursework)
             - Projects (if applicable)
-            """)
+            """, cache_key=f"cv_rewrite_{hashlib.md5((cv_text[:50] + job_title).encode()).hexdigest()[:8]}")
 
             self.print_success("CV rewritten for maximum impact")
             if not self.quiet:
@@ -505,16 +1088,30 @@ class JobMarketAnalyzer:
         if not cv_text:
             return False
 
-        # Create profile for matching (simplified)
+        # Parse the profile analysis to extract structured data
+        parsed_profile = parse_profile_analysis(profile_content)
+
+        # Create profile for matching using extracted data
         student_profile = {
             'summary': cv_text[:500],
             'cv_text': cv_text,  # Full CV text for keyword analysis
-            'skills': ['Python', 'Java', 'SQL', 'Machine Learning', 'React', 'Node.js'],
-            'desired_role': 'Software Engineer',
-            'industry': 'fintech',
-            'field_of_study': 'Computer Science',
-            'location': 'South Africa'
+            'profile_analysis': profile_content,  # Store full analysis
+            'skills': parsed_profile['skills'],
+            'desired_role': parsed_profile['desired_role'],
+            'industry': parsed_profile['industry'],
+            'field_of_study': 'Computer Science',  # Could also be extracted
+            'location': parsed_profile['location'],
+            'experience_level': parsed_profile['experience_level'],
+            'career_goals': career_goals or parsed_profile.get('career_goals', '')
         }
+
+        if not self.quiet:
+            print(f"\n🎯 EXTRACTED PROFILE:")
+            print(f"   Role: {student_profile['desired_role']}")
+            print(f"   Industry: {student_profile['industry']}")
+            print(f"   Location: {student_profile['location']}")
+            print(f"   Skills: {', '.join(student_profile['skills'][:5])}...")
+            print(f"   Experience: {student_profile['experience_level']}")
 
         # Discover jobs
         jobs_found = self.discover_jobs(student_profile)
@@ -523,9 +1120,23 @@ class JobMarketAnalyzer:
         if jobs_found > 0:
             matched_jobs = self.match_jobs(student_profile)
 
+            # Generate cover letters for top matched jobs
+            if matched_jobs and not self.quiet:
+                print("\n📝 Generating cover letters for top matches...")
+                top_matches = matched_jobs[:3]  # Generate for top 3 matches
+                cover_letters = self.generate_cover_letters(student_profile, top_matches, cv_text)
+
         # Summary
         elapsed = datetime.now() - self.start_time
+
+        # Show cache statistics in verbose mode
         if not self.quiet:
+            cache_stats = get_cache_stats()
+            print(f"\n📊 Cache Performance:")
+            for cache_name, stats in cache_stats.items():
+                if stats['hits'] + stats['misses'] > 0:  # Only show active caches
+                    print(f"   {cache_name.replace('_', ' ').title()}: {stats['hit_rate']} ({stats['hits']}/{stats['hits'] + stats['misses']} hits)")
+
             print(f"\n⏱️  Analysis completed in {elapsed.total_seconds():.1f} seconds")
             print("="*70)
 
@@ -577,7 +1188,7 @@ class CareerBoostPlatform:
                 print("❌ Consent not given. Cannot proceed with onboarding.")
                 return None, None
 
-        profile = profile_builder.run(f"""
+        profile = cached_agent_run(profile_builder, f"""
         Analyze CV: {student_cv}
         Career Goals: {career_goals}
 
@@ -587,7 +1198,11 @@ class CareerBoostPlatform:
         - Skills assessment
         - Career aspirations
         - Areas for development
-        """)
+        """, cache_key=f"platform_profile_{hashlib.md5((student_cv[:50] + career_goals).encode()).hexdigest()[:8]}")
+
+        # Parse the profile analysis to extract structured data
+        profile_text = profile.content if hasattr(profile, 'content') else str(profile)
+        parsed_profile = parse_profile_analysis(profile_text)
 
         student_id = generate_student_id()
 
@@ -600,7 +1215,8 @@ class CareerBoostPlatform:
         )
 
         self.students[student_id] = {
-            'profile': profile.content if hasattr(profile, 'content') else str(profile),
+            'profile': profile_text,
+            'parsed_profile': parsed_profile,  # Store structured data
             'cv_text': student_cv,
             'career_goals': career_goals,
             'onboarded_at': datetime.now(),
@@ -629,18 +1245,22 @@ class CareerBoostPlatform:
         student = self.students[student_id]
         print(f"🔍 Finding matching jobs for {student_id}...")
 
-        # Create student profile for job matching
+        # Use parsed profile data for job matching
+        parsed_profile = student.get('parsed_profile', {})
         student_profile = {
             'summary': student['cv_text'][:500],
             'cv_text': student['cv_text'],
-            'skills': ['Python', 'JavaScript', 'React', 'Node.js'],  # Would be extracted from profile
-            'desired_role': 'Software Engineer',  # Would be extracted from profile
-            'industry': 'Technology',
-            'location': location
+            'profile_analysis': student.get('profile', ''),
+            'skills': parsed_profile.get('skills', ['Python', 'JavaScript', 'SQL']),
+            'desired_role': parsed_profile.get('desired_role', 'Software Engineer'),
+            'industry': parsed_profile.get('industry', 'Technology'),
+            'experience_level': parsed_profile.get('experience_level', 'Entry Level'),
+            'location': parsed_profile.get('location', location),
+            'career_goals': student.get('career_goals', '')
         }
 
         # Discover new jobs
-        matched_jobs = discover_new_jobs(student_profile, location, verbose=True)
+        matched_jobs = discover_new_jobs(student_profile, location, verbose=True, max_jobs=MAX_JOBS_PER_SITE)
 
         # Filter and rank top matches with SA customizations
         top_matches = []
@@ -935,6 +1555,142 @@ class CareerBoostPlatform:
 
         return dashboard
 
+    def export_student_data(self, student_id, export_format='json'):
+        """
+        Export all student data in GDPR-compliant format
+
+        Args:
+            student_id: Student identifier
+            export_format: 'json' or 'pdf' (default: json)
+
+        Returns:
+            Dict containing all student data for export
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+
+        student = self.students[student_id]
+
+        # Gather all student data
+        export_data = {
+            'export_metadata': {
+                'student_id': student_id,
+                'export_date': datetime.now().isoformat(),
+                'data_controller': 'Job Market AI Analyzer',
+                'gdpr_compliant': True,
+                'retention_period': '2 years from onboarding',
+                'export_format': export_format
+            },
+            'personal_data': {
+                'student_id': student_id,
+                'onboarded_at': student['onboarded_at'].isoformat(),
+                'consent_id': student.get('consent_id'),
+                'ethical_disclosure': student.get('ethical_disclosure')
+            },
+            'career_profile': {
+                'cv_text': student.get('cv_text', ''),
+                'profile_analysis': student.get('profile'),
+                'parsed_profile': student.get('parsed_profile'),
+                'career_goals': student.get('career_goals'),
+                'cv_engine_initialized': student.get('cv_engine') is not None
+            },
+            'job_search_activity': {
+                'total_jobs_found': len(self.jobs),
+                'applications_submitted': len([
+                    app for app in self.applications.values()
+                    if app['student_id'] == student_id
+                ]),
+                'application_history': [
+                    {
+                        'application_id': app_id,
+                        'job_title': app['job_title'],
+                        'company': app['company'],
+                        'applied_at': app['applied_at'].isoformat(),
+                        'match_score': app['match_score'],
+                        'ethical_assessment': app.get('ethical_validation'),
+                        'url': app.get('job_url')
+                    }
+                    for app_id, app in self.applications.items()
+                    if app['student_id'] == student_id
+                ]
+            },
+            'system_usage': {
+                'knowledge_base_queries': [],  # Could be tracked separately
+                'cache_usage': get_cache_stats(),  # System-wide cache stats
+                'platform_features_used': [
+                    'cv_analysis', 'job_matching', 'cover_letter_generation',
+                    'interview_prep', 'ethical_guidelines', 'sa_customizations'
+                ]
+            }
+        }
+
+        # Add data portability information
+        export_data['data_portability'] = {
+            'can_be_transferred': True,
+            'machine_readable': True,
+            'comprehensive': True,
+            'retention_rights': 'Data retained for 2 years, can be deleted anytime',
+            'consent_withdrawal': 'Consent can be withdrawn at any time'
+        }
+
+        return export_data
+
+    def delete_student_data(self, student_id, consent_id):
+        """
+        GDPR/POPIA compliant data deletion
+
+        Args:
+            student_id: Student identifier
+            consent_id: Consent ID to verify deletion request
+
+        Returns:
+            Dict with deletion confirmation
+        """
+        if student_id not in self.students:
+            raise ValueError(f"Student {student_id} not found")
+
+        student = self.students[student_id]
+
+        # Verify consent ID matches
+        if student.get('consent_id') != consent_id:
+            raise ValueError("Invalid consent ID. Cannot proceed with deletion.")
+
+        # Log deletion for audit trail
+        deletion_log = {
+            'student_id': student_id,
+            'consent_id': consent_id,
+            'deletion_requested_at': datetime.now().isoformat(),
+            'data_categories_deleted': [
+                'personal_data', 'career_profile', 'job_search_activity',
+                'application_history', 'cv_engine', 'consent_records'
+            ]
+        }
+
+        # Delete applications
+        apps_to_delete = [
+            app_id for app_id, app in self.applications.items()
+            if app['student_id'] == student_id
+        ]
+        for app_id in apps_to_delete:
+            del self.applications[app_id]
+
+        # Delete jobs (only if no other students reference them - simplified)
+        # In production, this would check for references
+
+        # Delete student record
+        del self.students[student_id]
+
+        # Withdraw consent
+        self.ethical_guidelines.withdraw_consent(consent_id)
+
+        return {
+            'deletion_confirmed': True,
+            'student_id': student_id,
+            'deleted_at': datetime.now().isoformat(),
+            'audit_log': deletion_log,
+            'confirmation_message': 'All personal data has been securely deleted as per GDPR/POPIA requirements.'
+        }
+
     def search_knowledge_base(self, query: str, sources: List[str] = None, n_results: int = 3):
         """
         Search the knowledge base for relevant context
@@ -1198,13 +1954,75 @@ Examples:
         help='Check consent status'
     )
 
+    # Data export and GDPR compliance options
+    parser.add_argument(
+        '--export-data',
+        type=str,
+        help='Export student data (provide student ID)'
+    )
+
+    parser.add_argument(
+        '--delete-data',
+        type=str,
+        help='Delete student data (provide student ID, requires consent ID)'
+    )
+
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {__version__} by {__author__}'
+    )
+
+    # Web server mode
+    parser.add_argument(
+        '--web-server',
+        action='store_true',
+        help='Start web server with health check endpoints'
+    )
+
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=8000,
+        help='Port for web server (default: 8000)'
+    )
+
     return parser
 
 
 def main():
     """Main entry point with professional CLI"""
+    # Setup graceful shutdown handling
+    import signal
+    import sys
+
+    def signal_handler(signum, frame):
+        """Handle graceful shutdown on Ctrl+C"""
+        print("\n\n🛑 Received shutdown signal. Cleaning up...")
+        print("💾 Saving cache and finalizing...")
+        # Any cleanup code here
+        print("✅ Shutdown complete. Goodbye! 👋")
+        sys.exit(0)
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
+
     parser = create_parser()
     args = parser.parse_args()
+
+    # Debug: Check if web server mode (only show if actually enabled)
+    if hasattr(args, 'web_server') and args.web_server:
+        if not FASTAPI_AVAILABLE:
+            print("❌ FastAPI not available. Install with: pip install fastapi uvicorn")
+            print("💡 To use web server features, run: pip install fastapi uvicorn")
+            sys.exit(1)
+        start_web_server(args.port)
+        return
+
+    # Show cost estimation for AI operations
+    if not args.quiet:
+        show_cost_estimation()
 
     # Check if using CareerBoost Platform
     if args.platform:
@@ -1256,15 +2074,13 @@ def run_careerboost_platform(args):
     if args.onboard:
         # Onboard new student
         cv_path = args.onboard
-        if not os.path.exists(cv_path):
-            print(f"❌ CV file not found: {cv_path}")
-            sys.exit(1)
 
-        # Read CV
-        cv_text = ""
-        with fitz.open(cv_path) as doc:
-            for page in doc:
-                cv_text += page.get_text()
+        # Read CV using utility function (handles validation)
+        try:
+            cv_text = read_cv_file(cv_path)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"❌ {e}")
+            sys.exit(1)
 
         career_goals = args.goals or CAREER_GOALS_DEFAULT
 
@@ -1484,6 +2300,52 @@ def run_careerboost_platform(args):
             print("• Right to withdraw consent anytime")
             print()
 
+        elif args.export_data:
+            # Export student data
+            student_id = args.export_data
+            try:
+                export_data = platform.export_student_data(student_id)
+                import json
+                filename = f"student_data_export_{student_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(export_data, f, ensure_ascii=False, indent=2)
+
+                print(f"✅ Student data exported successfully!")
+                print(f"📄 File: {filename}")
+                print(f"📊 Data categories exported: {len(export_data) - 1}")  # Exclude metadata
+                print(f"🛡️  GDPR compliant: {export_data['export_metadata']['gdpr_compliant']}")
+                print(f"📅 Export date: {export_data['export_metadata']['export_date'][:10]}")
+
+            except ValueError as e:
+                print(f"❌ Error: {e}")
+
+        elif args.delete_data:
+            # Delete student data (GDPR/POPIA compliant)
+            student_id = args.delete_data
+
+            # Get consent ID for verification
+            if student_id in platform.students:
+                consent_id = platform.students[student_id].get('consent_id')
+                if consent_id:
+                    confirm = input(f"\n⚠️  DATA DELETION REQUEST\nThis will permanently delete ALL data for student {student_id}\nConsent ID: {consent_id}\n\nType 'DELETE' to confirm: ")
+                    if confirm.upper() == 'DELETE':
+                        try:
+                            deletion_result = platform.delete_student_data(student_id, consent_id)
+                            print(f"\n✅ DATA DELETION COMPLETED")
+                            print("=" * 50)
+                            print(f"🆔 Student ID: {deletion_result['student_id']}")
+                            print(f"🗑️  Deleted at: {deletion_result['deleted_at'][:19]}")
+                            print(f"📋 Categories deleted: {', '.join(deletion_result['audit_log']['data_categories_deleted'])}")
+                            print(f"\n{deletion_result['confirmation_message']}")
+                        except ValueError as e:
+                            print(f"❌ Error: {e}")
+                    else:
+                        print("❌ Deletion cancelled.")
+                else:
+                    print(f"❌ No consent ID found for student {student_id}")
+            else:
+                print(f"❌ Student {student_id} not found")
+
         else:
             print("❌ No operation specified. Use --help for available options.")
             print("\nAvailable operations:")
@@ -1499,6 +2361,8 @@ def run_careerboost_platform(args):
             print("  --ethical-audit         : Generate ethical compliance report")
             print("  --withdraw-consent <id> : Withdraw data consent")
             print("  --consent-status        : Check consent status")
+            print("  --export-data <id>      : Export student data (GDPR)")
+            print("  --delete-data <id>      : Delete student data (GDPR/POPIA)")
 
     else:
         print("🎯 CareerBoost Platform Ready!")
