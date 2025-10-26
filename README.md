@@ -1,5 +1,10 @@
 # Job Market AI Analyzer
 
+[![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](https://docker.com)
+[![CI/CD](https://img.shields.io/badge/CI/CD-GitHub%20Actions-orange.svg)](https://github.com/features/actions)
+
 Advanced AI-powered job matching for students and professionals with intelligent CV analysis, personalized job recommendations, and automated cover letter generation.
 
 ## ✨ Key Features
@@ -62,14 +67,18 @@ Advanced AI-powered job matching for students and professionals with intelligent
 
 ### Installation
 
-1. **Clone and setup:**
+1. **Clone the repository:**
 ```bash
-git clone <repository-url>
+git clone https://github.com/[YOUR_USERNAME]/job-market-analyzer.git
 cd job-market-analyzer
+```
+
+2. **Create virtual environment:**
+```bash
 python -m venv venv
 ```
 
-2. **Activate virtual environment:**
+3. **Activate virtual environment:**
 ```bash
 # Windows
 venv\Scripts\activate
@@ -77,19 +86,26 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-3. **Install dependencies:**
+4. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
 python -m playwright install  # Install browser for scraping
 ```
 
-4. **Configure environment:**
+5. **Add your CV:**
 ```bash
-cp env.example .env
-# Edit .env with your Google API key and CV path
+# Replace CV_PLACEHOLDER.txt with your actual CV in PDF format
+# Rename your CV file to "CV.pdf" in the project root
+cp /path/to/your/cv.pdf CV.pdf
 ```
 
-5. **Run the analyzer:**
+6. **Configure environment:**
+```bash
+cp env.example .env
+# Edit .env with your Google API key
+```
+
+7. **Run the analyzer:**
 ```bash
 python main.py
 ```
@@ -138,6 +154,44 @@ curl http://localhost:8000/metrics             # Cache and performance metrics
 - 🔍 Dependency status checks
 - 📈 System resource monitoring
 - 🕒 Uptime and version information
+
+## 📁 Project Structure
+
+```
+job-market-analyzer/
+├── 📄 main.py                 # Main application entry point
+├── 📄 scrapper.py             # Job scraping functionality
+├── 📄 requirements.txt        # Python dependencies
+├── 📄 Dockerfile             # Docker container configuration
+├── 📄 docker-compose.yml     # Docker Compose setup
+├── 📄 LICENSE                # MIT license
+├── 📄 CV_PLACEHOLDER.txt     # CV file placeholder
+├── 📄 env.example           # Environment configuration template
+├── 📄 .gitignore            # Git ignore rules
+├── 📁 .github/
+│   ├── 📁 workflows/        # GitHub Actions CI/CD
+│   └── 📄 dependabot.yml    # Dependency updates
+├── 📁 agents/               # AI agent implementations
+│   ├── 📄 __init__.py
+│   ├── 📄 profile_agent.py      # CV analysis agent
+│   ├── 📄 job_matcher.py        # Job matching agent
+│   ├── 📄 cover_letter_agent.py # Cover letter generation
+│   ├── 📄 ats_optimizer_agent.py # ATS optimization
+│   ├── 📄 cv_rewriter.py        # CV tailoring
+│   ├── 📄 interview_prep_agent.py # Interview preparation
+│   └── 📄 interview_copilot_agent.py # Interview assistance
+├── 📁 utils/                # Utility modules
+│   ├── 📄 __init__.py
+│   ├── 📄 scraping.py           # Job scraping utilities
+│   ├── 📄 matching.py           # Job matching algorithms
+│   ├── 📄 knowledge_base.py     # Knowledge base management
+│   ├── 📄 ethical_guidelines.py # Ethical AI guidelines
+│   ├── 📄 sa_customizations.py  # South African customizations
+│   ├── 📄 cv_tailoring.py       # CV tailoring engine
+│   ├── 📄 mock_interview.py     # Interview simulation
+│   └── 📄 database.py           # Database utilities
+└── 📁 README.md            # This file
+```
 
 ## ⚙️ Configuration
 
@@ -420,6 +474,61 @@ python main.py --verbose  # Enable detailed logging
 ```python
 python test_complete.py  # Test the complete job matching pipeline
 ```
+
+## 🤝 Contributing
+
+We welcome contributions to the Job Market AI Analyzer! Here's how you can help:
+
+### Development Setup
+
+1. **Fork the repository** on GitHub
+2. **Clone your fork** locally
+3. **Create a feature branch**: `git checkout -b feature/your-feature-name`
+4. **Set up development environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   pip install -r requirements-dev.txt  # For development dependencies
+   ```
+
+### Development Workflow
+
+1. **Make your changes** following our coding standards
+2. **Run tests**: `pytest`
+3. **Check code quality**: `flake8` and `black`
+4. **Test your changes** thoroughly
+5. **Commit with clear messages**: `git commit -m "feat: add new feature"`
+6. **Push to your fork**: `git push origin feature/your-feature-name`
+7. **Create a Pull Request** on GitHub
+
+### Coding Standards
+
+- **Python**: Follow PEP 8 style guidelines
+- **Type Hints**: Add type annotations to all functions
+- **Documentation**: Document all public functions and classes
+- **Testing**: Write tests for new features
+- **Commits**: Use conventional commit format
+
+### Areas for Contribution
+
+- 🐛 **Bug Fixes**: Help us squash bugs and improve stability
+- ✨ **New Features**: Add new AI agents or functionality
+- 📚 **Documentation**: Improve docs, tutorials, or examples
+- 🧪 **Testing**: Write more comprehensive tests
+- 🎨 **UI/UX**: Improve the command-line interface
+- 🌐 **Internationalization**: Add support for more languages
+- 📊 **Analytics**: Add better metrics and reporting
+
+### Reporting Issues
+
+When reporting bugs or requesting features:
+- Use the issue templates provided
+- Include detailed steps to reproduce
+- Provide system information (OS, Python version, etc.)
+- Attach relevant log files or screenshots
+
+Thank you for contributing to making job searching smarter! 🚀
 
 ## 📦 Dependencies
 
