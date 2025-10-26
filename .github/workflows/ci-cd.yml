@@ -1,11 +1,14 @@
 name: CI/CD Pipeline
 
-on:
+"on":
   push:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
   workflow_dispatch:
+  schedule:
+    # Run dependency updates weekly on Sunday at midnight
+    - cron: '0 0 * * 0'
 
 env:
   PYTHON_VERSION: "3.11"
@@ -132,7 +135,7 @@ jobs:
         docker run --rm job-market-analyzer:latest python --version
         docker run --rm job-market-analyzer:latest python -c "import main; print('Import successful')"
 
-  # Dependency Updates
+  # Dependency Updates (only on schedule)
   dependabot:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
@@ -216,9 +219,3 @@ jobs:
         echo "Deployment logic would go here"
         echo "Example: Update docker-compose, restart services, run migrations"
         # Add your deployment commands here
-
-# Scheduled jobs
-on:
-  schedule:
-    # Run dependency updates weekly
-    - cron: '0 0 * * 0'
