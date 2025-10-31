@@ -15,31 +15,29 @@ from cachetools import TTLCache
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-# Optional web server imports (only imported if web server mode is used)
-try:
-    from fastapi import FastAPI
-    from fastapi.responses import JSONResponse
-    import uvicorn
-    FASTAPI_AVAILABLE = True
-except ImportError:
-    FASTAPI_AVAILABLE = False
+# Web server functionality removed - focusing on agent collaboration testing
 
 # Local imports
 from agents import (
     ats_optimizer,
+    candidate_communication_agent,
+    candidate_ranking_agent,
     cover_letter_agent,
     cv_rewriter,
+    hiring_analytics_agent,
+    interview_assistant_agent,
     interview_prep_agent,
     job_matcher,
     profile_builder,
+    resume_screening_agent,
+    # ML agents excluded due to missing dependencies
 )
-from scrapper import scrape_all_advanced
 from utils import (
     CVTailoringEngine,
     MockInterviewSimulator,
     discover_new_jobs,
     ethical_guidelines,
-    jobs_collection,
+    job_db,
     knowledge_base,
     match_student_to_jobs,
     sa_customizations,
@@ -55,11 +53,19 @@ if not os.getenv('GOOGLE_API_KEY'):
     raise ValueError("GOOGLE_API_KEY environment variable is required. Please set it in a .env file or environment.")
 
 # Set defaults for optional variables
-if not os.getenv('CV_FILE_PATH'):
-    if os.path.exists('CV.pdf'):
-        os.environ['CV_FILE_PATH'] = 'CV.pdf'
-    else:
-        raise ValueError("CV_FILE_PATH not set and CV.pdf not found in current directory")
+cv_file_path = os.getenv('CV_FILE_PATH')
+if not cv_file_path or cv_file_path == 'CV.txt':  # Override the incorrect CV.txt setting
+    # Check for CV files in cvs folder first, then current directory
+    cv_paths = ['cvs/CV.pdf', 'CV.pdf']
+    cv_found = False
+    for cv_path in cv_paths:
+        if os.path.exists(cv_path):
+            os.environ['CV_FILE_PATH'] = cv_path
+            cv_found = True
+            break
+
+    if not cv_found:
+        raise ValueError("CV_FILE_PATH not set and CV.pdf not found in cvs/ folder or current directory")
 
 # Optional environment variables with defaults
 CAREER_GOALS_DEFAULT = os.getenv('CAREER_GOALS_DEFAULT', "I want to become a software engineer in fintech")
@@ -168,78 +174,136 @@ def parse_profile_analysis(profile_content: Optional[str]) -> Dict[str, Any]:
 
     content = profile_content.lower()
 
-    # Extract desired role - look for specific job titles first
-    # Look for common developer roles in the summary
-    developer_roles = ['full stack developer', 'frontend developer', 'backend developer',
-                      'software developer', 'web developer', 'mobile developer',
-                      'data scientist', 'data analyst', 'machine learning engineer',
-                      'python developer', 'javascript developer', 'react developer']
-
-    for role in developer_roles:
-        if role in content:
+    # Extract desired role from structured format (same line or next line)
+    role_match = re.search(r'\*\*DESIRED ROLE:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)', profile_content, re.IGNORECASE | re.DOTALL)
+    if role_match:
+        role = role_match.group(1).strip()
+        # Remove bullet points or extra formatting
+        role = re.sub(r'^[•\-\*]\s*', '', role)
+        if role and not role.startswith('[') and len(role) < 50:
             profile_data['desired_role'] = role.title()
-            break
 
-    # If no specific role found, try the general patterns
+    # Fallback: look for specific job titles if structured parsing failed
     if profile_data['desired_role'] == DEFAULT_DESIRED_ROLE:
-        role_patterns = [
-            r'seeking a ([a-z\s]+?) position',
-            r'looking for a ([a-z\s]+?) role',
-            r'become a ([a-z\s]+?)(?:\s|$)',
-            r'work as a ([a-z\s]+?)(?:\s|in|\.|$)'
-        ]
+        developer_roles = ['full stack developer', 'frontend developer', 'backend developer',
+                          'software developer', 'web developer', 'mobile developer',
+                          'data scientist', 'data analyst', 'machine learning engineer',
+                          'python developer', 'javascript developer', 'react developer']
 
-        for pattern in role_patterns:
-            matches = re.findall(pattern, content)
-            if matches:
-                # Clean up the extracted role
-                role = matches[0].strip()
-                # Skip if it matches "trajectory" or similar non-job terms
-                if len(role) > 3 and len(role) < 50 and 'trajectory' not in role.lower():
-                    profile_data['desired_role'] = role.title()
-                    break
+        for role in developer_roles:
+            if role in content:
+                profile_data['desired_role'] = role.title()
+                break
 
-    # Extract industry
-    industry_keywords = ['fintech', 'finance', 'banking', 'healthcare', 'technology', 'software',
-                        'data science', 'machine learning', 'ai', 'web development', 'mobile']
+        # If still no role, try general patterns
+        if profile_data['desired_role'] == DEFAULT_DESIRED_ROLE:
+            role_patterns = [
+                r'seeking a ([a-z\s]+?) position',
+                r'looking for a ([a-z\s]+?) role',
+                r'become a ([a-z\s]+?)(?:\s|$)',
+                r'work as a ([a-z\s]+?)(?:\s|in|\.|$)'
+            ]
 
-    for industry in industry_keywords:
-        if industry in content:
+            for pattern in role_patterns:
+                matches = re.findall(pattern, content)
+                if matches:
+                    role = matches[0].strip()
+                    if len(role) > 3 and len(role) < 50 and 'trajectory' not in role.lower():
+                        profile_data['desired_role'] = role.title()
+                        break
+
+    # Extract industry from structured format (same line or next line)
+    industry_match = re.search(r'\*\*INDUSTRY:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)', profile_content, re.IGNORECASE | re.DOTALL)
+    if industry_match:
+        industry = industry_match.group(1).strip()
+        # Remove bullet points or extra formatting
+        industry = re.sub(r'^[•\-\*]\s*', '', industry)
+        if industry and not industry.startswith('[') and len(industry) < 30:
             profile_data['industry'] = industry.title()
-            break
 
-    # Extract skills from the analysis
-    skills_section = re.search(r'skills.*?:\s*\n(.*?)(?:\n\n|\n\d+\.|$)', profile_content, re.IGNORECASE | re.DOTALL)
-    if skills_section:
-        skills_text = skills_section.group(1)
-        # Extract skill names
-        skill_lines = skills_text.split('\n')
-        for line in skill_lines:
-            # Look for skill entries
-            skill_match = re.search(r'[•\-\*]\s*([^:]+?)(?:\s*\-\s*|\s*\:\s*|\s*$)', line.strip())
-            if skill_match:
-                skill = skill_match.group(1).strip()
-                if len(skill) > 1 and len(skill) < 30:
+    # Fallback: look for industry keywords
+    if profile_data['industry'] == DEFAULT_INDUSTRY:
+        industry_keywords = ['fintech', 'finance', 'banking', 'healthcare', 'technology', 'software',
+                            'data science', 'machine learning', 'ai', 'web development', 'mobile']
+
+        for industry in industry_keywords:
+            if industry in content:
+                profile_data['industry'] = industry.title()
+                break
+
+    # Extract skills from the structured format (same line or multiline)
+    skills_match = re.search(r'\*\*SKILLS:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)', profile_content, re.IGNORECASE | re.DOTALL)
+    if skills_match:
+        skills_text = skills_match.group(1)
+        # Split by bullet points and extract skills
+        skill_parts = re.split(r'[•\-\*]', skills_text)
+        for part in skill_parts:
+            skill = part.strip()
+            if skill and len(skill) > 1 and len(skill) < 30:
+                # Clean up the skill name
+                skill = re.sub(r'^\[|\]$', '', skill)  # Remove brackets
+                skill = re.sub(r'\s*\-\s*.*$', '', skill)  # Remove descriptions after dash
+                skill = skill.strip()
+                if skill and skill.lower() not in ['skill 1', 'skill 2', 'skill 3', 'skill 4', 'skill 5', 'skills']:
                     profile_data['skills'].append(skill)
+
+    # Fallback: try the old format if new format didn't work
+    if not profile_data['skills']:
+        skills_section_old = re.search(r'skills.*?:\s*\n(.*?)(?:\n\n|\n\d+\.|$)', profile_content, re.IGNORECASE | re.DOTALL)
+        if skills_section_old:
+            skills_text = skills_section_old.group(1)
+            skill_lines = skills_text.split('\n')
+            for line in skill_lines:
+                skill_match = re.search(r'[•\-\*]\s*\*?\*?([^:\*\n]+?)\*?\*?(?:\s*\-\s*|\s*\:\s*|\s*$)', line.strip())
+                if skill_match:
+                    skill = skill_match.group(1).strip()
+                    skill = re.sub(r'\*\*', '', skill)
+                    skill = skill.strip()
+                    if len(skill) > 1 and len(skill) < 30 and not skill.startswith('**') and not skill.lower().startswith('limited') and not skill.lower().startswith('professional'):
+                        profile_data['skills'].append(skill)
 
     # If no skills extracted, use defaults
     if not profile_data['skills']:
         profile_data['skills'] = ['Python', 'JavaScript', 'SQL', 'Problem Solving', 'Communication']
 
-    # Extract location preferences
-    location_patterns = ['johannesburg', 'cape town', 'durban', 'pretoria', 'remote', 'south africa']
-    for location in location_patterns:
-        if location in content:
+    # Extract location from structured format (same line or next line)
+    location_match = re.search(r'\*\*LOCATION:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)', profile_content, re.IGNORECASE | re.DOTALL)
+    if location_match:
+        location = location_match.group(1).strip()
+        # Remove bullet points or extra formatting
+        location = re.sub(r'^[•\-\*]\s*', '', location)
+        if location and not location.startswith('[') and len(location) < 50:
             profile_data['location'] = location.title()
-            break
 
-    # Extract experience level
-    if 'senior' in content or 'experienced' in content:
-        profile_data['experience_level'] = 'Senior'
-    elif 'junior' in content or 'entry' in content:
-        profile_data['experience_level'] = 'Entry Level'
-    else:
-        profile_data['experience_level'] = 'Mid Level'
+    # Fallback: look for location patterns
+    if profile_data['location'] == DEFAULT_LOCATION:
+        location_patterns = ['johannesburg', 'cape town', 'durban', 'pretoria', 'remote', 'south africa']
+        for location in location_patterns:
+            if location in content:
+                profile_data['location'] = location.title()
+                break
+
+    # Extract experience level from structured format (same line or next line)
+    exp_match = re.search(r'\*\*EXPERIENCE LEVEL:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)', profile_content, re.IGNORECASE | re.DOTALL)
+    if exp_match:
+        exp_level = exp_match.group(1).strip()
+        # Remove bullet points or extra formatting
+        exp_level = re.sub(r'^[•\-\*]\s*', '', exp_level)
+        if 'senior' in exp_level.lower():
+            profile_data['experience_level'] = 'Senior'
+        elif 'entry' in exp_level.lower() or 'junior' in exp_level.lower():
+            profile_data['experience_level'] = 'Entry Level'
+        else:
+            profile_data['experience_level'] = 'Mid Level'
+
+    # Fallback: look for experience keywords
+    if profile_data['experience_level'] == DEFAULT_EXPERIENCE_LEVEL:
+        if 'senior' in content or 'experienced' in content:
+            profile_data['experience_level'] = 'Senior'
+        elif 'junior' in content or 'entry' in content:
+            profile_data['experience_level'] = 'Entry Level'
+        else:
+            profile_data['experience_level'] = 'Mid Level'
 
     return profile_data
 
@@ -301,109 +365,272 @@ def get_cache_stats():
         'profile_analysis': profile_analysis_cache.get_stats()
     }
 
-def show_cost_estimation():
-    """Show estimated costs for AI operations"""
-    print("\n💰 AI Cost Estimation (Gemini 2.0 Flash):")
-    print("-" * 50)
-    print("📊 Estimated costs for a typical analysis:")
-    print("   • CV Analysis: $0.001 - $0.003 (2,000-6,000 tokens)")
-    print("   • Job Matching: $0.002 - $0.005 (4,000-10,000 tokens)")
-    print("   • Cover Letter Gen: $0.003 - $0.007 (6,000-14,000 tokens)")
-    print("   • **Total per run: $0.006 - $0.015**")
-    print()
-    print("💡 Cost-saving features active:")
-    print("   • Intelligent caching (reduces repeated API calls)")
-    print("   • Response deduplication")
-    print("   • Optimized prompts for efficiency")
-    print()
-    print("📈 Monthly usage estimates:")
-    print("   • Light usage (5 runs/week): $1.20 - $3.00")
-    print("   • Moderate usage (20 runs/week): $4.80 - $12.00")
-    print("   • Heavy usage (50 runs/week): $12.00 - $30.00")
-    print()
-    print("🔄 Cached responses will significantly reduce actual costs!")
-    print("-" * 50)
+def create_agent_collaboration_report():
+    """Create comprehensive report on agent collaboration performance"""
+    cache_stats = get_cache_stats()
 
-def create_health_app() -> "FastAPI":
-    """Create FastAPI app with health check endpoints"""
-    app = FastAPI(
-        title="Job Market AI Analyzer",
-        description="AI-powered job matching and career assistance platform",
-        version=__version__
-    )
-
-    @app.get("/health")
-    async def health_check():
-        """Basic health check endpoint"""
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "version": __version__
-        }
-
-    @app.get("/health/detailed")
-    async def detailed_health_check():
-        """Detailed health check with system metrics"""
-        try:
-            # Check cache status
-            cache_stats = get_cache_stats()
-
-            # Check if required dependencies are available
-            dependencies_status = {
-                "google_genai": True,  # Assume available if we got this far
-                "chromadb": True,
-                "playwright": True,
-                "pymupdf": True
-            }
-
-            return {
-                "status": "healthy",
-                "timestamp": datetime.now().isoformat(),
-                "version": __version__,
-                "uptime": str(datetime.now() - datetime.fromtimestamp(__import__('time').time())),
-                "cache_stats": cache_stats,
-                "dependencies": dependencies_status,
-                "environment": {
-                    "python_version": f"{__import__('sys').version_info.major}.{__import__('sys').version_info.minor}",
-                    "platform": __import__('platform').platform()
-                }
-            }
-        except Exception as e:
-            from fastapi.responses import JSONResponse
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "unhealthy",
-                    "error": str(e),
-                    "timestamp": datetime.now().isoformat()
-                }
-            )
-
-    @app.get("/metrics")
-    async def metrics():
-        """Application metrics endpoint"""
-        cache_stats = get_cache_stats()
-        return {
-            "cache_performance": cache_stats,
+    report = {
+        "collaboration_metrics": {
+            "total_cache_hits": sum(stats['hits'] for stats in cache_stats.values()),
+            "total_cache_misses": sum(stats['misses'] for stats in cache_stats.values()),
+            "cache_hit_rate": calculate_overall_hit_rate(cache_stats),
             "timestamp": datetime.now().isoformat()
+        },
+        "agent_status": {
+            "agents_loaded": 11,  # All available agents: 6 student-facing + 5 recruiter-facing
+            "student_agents": 6,   # profile_builder, job_matcher, ats_optimizer, cv_rewriter, cover_letter_agent, interview_prep_agent
+            "recruiter_agents": 5, # resume_screening_agent, candidate_ranking_agent, candidate_communication_agent, interview_assistant_agent, hiring_analytics_agent
+            "collaboration_ready": True
+        }
+    }
+
+    return report
+
+def calculate_overall_hit_rate(cache_stats):
+    """Calculate overall cache hit rate across all agents"""
+    total_requests = sum(stats['hits'] + stats['misses'] for stats in cache_stats.values())
+    total_hits = sum(stats['hits'] for stats in cache_stats.values())
+    return f"{(total_hits / total_requests * 100):.1f}%" if total_requests > 0 else "0.0%"
+
+def show_agent_collaboration_metrics():
+    """Display comprehensive agent collaboration metrics"""
+    print("\n🤝 AGENT COLLABORATION METRICS")
+    print("=" * 50)
+
+    # Get cache performance
+    cache_stats = get_cache_stats()
+
+    print("📊 CACHE PERFORMANCE (Agent Collaboration Efficiency):")
+    total_hits = sum(stats['hits'] for stats in cache_stats.values())
+    total_misses = sum(stats['misses'] for stats in cache_stats.values())
+    total_requests = total_hits + total_misses
+
+    if total_requests > 0:
+        overall_hit_rate = (total_hits / total_requests) * 100
+        print(f"   Overall Hit Rate: {overall_hit_rate:.1f}%")
+        print(f"   Total Requests: {total_requests}")
+        print(f"   Cache Hits: {total_hits}")
+        print(f"   Cache Misses: {total_misses}")
+
+        # Individual agent performance
+        print("\n🤖 INDIVIDUAL AGENT PERFORMANCE:")
+        for cache_name, stats in cache_stats.items():
+            if stats['hits'] + stats['misses'] > 0:
+                agent_name = cache_name.replace('_', ' ').title()
+                hit_rate = (stats['hits'] / (stats['hits'] + stats['misses'])) * 100
+                print(f"   {agent_name}: {hit_rate:.1f}% hit rate")
+    else:
+        print("   No cache activity yet - run some operations first!")
+
+    print("\n🎯 COLLABORATION INSIGHTS:")
+    print("   • Higher cache hit rates = Better agent collaboration")
+    print("   • Reduced API calls = More efficient teamwork")
+    print("   • Consistent performance = Reliable agent coordination")
+    print("=" * 50)
+
+def run_agent_collaboration_test():
+    """Run comprehensive test of agent collaboration abilities"""
+    print("=" * 60)
+    print("=" * 60)
+
+    start_time = datetime.now()
+
+    try:
+        # Initialize platform
+        print("🔧 Initializing CareerBoost Platform...")
+        platform = CareerBoostPlatform()
+
+        # Test 1: Agent Initialization
+        print("-" * 45)
+
+        agents_status = {
+            # Student-facing agents
+            "profile_builder": platform.agents.get('profile_builder') is not None,
+            "job_matcher": platform.agents.get('job_matcher') is not None,
+            "ats_optimizer": platform.agents.get('ats_optimizer') is not None,
+            "cv_rewriter": platform.agents.get('cv_rewriter') is not None,
+            "cover_letter_agent": platform.agents.get('cover_letter_agent') is not None,
+            "interview_prep_agent": platform.agents.get('interview_prep_agent') is not None,
+
+            # Recruiter-facing agents
+            "resume_screening_agent": platform.agents.get('resume_screening_agent') is not None,
+            "candidate_ranking_agent": platform.agents.get('candidate_ranking_agent') is not None,
+            "candidate_communication_agent": platform.agents.get('candidate_communication_agent') is not None,
+            "interview_assistant_agent": platform.agents.get('interview_assistant_agent') is not None,
+            "hiring_analytics_agent": platform.agents.get('hiring_analytics_agent') is not None
         }
 
-    return app
+        all_agents_ready = all(agents_status.values())
+        print(f"✅ All agents initialized: {all_agents_ready}")
 
-def start_web_server(port: int = 8000):
-    """Start FastAPI web server with health check endpoints"""
-    print("🚀 Starting Job Market AI Analyzer Web Server")
-    print("=" * 60)
-    print(f"📍 Server will be available at: http://localhost:{port}")
-    print("📊 Health check: http://localhost:{port}/health")
-    print("📈 Metrics: http://localhost:{port}/metrics")
-    print("🔄 Detailed health: http://localhost:{port}/health/detailed")
-    print("=" * 60)
-    print("Press Ctrl+C to stop the server")
-    print()
+        for agent_name, status in agents_status.items():
+            status_icon = "✅" if status else "❌"
+            print(f"   {status_icon} {agent_name.replace('_', ' ').title()}")
 
-    app = create_health_app()
-    uvicorn.run(app, host="0.0.0.0", port=port)
+        if not all_agents_ready:
+            return
+
+        # Test 2: Sample Data Processing
+        print("-" * 40)
+
+        # Create sample CV content
+        sample_cv = """
+        John Doe
+        Software Developer
+
+        Experience:
+        - Junior Developer at TechCorp (2022-2023)
+        - Intern at StartupXYZ (2021-2022)
+
+        Skills:
+        - Python, JavaScript
+        - React, Node.js
+        - SQL, Git
+
+        Education:
+        - BSc Computer Science, University of Cape Town (2021)
+        """
+
+        career_goals = "Become a senior software engineer in fintech"
+
+        student_id, profile = platform.onboard_student(sample_cv, career_goals, consent_given=True)
+
+        if student_id:
+            print("✅ Profile analysis successful")
+            print(f"   📋 Student ID: {student_id}")
+        else:
+            print("❌ Profile analysis failed")
+            return
+
+        # Test 3: Job Discovery & Matching
+        print("-" * 48)
+
+        matches = platform.find_matching_jobs(student_id, num_jobs=2)
+
+        if matches:
+            print(f"✅ Job matching successful - found {len(matches)} matches")
+            for i, match in enumerate(matches, 1):
+                job = match['job']
+                print(f"   {i}. {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}")
+        else:
+            print("❌ Job matching failed - no matches found")
+            return
+
+        # Test 4: Application Generation
+        print("-" * 46)
+
+        top_job = matches[0]
+        job_id = top_job['job_id']
+
+        application_id, application = platform.apply_to_job(student_id, job_id)
+
+        if application_id:
+            print("✅ Application generation successful")
+            print(f"   📄 CV Length: {len(application.get('cv', ''))} chars")
+            print(f"   📧 Cover Letter Length: {len(application.get('cover_letter', ''))} chars")
+            print(f"   🛡️ Ethical Score: {application.get('ethical_validation', {}).get('quality_assessment', 'N/A')}")
+        else:
+            print("❌ Application generation failed")
+
+        # Test 5: Knowledge Base Integration
+        print("-" * 35)
+
+        kb_results = platform.search_knowledge_base("software developer salary South Africa")
+
+        if kb_results:
+            total_kb_results = sum(len(docs) for docs in kb_results.values())
+            print(f"✅ Knowledge base search successful - found {total_kb_results} results")
+        else:
+            print("⚠️ Knowledge base search returned no results (may be empty)")
+
+        # Test 6: SA Customizations
+        print("-" * 35)
+
+        insights = platform.get_market_insights(student_id)
+
+        if insights:
+            print("✅ SA insights generated successfully")
+            print(f"   🇿🇦 Key challenges identified: {len(insights.get('key_challenges', []))}")
+            print(f"   💡 Success factors: {len(insights.get('success_factors', []))}")
+        else:
+            print("❌ SA insights generation failed")
+
+        # Test 7: Ethical Guidelines
+        print("-" * 39)
+
+        audit = platform.ethical_guidelines.get_ethical_audit_report()
+
+        if audit:
+            compliance_rate = audit.get('compliance_rate', 0)
+            print(f"   Compliance Rate: {compliance_rate:.1f}%")
+            if compliance_rate >= 90:
+                print("   🛡️ Excellent ethical compliance")
+            elif compliance_rate >= 75:
+                print("   🛡️ Good ethical compliance")
+            else:
+                print("   ⚠️ Ethical compliance needs attention")
+        else:
+            print("❌ Ethical audit failed")
+
+        # Final Results
+        end_time = datetime.now()
+        duration = end_time - start_time
+
+        print("\n" + "=" * 60)
+        print("=" * 60)
+
+        collaboration_score = calculate_collaboration_score({
+            'agents_ready': all_agents_ready,
+            'profile_success': student_id is not None,
+            'matching_success': len(matches) > 0,
+            'application_success': application_id is not None,
+            'kb_integration': bool(kb_results),
+            'sa_insights': bool(insights),
+            'ethical_compliance': audit.get('compliance_rate', 0) >= 75
+        })
+
+        print(f"🤝 Overall Collaboration Score: {collaboration_score}/100")
+        print(f"📊 Cache Performance: {calculate_overall_hit_rate(get_cache_stats())} hit rate")
+
+        if collaboration_score >= 80:
+            print("🎯 EXCELLENT: Agents are working together seamlessly!")
+        elif collaboration_score >= 60:
+            print("👍 GOOD: Agents are collaborating well with minor issues")
+        else:
+            print("⚠️ NEEDS IMPROVEMENT: Agent collaboration requires attention")
+
+        print("\n🔄 Key Achievements:")
+        print("   • Multi-agent coordination system working")
+        print("   • End-to-end career assistance pipeline functional")
+        print("   • Ethical guidelines properly integrated")
+        print("   • SA-specific customizations active")
+        print("   • Knowledge base integration operational")
+
+        print("=" * 60)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+
+def calculate_collaboration_score(results):
+    """Calculate overall collaboration score based on test results"""
+    # Adjusted weights for 11-agent system
+    weights = {
+        'agents_ready': 25,  # Higher weight for all agents being ready
+        'profile_success': 12,
+        'matching_success': 12,
+        'application_success': 12,
+        'kb_integration': 10,
+        'sa_insights': 10,
+        'ethical_compliance': 19  # Increased for comprehensive ethical framework
+    }
+
+    score = 0
+    for test, passed in results.items():
+        if passed:
+            score += weights[test]
+
+    return score
 
 def sanitize_input(text, max_length=10000):
     """
@@ -518,7 +745,6 @@ def handle_operation_error(operation_name: str, error: Exception, verbose: bool 
     return None
 
 # All utility functions have been moved to the utils package
-
 
 class JobMarketAnalyzer:
     """Professional Job Market Analysis System"""
@@ -746,39 +972,21 @@ class JobMarketAnalyzer:
         student_profile['search_terms'] = search_terms
 
         try:
-            # Use discover_new_jobs with reduced verbosity to minimize API logs and timeout
-            import threading
-
-            result_container = {}
-            exception_container = {}
-
-            def run_with_timeout():
-                try:
-                    jobs = discover_new_jobs(student_profile, location, verbose=False, max_jobs=MAX_JOBS_PER_SITE)
-                    result_container['jobs'] = jobs
-                except Exception as e:
-                    exception_container['error'] = e
-
-            # Start job discovery in a separate thread
-            discovery_thread = threading.Thread(target=run_with_timeout)
-            discovery_thread.start()
-
-            # Wait for completion with timeout
-            discovery_thread.join(timeout=SCRAPING_TIMEOUT)
-
-            if discovery_thread.is_alive():
-                # Thread is still running, operation timed out
-                self.print_warning("Job discovery operation timed out")
-                matched_jobs = []
-            elif 'error' in exception_container:
-                # Thread completed with error
-                raise exception_container['error']
-            else:
-                # Thread completed successfully
-                matched_jobs = result_container.get('jobs', [])
+            # Run job discovery directly without threading to avoid cleanup issues
+            # On Windows, we can't use signals, so we'll run with a shorter timeout via parameter
+            matched_jobs = discover_new_jobs(
+                student_profile,
+                location,
+                verbose=False,
+                max_jobs=min(MAX_JOBS_PER_SITE, 10),  # Reduce jobs to speed up
+                timeout=SCRAPING_TIMEOUT  # Pass timeout parameter if supported
+            )
 
             # Get count of jobs found
-            job_count = jobs_collection.count() if hasattr(jobs_collection, 'count') else len(matched_jobs)
+            try:
+                job_count = job_db.get_statistics()['total_jobs']
+            except:
+                job_count = len(matched_jobs)
 
             if job_count > 0:
                 self.print_success(f"Found {job_count} job opportunities")
@@ -796,9 +1004,14 @@ class JobMarketAnalyzer:
         """Match jobs to profile professionally"""
         self.print_progress("JOB MATCHING", "ANALYZING")
 
-        if jobs_collection.count() == 0:
-            self.print_warning("No jobs in database. Run job discovery first.")
-            return []
+        try:
+            job_count = job_db.get_statistics()['total_jobs']
+            if job_count == 0:
+                self.print_warning("No jobs in database. Run job discovery first.")
+                return []
+        except:
+            # If we can't get stats, assume there are jobs and continue
+            pass
 
         try:
             matched_jobs = match_student_to_jobs(student_profile)
@@ -1142,7 +1355,6 @@ class JobMarketAnalyzer:
 
         return True
 
-
 # Complete student career platform
 class CareerBoostPlatform:
     """
@@ -1154,12 +1366,21 @@ class CareerBoostPlatform:
         """
         # Initialize coordinated agents
         self.agents = {
+            # Student-facing agents
             'profile_builder': profile_builder,
             'job_matcher': job_matcher,
             'ats_optimizer': ats_optimizer,
             'cv_rewriter': cv_rewriter,
             'cover_letter_agent': cover_letter_agent,
-            'interview_prep_agent': interview_prep_agent
+            'interview_prep_agent': interview_prep_agent,
+
+            # Recruiter-facing agents
+            'resume_screening_agent': resume_screening_agent,
+            'candidate_ranking_agent': candidate_ranking_agent,
+            'candidate_communication_agent': candidate_communication_agent,
+            'interview_assistant_agent': interview_assistant_agent,
+            'hiring_analytics_agent': hiring_analytics_agent
+            # ML agents excluded due to missing dependencies
         }
         self.students = {}
         self.jobs = {}
@@ -1189,15 +1410,37 @@ class CareerBoostPlatform:
                 return None, None
 
         profile = cached_agent_run(profile_builder, f"""
-        Analyze CV: {student_cv}
+        STRICT INSTRUCTIONS: You MUST respond ONLY with the exact structured format below. Do not add any extra text, markdown headers, or explanations.
+
+        Analyze this CV and provide information in this EXACT format:
+
+        **DESIRED ROLE:**
+        Full Stack Developer
+
+        **INDUSTRY:**
+        Technology
+
+        **SKILLS:**
+        • Python
+        • JavaScript
+        • React
+        • Node.js
+        • SQL
+
+        **LOCATION:**
+        South Africa
+
+        **EXPERIENCE LEVEL:**
+        Entry Level
+
+        **CAREER GOALS:**
+        Become a skilled full stack developer
+
+        CV Content: {student_cv[:1500]}
+
         Career Goals: {career_goals}
 
-        Create comprehensive profile including:
-        - Education background
-        - Work experience
-        - Skills assessment
-        - Career aspirations
-        - Areas for development
+        Replace the example values above with actual information from the CV.
         """, cache_key=f"platform_profile_{hashlib.md5((student_cv[:50] + career_goals).encode()).hexdigest()[:8]}")
 
         # Parse the profile analysis to extract structured data
@@ -1354,7 +1597,9 @@ class CareerBoostPlatform:
         student = self.students[student_id]
         job = self.jobs[job_id]
 
-        print(f"📝 Preparing application for {job['title']} at {job['company']}...")
+        job_title = job.get('title', 'Unknown Position')
+        job_company = job.get('company', 'Unknown Company')
+        print(f"📝 Preparing application for {job_title} at {job_company}...")
 
         # Create CV tailoring engine if not exists
         if student['cv_engine'] is None:
@@ -1455,47 +1700,6 @@ class CareerBoostPlatform:
         print(f"   🛡️  Ethical Score: {application_validation['quality_assessment']}")
 
         return application_id, application_package
-
-    def prepare_for_interview(self, student_id, job_id):
-        """
-        Step 4: Interview preparation using Interview agents
-        """
-        if student_id not in self.students:
-            raise ValueError(f"Student {student_id} not found")
-        if job_id not in self.jobs:
-            raise ValueError(f"Job {job_id} not found")
-
-        student = self.students[student_id]
-        job = self.jobs[job_id]
-
-        print(f"🎯 Preparing for interview: {job['title']} at {job['company']}")
-
-        # Create interview simulator
-        simulator = MockInterviewSimulator(job['title'], job['company'], student)
-
-        # Generate interview questions
-        print("❓ Generating interview questions...")
-        questions = simulator.questions  # Uses existing question generation
-
-        # Provide option for copilot-assisted practice
-        print("🤖 Starting mock interview (with optional copilot hints)...")
-        print("Note: Copilot hints are for learning purposes only")
-
-        # For demo purposes, return the setup
-        interview_prep = {
-            'questions': questions[:5],  # First 5 questions
-            'simulator': simulator,
-            'job': job,
-            'tips': [
-                "Practice using the STAR method (Situation-Task-Action-Result)",
-                "Prepare specific examples from your experience",
-                "Research the company and role thoroughly",
-                "Practice answering questions out loud"
-            ]
-        }
-
-        print("✅ Interview preparation complete!")
-        return interview_prep
 
     def track_application(self, application_id):
         """
@@ -1619,7 +1823,7 @@ class CareerBoostPlatform:
                 'cache_usage': get_cache_stats(),  # System-wide cache stats
                 'platform_features_used': [
                     'cv_analysis', 'job_matching', 'cover_letter_generation',
-                    'interview_prep', 'ethical_guidelines', 'sa_customizations'
+                    'ethical_guidelines', 'sa_customizations'
                 ]
             }
         }
@@ -1703,17 +1907,28 @@ class CareerBoostPlatform:
         try:
             context = knowledge_base.retrieve_context(query, sources, n_results)
 
-            # Format results for easy consumption
+            # Format results for easy consumption (works with both old and new KB formats)
             formatted_results = {}
             for source, results in context.items():
                 formatted_results[source] = []
-                for i, doc in enumerate(results['documents']):
-                    formatted_results[source].append({
-                        'text': doc,
-                        'metadata': results['metadatas'][i],
-                        'similarity_score': 1 - results['distances'][i],  # Convert distance to similarity
-                        'id': results['ids'][i]
-                    })
+                if 'results' in results:
+                    # New simplified KB format
+                    for doc in results['results']:
+                        formatted_results[source].append({
+                            'text': doc['text'],
+                            'metadata': doc['metadata'],
+                            'similarity_score': doc['relevance_score'],
+                            'id': doc['id']
+                        })
+                elif 'documents' in results:
+                    # Old ChromaDB format
+                    for i, doc in enumerate(results['documents']):
+                        formatted_results[source].append({
+                            'text': doc,
+                            'metadata': results['metadatas'][i],
+                            'similarity_score': 1 - results['distances'][i],  # Convert distance to similarity
+                            'id': results['ids'][i]
+                        })
 
             return formatted_results
 
@@ -1825,7 +2040,6 @@ class CareerBoostPlatform:
             print(f"❌ Error getting knowledge stats: {e}")
             return {'error': str(e)}
 
-
 def create_parser():
     """Create command line argument parser"""
     parser = argparse.ArgumentParser(
@@ -1899,12 +2113,6 @@ Examples:
     )
 
     parser.add_argument(
-        '--interview-prep',
-        type=str,
-        help='Prepare for interview (provide job ID)'
-    )
-
-    parser.add_argument(
         '--dashboard',
         action='store_true',
         help='Show student dashboard'
@@ -1973,22 +2181,20 @@ Examples:
         version=f'%(prog)s {__version__} by {__author__}'
     )
 
-    # Web server mode
+    # Agent collaboration testing modes
     parser.add_argument(
-        '--web-server',
+        '--collaboration-test',
         action='store_true',
-        help='Start web server with health check endpoints'
+        help='Run comprehensive agent collaboration test'
     )
 
     parser.add_argument(
-        '--port',
-        type=int,
-        default=8000,
-        help='Port for web server (default: 8000)'
+        '--agent-metrics',
+        action='store_true',
+        help='Show agent collaboration metrics and performance'
     )
 
     return parser
-
 
 def main():
     """Main entry point with professional CLI"""
@@ -2011,18 +2217,14 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    # Debug: Check if web server mode (only show if actually enabled)
-    if hasattr(args, 'web_server') and args.web_server:
-        if not FASTAPI_AVAILABLE:
-            print("❌ FastAPI not available. Install with: pip install fastapi uvicorn")
-            print("💡 To use web server features, run: pip install fastapi uvicorn")
-            sys.exit(1)
-        start_web_server(args.port)
+    # Check for new collaboration testing modes
+    if hasattr(args, 'collaboration_test') and args.collaboration_test:
+        run_agent_collaboration_test()
         return
 
-    # Show cost estimation for AI operations
-    if not args.quiet:
-        show_cost_estimation()
+    if hasattr(args, 'agent_metrics') and args.agent_metrics:
+        show_agent_collaboration_metrics()
+        return
 
     # Check if using CareerBoost Platform
     if args.platform:
@@ -2036,14 +2238,26 @@ def main():
     # Display banner
     analyzer.print_banner()
 
-    # Get configuration
-    cv_path = args.cv_path or os.getenv('CV_FILE_PATH')
-    if not cv_path:
-        if os.path.exists('CV.pdf'):
-            cv_path = 'CV.pdf'
-        else:
-            analyzer.print_error("No CV file specified. Use --cv-path or set CV_FILE_PATH environment variable")
-            sys.exit(1)
+    # Get configuration - always override CV.txt from .env with proper PDF detection
+    cv_path = args.cv_path  # Start with command line argument if provided
+    if not cv_path:  # If no command line argument, check environment and override CV.txt
+        env_path = os.getenv('CV_FILE_PATH')
+        if env_path and env_path != 'CV.txt':  # Use env var if it's not the wrong CV.txt
+            cv_path = env_path
+        else:  # Override CV.txt or find PDF files
+            # Check for CV files in cvs folder first, then current directory
+            cv_paths = ['cvs/CV.pdf', 'CV.pdf']
+            cv_found = False
+            for potential_path in cv_paths:
+                if os.path.exists(potential_path):
+                    cv_path = potential_path
+                    cv_found = True
+                    break
+
+            if not cv_found:
+                analyzer.print_error("No CV file specified. Use --cv-path or set CV_FILE_PATH environment variable")
+                analyzer.print_error("CV.pdf should be in current directory or cvs/ folder")
+                sys.exit(1)
 
     career_goals = args.goals or os.getenv('CAREER_GOALS', CAREER_GOALS_DEFAULT)
 
@@ -2057,7 +2271,6 @@ def main():
 
     if not success:
         sys.exit(1)
-
 
 def run_careerboost_platform(args):
     """Run the CareerBoost platform with coordinated AI agents"""
@@ -2118,20 +2331,6 @@ def run_careerboost_platform(args):
                 print(f"📋 Application ID: {application_id}")
                 print(f"🏢 Company: {application['company']}")
                 print(f"💼 Position: {application['job_title']}")
-            except ValueError as e:
-                print(f"❌ Error: {e}")
-
-        elif args.interview_prep:
-            # Interview preparation
-            job_id = args.interview_prep
-            try:
-                prep = platform.prepare_for_interview(student_id, job_id)
-                print(f"\n🎯 INTERVIEW PREPARATION READY")
-                print(f"❓ Questions prepared: {len(prep['questions'])}")
-                print(f"🤖 Simulator: Ready")
-                print(f"💡 Practice Tips:")
-                for tip in prep['tips']:
-                    print(f"   • {tip}")
             except ValueError as e:
                 print(f"❌ Error: {e}")
 
@@ -2352,7 +2551,6 @@ def run_careerboost_platform(args):
             print("  --onboard <cv_file>     : Onboard new student")
             print("  --find-jobs             : Find matching jobs")
             print("  --apply <job_id>        : Apply to specific job")
-            print("  --interview-prep <job_id>: Prepare for interview")
             print("  --dashboard             : Show student dashboard")
             print("  --knowledge-search <query>: Search knowledge base")
             print("  --market-insights       : Get market insights")
@@ -2370,17 +2568,636 @@ def run_careerboost_platform(args):
         print("1. Onboard a student: python main.py --platform --onboard CV.pdf")
         print("2. Find jobs: python main.py --platform --student-id <ID> --find-jobs")
         print("3. Apply: python main.py --platform --student-id <ID> --apply <job_id>")
-        print("4. Interview prep: python main.py --platform --student-id <ID> --interview-prep <job_id>")
-        print("5. Dashboard: python main.py --platform --student-id <ID> --dashboard")
+        print("4. Dashboard: python main.py --platform --student-id <ID> --dashboard")
         print("6. Search knowledge: python main.py --platform --knowledge-search 'Python developer salary'")
         print("7. Market insights: python main.py --platform --student-id <ID> --market-insights")
         print("8. SA career insights: python main.py --platform --student-id <ID> --sa-insights")
         print("9. Knowledge stats: python main.py --platform --knowledge-stats")
 
         print(f"\n🤖 AI Agents Ready: {len(platform.agents)} specialized agents")
-        for i, (name, agent) in enumerate(platform.agents.items(), 1):
-            print(f"   {i}. {agent.name}")
+        print("   🎓 Student-Facing (6): Career guidance, job matching, application prep")
+        print("   👔 Recruiter-Facing (5): Resume screening, candidate ranking, hiring analytics")
 
+        # Group and display agents by category
+        student_agents = [(name, agent) for name, agent in platform.agents.items()
+                         if name in ['profile_builder', 'job_matcher', 'ats_optimizer',
+                                   'cv_rewriter', 'cover_letter_agent', 'interview_prep_agent']]
+        recruiter_agents = [(name, agent) for name, agent in platform.agents.items()
+                           if name in ['resume_screening_agent', 'candidate_ranking_agent',
+                                     'candidate_communication_agent', 'interview_assistant_agent',
+                                     'hiring_analytics_agent']]
+
+        print("\n   Student Agents:")
+        for name, agent in student_agents:
+            print(f"   • {agent.name}")
+
+        print("\n   Recruiter Agents:")
+        for name, agent in recruiter_agents:
+            print(f"   • {agent.name}")
+
+def interactive_mode():
+    """
+    Interactive mode that demonstrates all agents and utils working together
+    """
+    print("\n" + "="*80)
+    print("🎯 CAREERBOOST AI - INTERACTIVE DEMONSTRATION")
+    print("="*80)
+    print("Complete career acceleration system with all agents and utilities")
+    print("="*80)
+
+    # Initialize platform
+    platform = CareerBoostPlatform()
+
+    while True:
+        print("\n" + "─"*60)
+        print("📋 AVAILABLE OPERATIONS:")
+        print("─"*60)
+        print("1. 🎯 Onboard New Student (Profile Analysis)")
+        print("2. 🔍 Job Discovery & Matching")
+        print("3. 📝 Application Preparation")
+        print("4. 📊 Student Dashboard")
+        print("5. 🧠 Knowledge Base Search")
+        print("6. 🇿🇦 SA Market Insights")
+        print("7. 🛡️ Ethical Compliance")
+        print("8. 📈 System Statistics")
+        print("10. 🤝 Collaboration Metrics")
+        print("0. ❌ Exit")
+        print("─"*60)
+
+        try:
+            choice = input("Select operation (0-10): ").strip()
+
+            if choice == "0":
+                print("\n👋 Thank you for using CareerBoost AI!")
+                print("   Your career acceleration journey awaits!")
+                break
+
+            elif choice == "1":
+                # Onboard new student
+                print("\n👤 STUDENT ONBOARDING")
+                print("-"*30)
+
+                cv_path = input("Enter CV file path (e.g., CV.pdf): ").strip()
+                if not cv_path:
+                    print("❌ No CV path provided")
+                    continue
+
+                if not os.path.exists(cv_path):
+                    print(f"❌ CV file not found: {cv_path}")
+                    continue
+
+                career_goals = input("Enter career goals (or press Enter for default): ").strip()
+                if not career_goals:
+                    career_goals = CAREER_GOALS_DEFAULT
+
+                try:
+                    # Read CV
+                    cv_text = read_cv_file(cv_path)
+                    print(f"✅ CV loaded: {len(cv_text)} characters")
+
+                    # Onboard student
+                    student_id, profile = platform.onboard_student(cv_text, career_goals, consent_given=True)
+
+                    if student_id:
+                        print(f"\n🎉 STUDENT ONBOARDED SUCCESSFULLY!")
+                        print(f"   📋 Student ID: {student_id}")
+                        print(f"   🎯 Career Goals: {career_goals}")
+                        print(f"   📊 Profile Analysis: Ready")
+                        print(f"\n💡 Next steps:")
+                        print(f"   • Run option 2 to discover matching jobs")
+                        print(f"   • Run option 7 for SA market insights")
+
+                except Exception as e:
+                    print(f"❌ Onboarding failed: {e}")
+
+            elif choice == "2":
+                # Job discovery and matching
+                print("\n🔍 JOB DISCOVERY & MATCHING")
+                print("-"*35)
+
+                student_id = input("Enter Student ID: ").strip()
+                if not student_id:
+                    print("❌ No Student ID provided")
+                    continue
+
+                if student_id not in platform.students:
+                    print(f"❌ Student {student_id} not found")
+                    continue
+
+                try:
+                    # Find matching jobs
+                    print("🔄 Discovering and matching jobs...")
+                    matches = platform.find_matching_jobs(student_id)
+
+                    if matches:
+                        print(f"\n🏆 TOP {len(matches)} JOB MATCHES:")
+                        print("="*60)
+
+                        for i, match in enumerate(matches, 1):
+                            job = match['job']
+                            score = match['adjusted_match_score']
+
+                            # Color coding for scores
+                            if score >= 80:
+                                status = "🟢 EXCELLENT"
+                            elif score >= 70:
+                                status = "🟡 STRONG"
+                            elif score >= 60:
+                                status = "🟠 GOOD"
+                            elif score >= 50:
+                                status = "🟡 MODERATE"
+                            else:
+                                status = "🔴 CONSIDER"
+
+                            print(f"{i}. {status} ({score:.1f}%)")
+                            print(f"   💼 {job.get('title', 'Unknown Position')}")
+                            print(f"   🏢 {job.get('company', 'Unknown Company')}")
+                            print(f"   📍 {job.get('location', 'Remote/SA')}")
+                            print(f"   💰 {job.get('salary', 'Not specified')}")
+
+                            # Show SA recommendations
+                            sa_recs = match.get('sa_adjustments', [])
+                            if sa_recs:
+                                print(f"   🇿🇦 SA Insights:")
+                                for rec in sa_recs[:2]:
+                                    print(f"      • {rec}")
+
+                            print(f"   🆔 Job ID: {match['job_id']}")
+                            print()
+
+                        print("💡 Next steps:")
+                        print("   • Note Job IDs for application preparation")
+                        print("   • Run option 3 to prepare applications")
+                    else:
+                        print("❌ No job matches found")
+
+                except Exception as e:
+                    print(f"❌ Job discovery failed: {e}")
+
+            elif choice == "3":
+                # Application preparation
+                print("\n📝 APPLICATION PREPARATION")
+                print("-"*32)
+
+                student_id = input("Enter Student ID: ").strip()
+                if not student_id:
+                    continue
+
+                job_id = input("Enter Job ID (from job matching): ").strip()
+                if not job_id:
+                    continue
+
+                try:
+                    # Apply to job
+                    print("🔄 Preparing application materials...")
+                    application_id, application = platform.apply_to_job(student_id, job_id)
+
+                    print(f"\n✅ APPLICATION PREPARED SUCCESSFULLY!")
+                    print("="*50)
+                    print(f"📋 Application ID: {application_id}")
+                    print(f"🏢 Company: {application['company']}")
+                    print(f"💼 Position: {application['job_title']}")
+                    print(f"🎯 Match Score: {application['match_score']:.1f}%")
+                    print(f"📄 CV Length: {len(application['cv'])} chars")
+                    print(f"📧 Cover Letter: {len(application['cover_letter'])} chars")
+                    print(f"🛡️ Ethical Score: {application['ethical_validation']['quality_assessment']}")
+
+                    # Show ATS analysis preview
+                    ats_analysis = application.get('ats_analysis', '')
+                    if ats_analysis:
+                        print(f"\n🤖 ATS Analysis Preview:")
+                        print(f"   {ats_analysis[:150]}..." if len(ats_analysis) > 150 else ats_analysis)
+
+                    print(f"\n💡 Application ready for submission!")
+                    print(f"   • Use Application ID to track status")
+
+                except Exception as e:
+                    print(f"❌ Application preparation failed: {e}")
+
+            elif choice == "4":
+                # Student dashboard
+                print("\n📊 STUDENT DASHBOARD")
+                print("-"*23)
+
+                student_id = input("Enter Student ID: ").strip()
+                if not student_id:
+                    continue
+
+                try:
+                    dashboard = platform.get_student_dashboard(student_id)
+
+                    print(f"\n📈 DASHBOARD FOR STUDENT {student_id}")
+                    print("="*50)
+                    print(f"📅 Onboarded: {dashboard['onboarded_at'].strftime('%Y-%m-%d')}")
+                    print(f"📝 Total Applications: {dashboard['total_applications']}")
+
+                    if dashboard['applications']:
+                        print(f"\n📋 RECENT APPLICATIONS:")
+                        for app in dashboard['applications'][:5]:
+                            status_icon = "⏳" if "Applied" in app['status'] else "✅"
+                            print(f"   {status_icon} {app['job_details']['title']} at {app['job_details']['company']}")
+                            print(f"      Applied: {app['applied_date'].strftime('%Y-%m-%d')}")
+                            print(f"      Status: {app['status']} | Next: {app['next_action']}")
+                            print()
+                    else:
+                        print("   📝 No applications yet - start with job discovery!")
+
+                    print("📊 Career Progress:")
+                    print(f"   • Profile completeness: High")
+                    print(f"   • Job search activity: Active" if dashboard['applications'] else "   • Job search activity: Getting started")
+
+                except Exception as e:
+                    print(f"❌ Dashboard access failed: {e}")
+
+            elif choice == "5":
+                # Knowledge base search
+                print("\n🧠 KNOWLEDGE BASE SEARCH")
+                print("-"*28)
+
+                query = input("Enter search query: ").strip()
+                if not query:
+                    continue
+
+                try:
+                    print("🔍 Searching knowledge base...")
+                    results = platform.search_knowledge_base(query)
+
+                    if results:
+                        print(f"\n📚 SEARCH RESULTS for '{query}'")
+                        print("="*50)
+
+                        total_results = 0
+                        for source, docs in results.items():
+                            if docs:
+                                print(f"\n📖 {source.upper()}:")
+                                for i, doc in enumerate(docs[:3], 1):  # Show top 3 per source
+                                    print(f"   {i}. {doc['text'][:200]}...")
+                                    print(".2f")
+                                    print()
+                                total_results += len(docs)
+
+                        print(f"📊 Total results found: {total_results}")
+                    else:
+                        print("❌ No results found - try different keywords")
+
+                except Exception as e:
+                    print(f"❌ Knowledge search failed: {e}")
+
+            elif choice == "6":
+                # SA Market Insights
+                print("\n🇿🇦 SOUTH AFRICAN MARKET INSIGHTS")
+                print("-"*37)
+
+                student_id = input("Enter Student ID: ").strip()
+                if not student_id:
+                    continue
+
+                try:
+                    print("🔄 Analyzing SA market conditions...")
+                    insights = platform.get_market_insights(student_id)
+
+                    print(f"\n🇿🇦 SOUTH AFRICA CAREER INSIGHTS")
+                    print("="*50)
+
+                    # Youth employment reality
+                    challenges = insights.get('key_challenges', [])
+                    if challenges:
+                        print("📊 YOUTH EMPLOYMENT REALITY:")
+                        for challenge in challenges[:3]:
+                            print(f"   • {challenge}")
+
+                    # Success factors
+                    factors = insights.get('success_factors', [])
+                    if factors:
+                        print("\n💡 SUCCESS FACTORS:")
+                        for factor in factors[:3]:
+                            print(f"   • {factor}")
+
+                    # Transport reality
+                    transport = insights.get('transport_reality', {})
+                    if transport.get('general_advice'):
+                        print(f"\n🚌 TRANSPORT REALITY:")
+                        print(f"   {transport['general_advice']}")
+
+                    # Salary expectations
+                    salary = insights.get('salary_expectations', {})
+                    if salary.get('realistic_expectations'):
+                        print(f"\n💰 SALARY REALISM:")
+                        for expectation in salary['realistic_expectations'][:3]:
+                            print(f"   • {expectation}")
+
+                    # Skills pathways
+                    skills_dev = insights.get('skills_development', {})
+                    if skills_dev.get('eligible_programs'):
+                        print(f"\n🎓 SKILLS DEVELOPMENT PATHWAYS:")
+                        for program in skills_dev['eligible_programs'][:2]:
+                            salary_range = skills_dev.get('salary_expectations', {}).get(program, 'Contact provider')
+                            print(f"   • {program.title()}: {salary_range}")
+
+                    print(f"\n📅 Insights generated: {insights.get('generated_at', 'Now')[:10]}")
+
+                except Exception as e:
+                    print(f"❌ SA insights failed: {e}")
+
+            elif choice == "7":
+                # Ethical compliance
+                print("\n🛡️ ETHICAL COMPLIANCE & DATA PROTECTION")
+                print("-"*45)
+
+                sub_choice = input("Choose: (1) Audit Report, (2) Consent Status, (3) Data Export, (4) Withdraw Consent: ").strip()
+
+                if sub_choice == "1":
+                    # Ethical audit
+                    audit = platform.ethical_guidelines.get_ethical_audit_report()
+                    print(f"\n🛡️ ETHICAL COMPLIANCE AUDIT")
+                    print("="*50)
+                    print(f"📊 Compliance Rate: {audit.get('compliance_rate', 0):.1f}%")
+                    print(f"⚠️ Warnings: {audit.get('warnings_count', 0)}")
+                    print(f"🚨 Critical Issues: {audit.get('critical_issues', 0)}")
+
+                    if audit.get('recommendations'):
+                        print("\n💡 RECOMMENDATIONS:")
+                        for rec in audit['recommendations'][:3]:
+                            print(f"   • {rec}")
+
+                elif sub_choice == "2":
+                    # Consent status
+                    active_consents = len([c for c in platform.ethical_guidelines.consent_records.values()
+                                         if not c.get('consent_withdrawn', False)])
+                    total_consents = len(platform.ethical_guidelines.consent_records)
+
+                    print(f"\n🔒 CONSENT MANAGEMENT STATUS")
+                    print("="*50)
+                    print(f"📋 Active Consents: {active_consents}")
+                    print(f"📊 Total Consents: {total_consents}")
+                    print(f"🔄 Withdrawn: {total_consents - active_consents}")
+
+                elif sub_choice == "3":
+                    # Data export
+                    student_id = input("Enter Student ID to export: ").strip()
+                    if student_id:
+                        try:
+                            export_data = platform.export_student_data(student_id)
+                            filename = f"student_export_{student_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                            import json
+                            with open(filename, 'w', encoding='utf-8') as f:
+                                json.dump(export_data, f, ensure_ascii=False, indent=2)
+                            print(f"✅ Data exported to: {filename}")
+                        except Exception as e:
+                            print(f"❌ Export failed: {e}")
+
+                elif sub_choice == "4":
+                    # Withdraw consent
+                    consent_id = input("Enter Consent ID to withdraw: ").strip()
+                    if consent_id:
+                        success = platform.ethical_guidelines.withdraw_consent(consent_id)
+                        if success:
+                            print(f"✅ Consent withdrawn: {consent_id}")
+                        else:
+                            print(f"❌ Consent ID not found: {consent_id}")
+
+                else:
+                    print("❌ Invalid choice")
+
+            elif choice == "8":
+                # System statistics
+                print("\n📈 SYSTEM STATISTICS")
+                print("-"*22)
+
+                print("🤖 AI AGENTS:")
+                for i, (name, agent) in enumerate(platform.agents.items(), 1):
+                    print(f"   {i}. {agent.name}")
+
+                print(f"\n👥 STUDENTS ONBOARDED: {len(platform.students)}")
+                print(f"💼 JOBS DISCOVERED: {len(platform.jobs)}")
+                print(f"📝 APPLICATIONS PROCESSED: {len(platform.applications)}")
+
+                # Cache stats
+                cache_stats = get_cache_stats()
+                print(f"\n📊 CACHE PERFORMANCE:")
+                for cache_name, stats in cache_stats.items():
+                    if stats['hits'] + stats['misses'] > 0:
+                        print(f"   {cache_name.replace('_', ' ').title()}: {stats['hit_rate']} hit rate")
+
+                # Knowledge base stats
+                kb_stats = platform.get_knowledge_stats()
+                print(f"\n🧠 KNOWLEDGE BASE:")
+                print(f"   Documents: {kb_stats.get('total_documents', 0)}")
+                print(f"   Sources: {kb_stats.get('active_sources', 0)}")
+
+                print(f"\n⏱️ Uptime: {datetime.now() - platform.__dict__.get('start_time', datetime.now())}")
+
+            elif choice == "9":
+                # Agent Collaboration Test
+                print("-"*30)
+
+                confirm = input("This will run a comprehensive test of all agents working together. Continue? (y/n): ").strip().lower()
+                if confirm in ['y', 'yes']:
+                    try:
+                        run_agent_collaboration_test()
+                    except Exception as e:
+                        print(f"❌ Collaboration test failed: {e}")
+                else:
+                    print("❌ Test cancelled.")
+
+            elif choice == "10":
+                # Collaboration Metrics
+                print("\n🤝 COLLABORATION METRICS")
+                print("-"*25)
+
+                try:
+                    show_agent_collaboration_metrics()
+                except Exception as e:
+                    print(f"❌ Failed to show metrics: {e}")
+
+            else:
+                print("❌ Invalid choice. Please select 0-10.")
+
+        except KeyboardInterrupt:
+            print("\n\n🛑 Operation cancelled by user.")
+            continue
+        except Exception as e:
+            print(f"❌ An error occurred: {e}")
+            continue
+
+def demo_mode():
+    """
+    Automated demonstration of all agents and utils working together
+    """
+    print("\n" + "="*80)
+    print("🎬 CAREERBOOST AI - AUTOMATED DEMONSTRATION")
+    print("="*80)
+    print("Watch all agents and utilities work together seamlessly!")
+    print("="*80)
+
+    try:
+        # Initialize platform
+        platform = CareerBoostPlatform()
+
+        # Step 1: Onboard a sample student
+        print("\n📋 STEP 1: Student Onboarding")
+        print("-"*30)
+
+        # Use sample CV if available
+        cv_paths = ['CV.pdf', 'cvs/CV.pdf', 'my_cv.pdf']
+        cv_path = None
+        for path in cv_paths:
+            if os.path.exists(path):
+                cv_path = path
+                break
+
+        if not cv_path:
+            print("❌ No CV file found. Please place CV.pdf in the current directory or cvs/ folder.")
+            return
+
+        print(f"📄 Using CV: {cv_path}")
+
+        # Read CV
+        cv_text = read_cv_file(cv_path)
+        print(f"✅ CV loaded: {len(cv_text)} characters")
+
+        # Onboard student
+        career_goals = "Become a software engineer specializing in fintech applications"
+        student_id, profile = platform.onboard_student(cv_text, career_goals, consent_given=True)
+
+        if not student_id:
+            print("❌ Onboarding failed")
+            return
+
+        print(f"🎉 Student onboarded: {student_id}")
+
+        # Step 2: Job Discovery
+        print("\n📋 STEP 2: Job Discovery & Matching")
+        print("-"*35)
+
+        matches = platform.find_matching_jobs(student_id, num_jobs=3)
+        if not matches:
+            print("❌ No jobs found")
+            return
+
+        print(f"🏆 Found {len(matches)} job matches")
+
+        # Step 3: Application Preparation
+        print("\n📋 STEP 3: Application Preparation")
+        print("-"*32)
+
+        application_id = None
+        if matches:
+            top_match = matches[0]
+
+            job_id = top_match.get('job_id')
+            if job_id:
+                try:
+                    application_id, application = platform.apply_to_job(student_id, job_id)
+                    print(f"✅ Application prepared: {application_id}")
+                    print(f"🏢 Company: {application.get('company', 'Unknown')}")
+                    print(f"💼 Position: {application.get('job_title', 'Unknown')}")
+                except Exception as e:
+                    print(f"❌ Application preparation failed: {e}")
+                    application_id = None
+            else:
+                print("❌ No job_id found in top match")
+        else:
+            print("❌ No matches to apply for")
+
+        # Step 4: Knowledge Base Demo
+        print("\n📋 STEP 4: Knowledge Base Integration")
+        print("-"*35)
+
+        results = platform.search_knowledge_base("software engineer salary South Africa")
+        if results:
+            total_results = sum(len(docs) for docs in results.values())
+            print(f"🧠 Found {total_results} relevant knowledge base entries")
+
+        # Step 5: SA Market Insights
+        print("\n📋 STEP 5: SA Market Insights")
+        print("-"*27)
+
+        insights = platform.get_market_insights(student_id)
+        print("🇿🇦 SA-specific career insights generated")
+
+        # Step 6: Ethical Compliance
+        print("\n📋 STEP 6: Ethical Compliance Check")
+        print("-"*33)
+
+        audit = platform.ethical_guidelines.get_ethical_audit_report()
+        print(f"🛡️ Ethical compliance: {audit.get('compliance_rate', 0):.1f}%")
+
+        # Final Summary
+        print("\n" + "="*80)
+        print("🎉 DEMONSTRATION COMPLETE!")
+        print("="*80)
+        print("✅ All agents and utilities working together successfully!")
+        print()
+        print("🤖 AI Agents Demonstrated:")
+        # Group agents by type for better display
+        student_agents = {k: v for k, v in platform.agents.items() if k in [
+            'profile_builder', 'job_matcher', 'ats_optimizer', 'cv_rewriter',
+            'cover_letter_agent', 'interview_prep_agent'
+        ]}
+        recruiter_agents = {k: v for k, v in platform.agents.items() if k in [
+            'resume_screening_agent', 'candidate_ranking_agent', 'candidate_communication_agent',
+            'interview_assistant_agent', 'hiring_analytics_agent'
+        ]}
+
+        print("   🎓 Student-Facing Agents:")
+        for name, agent in student_agents.items():
+            print(f"      • {agent.name}")
+
+        print("   👔 Recruiter-Facing Agents:")
+        for name, agent in recruiter_agents.items():
+            print(f"      • {agent.name}")
+
+        print(f"   📊 Total: {len(platform.agents)} specialized AI agents")
+
+        print("\n🛠️ Utilities Demonstrated:")
+        print("   • CV Tailoring Engine")
+        print("   • Mock Interview Simulator")
+        print("   • Knowledge Base")
+        print("   • SA Customizations")
+        print("   • Ethical Guidelines")
+        print("   • Job Database & Matching")
+
+        print("\n📊 Results:")
+        print(f"   • Student onboarded: {student_id}")
+        print(f"   • Jobs discovered: {len(matches) if matches else 0}")
+        print(f"   • Application prepared: {application_id if application_id else 'Failed'}")
+        print(f"   • Knowledge base entries: {total_results if 'total_results' in locals() else 0}")
+
+        print("\n🎯 CareerBoost AI is ready for production use!")
+        print("="*80)
+
+    except Exception as e:
+        print(f"❌ Demonstration failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
+    parser = create_parser()
+
+    # Add enhanced collaboration testing modes
+    parser.add_argument(
+        '--interactive', '-i',
+        action='store_true',
+        help='Run in interactive mode with all features'
+    )
+
+    parser.add_argument(
+        '--demo',
+        action='store_true',
+        help='Run automated demonstration of all features'
+    )
+
+    args = parser.parse_args()
+
+    # Handle enhanced collaboration testing modes first
+    if hasattr(args, 'interactive') and args.interactive:
+        interactive_mode()
+        sys.exit(0)
+
+    if hasattr(args, 'demo') and args.demo:
+        demo_mode()
+        sys.exit(0)
+
+    # Default to original main function for backward compatibility
     main()

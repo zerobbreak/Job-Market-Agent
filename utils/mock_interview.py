@@ -6,9 +6,7 @@ Conduct realistic mock interviews with AI interviewer and real-time feedback
 import os
 from datetime import datetime
 from .scraping import extract_job_keywords
-from agents import interview_prep_agent, interview_copilot
 from .ethical_guidelines import ethical_guidelines
-
 
 class MockInterviewSimulator:
     """
@@ -213,18 +211,8 @@ class MockInterviewSimulator:
         }
 
         try:
-            # Try to use the interview prep agent
-            questions_text = interview_prep_agent.run(f"""
-            Generate 8-10 interview questions for a {self.role} position at {self.company}:
-
-            Include:
-            - 3 Technical/Skills questions
-            - 3 Behavioral questions (STAR method)
-            - 2 Company-specific questions
-            - 2 Situational questions
-
-            Return as a numbered list.
-            """)
+            # Use fallback question generation (interview agent removed)
+            questions_text = self._generate_questions_fallback()
 
             if hasattr(questions_text, 'content'):
                 questions_text = questions_text.content
@@ -436,3 +424,47 @@ Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             ])
 
         return "\n".join(hints[:4])  # Return up to 4 hints
+
+    def _generate_questions_fallback(self):
+        """
+        Fallback question generation when interview agent is not available
+        """
+        role = self.role.lower()
+        company = self.company
+
+        # Base questions that work for most roles
+        questions = f"""**Mock Interview Questions for {self.role} at {company}**
+
+**Technical/Skills Questions:**
+1. Can you walk me through your experience with relevant technologies for this role?
+2. How do you approach solving complex problems in your field?
+3. Tell me about a technical project you've worked on and the challenges you faced.
+4. How do you stay current with industry trends and best practices?
+5. Describe your experience with collaboration tools and version control.
+
+**Behavioral Questions (STAR Method):**
+6. Tell me about a time when you had to learn a new skill or technology quickly.
+7. Describe a situation where you worked effectively as part of a team.
+8. Tell me about a time when you received constructive feedback and how you responded.
+9. Describe a challenging problem you solved and the steps you took.
+10. Tell me about a time when you had to meet a tight deadline.
+
+**Company/Role-Specific Questions:**
+11. What interests you most about working at {company}?
+12. How do you see yourself contributing to our team and company goals?
+13. What do you know about {company}'s products, services, or industry position?
+
+**Situational Questions:**
+14. How would you handle a disagreement with a colleague about project approach?
+15. If you discovered an error in your work just before a deadline, what would you do?
+
+**South African Context Questions:**
+16. Do you have the legal right to work in South Africa?
+17. Can you reliably commute to our office location?
+18. What are your salary expectations for this role?
+
+**Curveball Questions:**
+19. If you could change one thing about your previous work experience, what would it be?
+20. Where do you see yourself professionally in 3-5 years?"""
+
+        return questions

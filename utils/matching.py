@@ -3,54 +3,53 @@ Job matching utilities for comparing student profiles with job opportunities
 """
 
 from .scraping import semantic_skill_match
-from .database import jobs_collection
-import google.genai as genai
-import os
-
-# Initialize Gemini client for embeddings
-client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
-
+from .database import job_db
+from .scraping import extract_skills_from_description
 
 def match_student_to_jobs(student_profile):
     """
-    Match a student profile to jobs in the ChromaDB collection
+    Match a student profile to jobs using TF-IDF similarity and skill matching
     """
-    from agents import job_matcher
     from .scraping import extract_job_keywords, keyword_gap_analysis
 
     student_skills = student_profile.get('skills', [])
     student_cv_text = student_profile.get('cv_text', '')  # Full CV text for keyword analysis
 
     try:
-        # Create embedding for the student profile summary
-        query_text = student_profile.get('summary', '')
-        if not query_text:
-            query_text = f"{student_profile.get('desired_role', '')} {student_profile.get('industry', '')}"
+        # Create search query from student profile
+        desired_role = student_profile.get('desired_role', '')
+        industry = student_profile.get('industry', '')
+        skills_text = ' '.join(student_skills)
 
-        query_response = client.models.embed_content(
-            model="text-embedding-004",
-            contents=query_text
-        )
-        query_embedding = query_response.embeddings[0].values
+        # Build search query
+        query_parts = []
+        if desired_role:
+            query_parts.append(desired_role)
+        if industry:
+            query_parts.append(industry)
+        if skills_text:
+            query_parts.append(skills_text)
 
-        # Query similar jobs from ChromaDB using manual embeddings
-        results = jobs_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=10
-        )
+        search_query = ' '.join(query_parts)
+
+        # Search jobs using full-text search
+        search_results = job_db.search_jobs(search_query, limit=20)
 
         matched_jobs = []
-        for i, job_id in enumerate(results['ids'][0]):
-            job_metadata = results['metadatas'][0][i]
-            # Convert skills string back to list
-            skills_str = job_metadata.get('required_skills', '')
-            required_skills = [s.strip() for s in skills_str.split(',')] if skills_str else []
+        for job in search_results:
+            # Get job skills
+            required_skills = job.get('skills', [])
+            if not required_skills:
+                # Extract skills from description if not already extracted
+                job_desc = job.get('description', '')
+                required_skills = extract_skills_from_description(job_desc)
+                job['skills'] = required_skills
 
             # Perform semantic skill matching
             skill_matches, match_score = semantic_skill_match(student_skills, required_skills)
 
             # Extract job keywords using AI
-            job_description = job_metadata.get('description', '')
+            job_description = job.get('description', '')
             if job_description:
                 job_keywords = extract_job_keywords(job_description)
 
@@ -62,29 +61,33 @@ def match_student_to_jobs(student_profile):
                 job_keywords = "No job description available"
                 gap_analysis = "No job description available for keyword analysis"
 
-            # Use the agent to perform detailed analysis
-            analysis = job_matcher.run(f"""
-            Analyze this job match:
+            # Create analysis without AI agent (simplified)
+            analysis = f"""
+Job Match Analysis for {job.get('title', 'Unknown Position')} at {job.get('company', 'Unknown Company')}
 
-            Student Profile: {student_profile}
-            Job Description: {job_metadata.get('description', '')}
-            Company: {job_metadata.get('company', '')}
-            Required Skills: {required_skills}
-            Skill Match Score: {match_score:.1f}%
-            Skill Matches: {skill_matches}
+Skill Match: {match_score:.1f}%
+Matched Skills: {', '.join([m['student_has'] for m in skill_matches[:5]]) if skill_matches else 'None'}
 
-            Job Keywords: {job_keywords}
-            Keyword Gap Analysis: {gap_analysis}
+Job Requirements: {', '.join(required_skills[:10]) if required_skills else 'Not specified'}
 
-            Provide a comprehensive match analysis with scores, including keyword optimization suggestions.
-            """)
+Recommendations:
+- Focus on highlighting your experience with: {', '.join([m['required'] for m in skill_matches[:3]]) if skill_matches else 'relevant technologies'}
+- Consider adding keywords: {', '.join(required_skills[:5]) if required_skills else 'from job description'}
+            """
 
             matched_jobs.append({
-                'job_id': job_id,
+                'job_id': job['id'],
+                'job_title': job['title'],
+                'company': job['company'],
+                'location': job['location'],
                 'match_score': match_score,
-                'analysis': analysis.content,
+                'skill_matches': skill_matches,
+                'required_skills': required_skills,
+                'job_url': job['url'],
+                'analysis': analysis,
                 'job_keywords': job_keywords,
-                'keyword_gaps': gap_analysis
+                'keyword_gaps': gap_analysis,
+                'relevance_score': job.get('relevance_score', 0.0)
             })
 
         return matched_jobs

@@ -6,8 +6,7 @@ Generate job-specific CV versions from master CV using AI optimization
 import os
 from datetime import datetime
 from .scraping import extract_job_keywords
-from agents import ats_optimizer, cv_rewriter, cover_letter_agent, interview_prep_agent
-
+from agents import ats_optimizer, cv_rewriter, cover_letter_agent
 
 class CVTailoringEngine:
     """
@@ -31,7 +30,12 @@ class CVTailoringEngine:
         """
         try:
             # Extract job requirements
-            job_keywords = extract_job_keywords(job_posting['description'])
+            job_description = job_posting.get('description', '')
+            if not job_description:
+                print("⚠️ No job description available for CV tailoring")
+                job_description = f"{job_posting.get('title', 'Position')} at {job_posting.get('company', 'Company')}"
+
+            job_keywords = extract_job_keywords(job_description)
 
             # Optimize for ATS
             ats_analysis = ats_optimizer.run(f"""
@@ -294,7 +298,16 @@ class CVTailoringEngine:
             # Extract relevant company details
             company_details = []
             for source, results in company_info.items():
-                for doc in results.get('documents', []):
+                # Handle both old and new knowledge base formats
+                documents = []
+                if 'results' in results:
+                    # New simplified KB format
+                    documents = [doc['text'] for doc in results['results']]
+                elif 'documents' in results:
+                    # Old ChromaDB format
+                    documents = results['documents']
+
+                for doc in documents:
                     if company_name.lower() in doc.lower():
                         company_details.append(doc[:300])  # First 300 chars
 
@@ -342,88 +355,3 @@ Best regards,
 
         return fallback_letter
 
-    def generate_interview_questions(self, job_posting, tailored_cv=None):
-        """
-        Predict likely interview questions for a specific job application
-        """
-        try:
-            cv_content = tailored_cv if tailored_cv else self.master_cv
-            prompt = self._build_interview_questions_prompt(job_posting, cv_content)
-
-            questions = interview_prep_agent.run(prompt)
-            return self._extract_content(questions)
-
-        except Exception as e:
-            print(f"Error generating interview questions: {e}")
-            return self._generate_interview_questions_fallback(job_posting)
-
-    def _build_interview_questions_prompt(self, job_posting, cv_content):
-        """
-        Build the prompt for interview questions generation
-        """
-        return f"""
-        Generate interview questions for:
-        Student Profile: {self.profile}
-        CV Content: {cv_content}
-        Job Posting: {job_posting}
-
-        Make questions realistic and role-specific across these categories:
-        - 5 Technical/Skills-based questions
-        - 5 Behavioral questions (using STAR method)
-        - 3 Company/Role-specific questions
-        - 2 Background/CV questions
-        - 3-5 Curveball/stress questions
-
-        Include South African context where relevant:
-        - Work authorization in South Africa
-        - Transportation/reliability concerns
-        - Salary expectations
-        - Location preferences
-        """
-
-    def _generate_interview_questions_fallback(self, job_posting):
-        """
-        Fallback interview questions generation when API is unavailable
-        """
-        company = job_posting.get('company', 'Company')
-        role = job_posting.get('title', 'Position')
-
-        fallback_questions = f"""
-**Predicted Interview Questions for {role} at {company}**
-
-**Technical/Skills-Based Questions:**
-1. Can you walk me through your experience with web development technologies?
-2. How do you approach debugging a complex software issue?
-3. Tell me about a technical project you've worked on. What challenges did you face?
-4. How do you stay current with technology trends and new tools?
-5. Describe your experience with version control and collaborative development.
-
-**Behavioral Questions (STAR Method):**
-6. Tell me about a time when you had to learn a new technology quickly.
-7. Describe a situation where you worked effectively in a team.
-8. Tell me about a time when you received constructive feedback and how you responded.
-9. Describe a challenging problem you solved and the steps you took.
-10. Tell me about a time when you had to meet a tight deadline.
-
-**Company/Role-Specific Questions:**
-11. What interests you most about working at {company}?
-12. How do you see yourself contributing to our team dynamic?
-13. What do you know about {company}'s products/services?
-
-**Background/CV Questions:**
-14. I see you worked on an Instagram clone project. Can you tell me more about the technical challenges you faced?
-15. How has your Computer Science degree prepared you for this role?
-
-**South African Context Questions:**
-16. Do you have the right to work in South Africa?
-17. Can you reliably commute to our office location?
-18. What are your salary expectations for this role?
-19. How do you handle transportation challenges in the South African context?
-
-**Curveball/Stress Questions:**
-20. If you could change one thing about your previous work experience, what would it be?
-21. Where do you see yourself in 5 years?
-22. What would you do if a team member wasn't pulling their weight on a project?
-"""
-
-        return fallback_questions

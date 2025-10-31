@@ -10,8 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import google.generativeai as genai
 
-# Import ChromaDB client
-from utils.database import chroma_client
+# ChromaDB import removed - using simplified knowledge base without vector storage
 
 class KnowledgeBase:
     """
@@ -21,7 +20,6 @@ class KnowledgeBase:
         """
         Initialize the Knowledge Base system
         """
-        self.collections = {}
         self.knowledge_sources = {
             'job_descriptions': {
                 'source': 'PNet, CareerJunction, LinkedIn',
@@ -52,37 +50,26 @@ class KnowledgeBase:
             }
         }
 
-        # Initialize collections
-        self._initialize_collections()
+        # Initialize in-memory storage instead of ChromaDB
+        self.documents = {source: [] for source in self.knowledge_sources.keys()}
+        print("[KB] Knowledge base initialized (simplified mode without vector storage)")
 
-    def _initialize_collections(self):
-        """Initialize ChromaDB collections for each knowledge source"""
-        for source_name in self.knowledge_sources.keys():
-            try:
-                # Try to get existing collection
-                collection = chroma_client.get_collection(name=source_name)
-                self.collections[source_name] = collection
-                print(f"✅ Loaded existing collection: {source_name}")
-            except Exception:
-                # Create new collection if it doesn't exist
-                collection = chroma_client.create_collection(name=source_name)
-                self.collections[source_name] = collection
-                print(f"🆕 Created new collection: {source_name}")
+    # _initialize_collections method removed - using simplified storage
 
     def add_document(self, source: str, document: Dict[str, Any]) -> bool:
         """
-        Add a document to the knowledge base with vector embedding
+        Add a document to the knowledge base (simplified without embeddings)
 
         Args:
             source: Knowledge source name (e.g., 'job_descriptions')
             document: Dict with 'text', 'metadata', 'id' keys
         """
-        if source not in self.collections:
-            print(f"❌ Unknown knowledge source: {source}")
+        if source not in self.documents:
+            print(f"[ERROR] Unknown knowledge source: {source}")
             return False
 
         try:
-            # Clean metadata - convert lists to strings for ChromaDB compatibility
+            # Clean metadata - convert lists to strings for compatibility
             cleaned_metadata = {}
             for key, value in document['metadata'].items():
                 if isinstance(value, list):
@@ -90,85 +77,91 @@ class KnowledgeBase:
                 else:
                     cleaned_metadata[key] = value
 
-            # Generate embedding
-            embedding = genai.embed_content(
-                model="models/text-embedding-004",
-                content=document['text'],
-                task_type="retrieval_document"
-            )
+            # Add to in-memory storage (no embedding generation)
+            doc_entry = {
+                'id': document['id'],
+                'text': document['text'],
+                'metadata': cleaned_metadata,
+                'added_at': datetime.now().isoformat(),
+                'word_count': len(document['text'].split())
+            }
 
-            # Add to collection
-            collection = self.collections[source]
-            collection.add(
-                embeddings=[embedding['embedding']],
-                documents=[document['text']],
-                metadatas=[cleaned_metadata],
-                ids=[document['id']]
-            )
+            self.documents[source].append(doc_entry)
 
-            print(f"✅ Added document {document['id']} to {source}")
+            print(f"[OK] Added document {document['id']} to {source}")
             return True
 
         except Exception as e:
-            print(f"❌ Error adding document to {source}: {e}")
+            print(f"[ERROR] Error adding document to {source}: {e}")
             return False
 
     def search_similar(self, source: str, query: str, n_results: int = 5) -> Optional[Dict]:
         """
-        Search for similar documents using vector similarity
+        Search for similar documents using simple text matching (no vectors)
 
         Args:
             source: Knowledge source to search
             query: Search query
             n_results: Number of results to return
         """
-        if source not in self.collections:
-            print(f"❌ Unknown knowledge source: {source}")
+        if source not in self.documents:
+            print(f"[ERROR] Unknown knowledge source: {source}")
             return None
 
         try:
-            # Generate query embedding
-            query_embedding = genai.embed_content(
-                model="models/text-embedding-004",
-                content=query,
-                task_type="retrieval_query"
-            )
+            # Simple text search (case-insensitive)
+            query_lower = query.lower()
+            matching_docs = []
 
-            # Search collection
-            collection = self.collections[source]
-            results = collection.query(
-                query_embeddings=[query_embedding['embedding']],
-                n_results=n_results
-            )
+            for doc in self.documents[source]:
+                text_lower = doc['text'].lower()
+                if query_lower in text_lower:
+                    # Calculate simple relevance score (number of query words found)
+                    query_words = set(query_lower.split())
+                    text_words = set(text_lower.split())
+                    common_words = query_words.intersection(text_words)
+                    relevance_score = len(common_words) / len(query_words) if query_words else 0
+
+                    matching_docs.append({
+                        'id': doc['id'],
+                        'text': doc['text'][:200] + "..." if len(doc['text']) > 200 else doc['text'],
+                        'metadata': doc['metadata'],
+                        'relevance_score': relevance_score
+                    })
+
+            # Sort by relevance and return top results
+            matching_docs.sort(key=lambda x: x['relevance_score'], reverse=True)
+            top_results = matching_docs[:n_results]
 
             return {
-                'documents': results['documents'][0] if results['documents'] else [],
-                'metadatas': results['metadatas'][0] if results['metadatas'] else [],
-                'distances': results['distances'][0] if results['distances'] else [],
-                'ids': results['ids'][0] if results['ids'] else []
+                'query': query,
+                'source': source,
+                'results': top_results,
+                'total_found': len(top_results)
             }
 
         except Exception as e:
-            print(f"❌ Error searching {source}: {e}")
+            print(f"[ERROR] Error searching {source}: {e}")
             return None
 
     def get_collection_stats(self, source: str) -> Optional[Dict]:
-        """Get statistics for a knowledge source collection"""
-        if source not in self.collections:
+        """Get statistics for a knowledge source (simplified)"""
+        if source not in self.documents:
             return None
 
         try:
-            collection = self.collections[source]
-            count = collection.count()
+            doc_count = len(self.documents[source])
+            total_words = sum(doc.get('word_count', 0) for doc in self.documents[source])
 
             return {
                 'source': source,
-                'document_count': count,
+                'document_count': doc_count,
+                'total_words': total_words,
                 'description': self.knowledge_sources[source]['description'],
                 'metadata': self.knowledge_sources[source]
             }
         except Exception as e:
-            print(f"❌ Error getting stats for {source}: {e}")
+            print(f"[ERROR] Error getting stats for {source}: {e}")
             return None
 
     def get_all_stats(self) -> Dict:
@@ -180,7 +173,7 @@ class KnowledgeBase:
 
     def initialize_sample_data(self):
         """Initialize collections with sample data for demonstration"""
-        print("📚 Initializing knowledge base with sample data...")
+        print("[KB] Initializing knowledge base with sample data...")
 
         # Sample job descriptions
         job_samples = [
@@ -340,13 +333,13 @@ class KnowledgeBase:
 
         total_added = 0
         for source, documents in sample_data.items():
-            print(f"📝 Adding {len(documents)} documents to {source}...")
+            print(f"[ADD] Adding {len(documents)} documents to {source}...")
             for doc in documents:
                 if self.add_document(source, doc):
                     total_added += 1
                 time.sleep(0.1)  # Rate limiting
 
-        print(f"✅ Added {total_added} sample documents to knowledge base")
+        print(f"[OK] Added {total_added} sample documents to knowledge base")
         return total_added
 
     def retrieve_context(self, query: str, sources: List[str] = None, n_results: int = 3) -> Dict:
@@ -363,9 +356,9 @@ class KnowledgeBase:
 
         context = {}
         for source in sources:
-            if source in self.collections:
+            if source in self.documents:
                 results = self.search_similar(source, query, n_results)
-                if results and results['documents']:
+                if results and results.get('results'):
                     context[source] = results
 
         return context
