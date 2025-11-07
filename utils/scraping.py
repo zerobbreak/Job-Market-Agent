@@ -4,11 +4,28 @@ Scraping utilities for job data extraction and processing
 
 import google.genai as genai
 import os
+import logging
 from scrapper import scrape_all_advanced
 from tqdm import tqdm
 
-# Initialize Gemini client
-client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
+# Setup logger
+logger = logging.getLogger('job_market_analyzer.scraping')
+
+# Lazy-initialize Gemini client to avoid requiring API key at import time
+client = None
+
+
+def get_client():
+    # Short-circuit in OpenRouter-only mode
+    if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+        raise RuntimeError("OpenRouter-only mode enabled; Google GenAI disabled")
+    global client
+    if client is None:
+        api_key = os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            raise RuntimeError("GOOGLE_API_KEY not set")
+        client = genai.Client(api_key=api_key)
+    return client
 
 # Configuration for API resilience
 API_CONFIG = {
@@ -25,7 +42,9 @@ def check_api_status():
     """
     try:
         # Simple test request to check API availability
-        response = client.models.generate_content(
+        if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+            return False, "API disabled (OpenRouter-only mode)"
+        response = get_client().models.generate_content(
             model="gemini-2.0-flash",
             contents="Hello",
             config={'max_output_tokens': 10}  # Minimal response
@@ -65,6 +84,8 @@ def extract_skills_from_description(description):
 
     # Use Gemini for more sophisticated extraction
     try:
+        if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+            return found_skills
         extraction_agent = __import__('agents.job_matcher_agent').job_matcher.__class__(
             name="Skill Extractor",
             model=__import__('agno.models.google').Gemini(id="gemini-2.0-flash"),
@@ -92,10 +113,12 @@ def semantic_skill_match(student_skills, required_skills):
         return [], 0
 
     try:
+        if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+            return [], 0
         # Generate embeddings for student skills
         student_embeddings = []
         for skill in student_skills:
-            response = client.models.embed_content(
+            response = get_client().models.embed_content(
                 model="text-embedding-004",
                 contents=skill
             )
@@ -104,7 +127,7 @@ def semantic_skill_match(student_skills, required_skills):
         # Generate embeddings for required skills
         required_embeddings = []
         for skill in required_skills:
-            response = client.models.embed_content(
+            response = get_client().models.embed_content(
                 model="text-embedding-004",
                 contents=skill
             )
@@ -138,7 +161,7 @@ def semantic_skill_match(student_skills, required_skills):
         return matches, match_percentage
 
     except Exception as e:
-        print(f"Error in semantic skill matching: {e}")
+        logger.error(f"Error in semantic skill matching: {e}", exc_info=True)
         return [], 0
 
 
@@ -153,8 +176,8 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False, m
         search_terms = [desired_role]
 
     if verbose:
-        print(f"🔄 Starting advanced job scraping with search terms: {search_terms}")
-        print(f"   🎯 Location: {location}")
+        logger.info(f"Starting advanced job scraping with search terms: {search_terms}")
+        logger.info(f"Location: {location}")
 
     all_jobs = []
 
@@ -166,7 +189,7 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False, m
 
     for search_term in search_iterator:
         if verbose and len(search_terms) == 1:
-            print(f"   🔍 Scraping for: '{search_term}' in {location}")
+            logger.info(f"Scraping for: '{search_term}' in {location}")
 
         # Use the advanced scraping from scrapper.py
         term_jobs = scrape_all_advanced(search_term, location, results_wanted=max_jobs)
@@ -178,7 +201,7 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False, m
         all_jobs.extend(term_jobs)
 
         if verbose and len(search_terms) == 1:
-            print(f"   📊 Found {len(term_jobs)} jobs for '{search_term}'")
+            logger.info(f"Found {len(term_jobs)} jobs for '{search_term}'")
         elif len(search_terms) > 1:
             # Update progress bar description
             search_iterator.set_postfix({"jobs_found": len(term_jobs), "total": len(all_jobs)})
@@ -193,16 +216,16 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False, m
         search_iterator.close()
 
     if verbose:
-        print(f"📊 Scraped {len(all_jobs)} total jobs")
+        logger.info(f"Scraped {len(all_jobs)} total jobs")
 
     # Store in ChromaDB
     if all_jobs:
         from .database import store_jobs_in_db
-        store_jobs_in_db(all_jobs)
+        stored_count = store_jobs_in_db(all_jobs)
         if verbose:
-            print("💾 Jobs stored in database")
+            logger.info(f"Stored {stored_count} jobs in database")
     elif verbose:
-        print("⚠️ No jobs scraped, skipping database storage")
+        logger.warning("No jobs scraped, skipping database storage")
 
     # Match against student profile
     from .matching import match_student_to_jobs
@@ -228,7 +251,9 @@ def extract_job_keywords(job_description, max_retries=None):
 
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
+            if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+                return _extract_keywords_fallback(job_description)
+            response = get_client().models.generate_content(
                 model="gemini-2.0-flash",
                 contents=f"""
                 Analyze this job description and extract:
@@ -268,15 +293,15 @@ def extract_job_keywords(job_description, max_retries=None):
                 if attempt < max_retries - 1:
                     # Exponential backoff with jitter using configured base
                     wait_time = (retry_delay_base ** attempt) + random.uniform(0, 1)
-                    print(f"⚠️  API rate limited/overloaded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.1f} seconds...")
+                    logger.warning(f"API rate limited/overloaded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.1f} seconds...")
                     time.sleep(wait_time)
                     continue
                 else:
-                    print("❌ API still rate limited after all retries. Using fallback keyword extraction.")
+                    logger.error("API still rate limited after all retries. Using fallback keyword extraction.")
                     return _extract_keywords_fallback(job_description)
             else:
                 # Non-retryable error, don't retry
-                print(f"❌ Error extracting job keywords: {e}")
+                logger.error(f"Error extracting job keywords: {e}", exc_info=True)
                 return _extract_keywords_fallback(job_description)
 
     # This should not be reached, but just in case
@@ -364,7 +389,9 @@ def keyword_gap_analysis(student_cv, job_keywords, max_retries=None):
 
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
+            if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+                return _gap_analysis_fallback(student_cv, job_keywords)
+            response = get_client().models.generate_content(
                 model="gemini-2.0-flash",
                 contents=f"""
                 Compare student CV against required job keywords:
@@ -399,15 +426,15 @@ def keyword_gap_analysis(student_cv, job_keywords, max_retries=None):
                 if attempt < max_retries - 1:
                     # Exponential backoff with jitter using configured base
                     wait_time = (retry_delay_base ** attempt) + random.uniform(0, 1)
-                    print(f"⚠️  API rate limited/overloaded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.1f} seconds...")
+                    logger.warning(f"API rate limited/overloaded (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.1f} seconds...")
                     time.sleep(wait_time)
                     continue
                 else:
-                    print("❌ API still rate limited after all retries. Using fallback gap analysis.")
+                    logger.error("API still rate limited after all retries. Using fallback gap analysis.")
                     return _gap_analysis_fallback(student_cv, job_keywords)
             else:
                 # Non-retryable error, don't retry
-                print(f"❌ Error in keyword gap analysis: {e}")
+                logger.error(f"Error in keyword gap analysis: {e}", exc_info=True)
                 return _gap_analysis_fallback(student_cv, job_keywords)
 
     # This should not be reached, but just in case

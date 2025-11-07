@@ -6,22 +6,23 @@ Rewrites CV content for maximum impact and ATS compatibility
 import os
 import logging
 from agno.agent import Agent
-from agno.models.google import Gemini
+from agno.models.openrouter import OpenRouter
 
 # Configure logging
-logging.getLogger('google.genai').setLevel(logging.WARNING)
-logging.getLogger('google').setLevel(logging.WARNING)
 logging.getLogger('agno').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
-# Suppress API key confirmation messages by temporarily unsetting conflicting env vars
-gemini_key_backup = os.environ.get('GEMINI_API_KEY')
-if 'GEMINI_API_KEY' in os.environ:
-    del os.environ['GEMINI_API_KEY']
+# Get OpenRouter API key - required for agent functionality
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    # Allow import for testing, but will fail when agent is actually used
+    OPENROUTER_API_KEY = None
 
 # Create CV Content Optimizer Agent
+# Note: Will raise error if OPENROUTER_API_KEY is not set when agent is used
 cv_rewriter = Agent(
     name="CV Content Optimizer",
-    model=Gemini(id="gemini-2.0-flash"),
+    model=OpenRouter(id="deepseek/deepseek-chat", api_key=OPENROUTER_API_KEY or "placeholder"),
     instructions="""Rewrite CV content for maximum impact:
 
     TRANSFORMATION RULES:
@@ -64,7 +65,3 @@ cv_rewriter = Agent(
 
     Maintain authenticity - never fabricate experience!"""
 )
-
-# Restore GEMINI_API_KEY if it was set
-if gemini_key_backup:
-    os.environ['GEMINI_API_KEY'] = gemini_key_backup

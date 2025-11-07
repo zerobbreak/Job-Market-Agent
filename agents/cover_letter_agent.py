@@ -6,22 +6,23 @@ Generates personalized cover letters for job applications
 import os
 import logging
 from agno.agent import Agent
-from agno.models.google import Gemini
+from agno.models.openrouter import OpenRouter
 
 # Configure logging
-logging.getLogger('google.genai').setLevel(logging.WARNING)
-logging.getLogger('google').setLevel(logging.WARNING)
 logging.getLogger('agno').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
-# Suppress API key confirmation messages by temporarily unsetting conflicting env vars
-gemini_key_backup = os.environ.get('GEMINI_API_KEY')
-if 'GEMINI_API_KEY' in os.environ:
-    del os.environ['GEMINI_API_KEY']
+# Get OpenRouter API key - required for agent functionality
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    # Allow import for testing, but will fail when agent is actually used
+    OPENROUTER_API_KEY = None
 
 # Create Cover Letter Specialist Agent
+# Note: Will raise error if OPENROUTER_API_KEY is not set when agent is used
 cover_letter_agent = Agent(
     name="Cover Letter Specialist",
-    model=Gemini(id="gemini-2.0-flash"),
+    model=OpenRouter(id="deepseek/deepseek-chat", api_key=OPENROUTER_API_KEY or "placeholder"),
     instructions="""Generate personalized cover letters that:
 
     STRUCTURE (3-4 paragraphs):
@@ -62,7 +63,3 @@ cover_letter_agent = Agent(
     - Typos or grammatical errors
     - Mentioning salary expectations (unless requested)"""
 )
-
-# Restore GEMINI_API_KEY if it was set
-if gemini_key_backup:
-    os.environ['GEMINI_API_KEY'] = gemini_key_backup

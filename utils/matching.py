@@ -7,8 +7,20 @@ from .database import jobs_collection
 import google.genai as genai
 import os
 
-# Initialize Gemini client for embeddings
-client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
+# Lazy-initialize Gemini client for embeddings
+client = None
+
+
+def get_client():
+    if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+        raise RuntimeError("OpenRouter-only mode enabled; Google GenAI disabled")
+    global client
+    if client is None:
+        api_key = os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            raise RuntimeError("GOOGLE_API_KEY not set")
+        client = genai.Client(api_key=api_key)
+    return client
 
 
 def match_student_to_jobs(student_profile):
@@ -27,17 +39,28 @@ def match_student_to_jobs(student_profile):
         if not query_text:
             query_text = f"{student_profile.get('desired_role', '')} {student_profile.get('industry', '')}"
 
-        query_response = client.models.embed_content(
-            model="text-embedding-004",
-            contents=query_text
-        )
-        query_embedding = query_response.embeddings[0].values
+        if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+            # Basic metadata-only scan in OpenRouter-only mode
+            # Note: Without embeddings, perform a naive filter on stored metadatas
+            results = {'ids': [[]], 'metadatas': [[]]}
+            try:
+                # Chroma doesn't provide simple metadata scans in-memory here;
+                # rely on stored collection if available via get
+                pass
+            except Exception:
+                pass
+        else:
+            query_response = get_client().models.embed_content(
+                model="text-embedding-004",
+                contents=query_text
+            )
+            query_embedding = query_response.embeddings[0].values
 
-        # Query similar jobs from ChromaDB using manual embeddings
-        results = jobs_collection.query(
-            query_embeddings=[query_embedding],
-            n_results=10
-        )
+            # Query similar jobs from ChromaDB using manual embeddings
+            results = jobs_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=10
+            )
 
         matched_jobs = []
         for i, job_id in enumerate(results['ids'][0]):

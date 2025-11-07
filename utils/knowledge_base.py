@@ -6,12 +6,32 @@ Comprehensive vector embeddings for job market intelligence
 import os
 import json
 import time
+import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-import google.generativeai as genai
 
 # Import ChromaDB client
 from utils.database import chroma_client
+
+# Setup logger
+logger = logging.getLogger('job_market_analyzer.knowledge_base')
+
+# Lazy-initialize Gemini client to avoid requiring API key at import time
+genai_client = None
+
+def get_genai_client():
+    """Get Google GenAI client (lazy initialization)"""
+    # Short-circuit in OpenRouter-only mode
+    if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+        raise RuntimeError("OpenRouter-only mode enabled; Google GenAI disabled")
+    global genai_client
+    if genai_client is None:
+        import google.generativeai as genai
+        api_key = os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            raise RuntimeError("GOOGLE_API_KEY not set")
+        genai_client = genai
+    return genai_client
 
 class KnowledgeBase:
     """
@@ -62,12 +82,15 @@ class KnowledgeBase:
                 # Try to get existing collection
                 collection = chroma_client.get_collection(name=source_name)
                 self.collections[source_name] = collection
-                print(f"✅ Loaded existing collection: {source_name}")
-            except Exception:
+                logger.info(f"Loaded existing collection: {source_name}")
+            except chromadb.errors.NotFoundError:
                 # Create new collection if it doesn't exist
                 collection = chroma_client.create_collection(name=source_name)
                 self.collections[source_name] = collection
-                print(f"🆕 Created new collection: {source_name}")
+                logger.info(f"Created new collection: {source_name}")
+            except Exception as e:
+                logger.error(f"Error initializing collection {source_name}: {e}", exc_info=True)
+                raise
 
     def add_document(self, source: str, document: Dict[str, Any]) -> bool:
         """
@@ -78,7 +101,7 @@ class KnowledgeBase:
             document: Dict with 'text', 'metadata', 'id' keys
         """
         if source not in self.collections:
-            print(f"❌ Unknown knowledge source: {source}")
+            logger.error(f"Unknown knowledge source: {source}")
             return False
 
         try:
@@ -90,27 +113,45 @@ class KnowledgeBase:
                 else:
                     cleaned_metadata[key] = value
 
-            # Generate embedding
-            embedding = genai.embed_content(
-                model="models/text-embedding-004",
-                content=document['text'],
-                task_type="retrieval_document"
-            )
-
             # Add to collection
             collection = self.collections[source]
-            collection.add(
-                embeddings=[embedding['embedding']],
-                documents=[document['text']],
-                metadatas=[cleaned_metadata],
-                ids=[document['id']]
-            )
+            
+            # Check if OpenRouter-only mode is enabled
+            if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+                # Add without embeddings - ChromaDB will use default embeddings
+                collection.add(
+                    documents=[document['text']],
+                    metadatas=[cleaned_metadata],
+                    ids=[document['id']]
+                )
+            else:
+                # Generate embedding using Google GenAI
+                try:
+                    genai = get_genai_client()
+                    embedding = genai.embed_content(
+                        model="models/text-embedding-004",
+                        content=document['text'],
+                        task_type="retrieval_document"
+                    )
+                    collection.add(
+                        embeddings=[embedding['embedding']],
+                        documents=[document['text']],
+                        metadatas=[cleaned_metadata],
+                        ids=[document['id']]
+                    )
+                except RuntimeError as e:
+                    # Fallback: add without embeddings if GenAI is disabled
+                    collection.add(
+                        documents=[document['text']],
+                        metadatas=[cleaned_metadata],
+                        ids=[document['id']]
+                    )
 
-            print(f"✅ Added document {document['id']} to {source}")
+            logger.info(f"Added document {document['id']} to {source}")
             return True
 
         except Exception as e:
-            print(f"❌ Error adding document to {source}: {e}")
+            logger.error(f"Error adding document to {source}: {e}", exc_info=True)
             return False
 
     def search_similar(self, source: str, query: str, n_results: int = 5) -> Optional[Dict]:
@@ -123,23 +164,39 @@ class KnowledgeBase:
             n_results: Number of results to return
         """
         if source not in self.collections:
-            print(f"❌ Unknown knowledge source: {source}")
+            logger.error(f"Unknown knowledge source: {source}")
             return None
 
         try:
-            # Generate query embedding
-            query_embedding = genai.embed_content(
-                model="models/text-embedding-004",
-                content=query,
-                task_type="retrieval_query"
-            )
-
             # Search collection
             collection = self.collections[source]
-            results = collection.query(
-                query_embeddings=[query_embedding['embedding']],
-                n_results=n_results
-            )
+            
+            # Check if OpenRouter-only mode is enabled
+            if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
+                # Use text-based search (ChromaDB will handle it)
+                results = collection.query(
+                    query_texts=[query],
+                    n_results=n_results
+                )
+            else:
+                # Generate query embedding using Google GenAI
+                try:
+                    genai = get_genai_client()
+                    query_embedding = genai.embed_content(
+                        model="models/text-embedding-004",
+                        content=query,
+                        task_type="retrieval_query"
+                    )
+                    results = collection.query(
+                        query_embeddings=[query_embedding['embedding']],
+                        n_results=n_results
+                    )
+                except RuntimeError:
+                    # Fallback: use text-based search if GenAI is disabled
+                    results = collection.query(
+                        query_texts=[query],
+                        n_results=n_results
+                    )
 
             return {
                 'documents': results['documents'][0] if results['documents'] else [],
@@ -149,7 +206,7 @@ class KnowledgeBase:
             }
 
         except Exception as e:
-            print(f"❌ Error searching {source}: {e}")
+            logger.error(f"Error searching {source}: {e}", exc_info=True)
             return None
 
     def get_collection_stats(self, source: str) -> Optional[Dict]:
@@ -168,7 +225,7 @@ class KnowledgeBase:
                 'metadata': self.knowledge_sources[source]
             }
         except Exception as e:
-            print(f"❌ Error getting stats for {source}: {e}")
+            logger.error(f"Error getting stats for {source}: {e}", exc_info=True)
             return None
 
     def get_all_stats(self) -> Dict:
@@ -180,7 +237,7 @@ class KnowledgeBase:
 
     def initialize_sample_data(self):
         """Initialize collections with sample data for demonstration"""
-        print("📚 Initializing knowledge base with sample data...")
+        logger.info("Initializing knowledge base with sample data...")
 
         # Sample job descriptions
         job_samples = [
@@ -340,13 +397,13 @@ class KnowledgeBase:
 
         total_added = 0
         for source, documents in sample_data.items():
-            print(f"📝 Adding {len(documents)} documents to {source}...")
+            logger.info(f"Adding {len(documents)} documents to {source}...")
             for doc in documents:
                 if self.add_document(source, doc):
                     total_added += 1
                 time.sleep(0.1)  # Rate limiting
 
-        print(f"✅ Added {total_added} sample documents to knowledge base")
+        logger.info(f"Added {total_added} sample documents to knowledge base")
         return total_added
 
     def retrieve_context(self, query: str, sources: List[str] = None, n_results: int = 3) -> Dict:

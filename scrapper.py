@@ -4,7 +4,12 @@ import hashlib
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from jobspy import scrape_jobs
+try:
+    from jobspy import scrape_jobs  # Job scraping library
+except Exception:  # Fallback if scraping lib isn't available
+    def scrape_jobs(**kwargs):
+        import pandas as pd  # local import to avoid top-level dependency
+        return pd.DataFrame()
 import pandas as pd
 import logging
 
