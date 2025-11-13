@@ -5,7 +5,7 @@ Scraping utilities for job data extraction and processing
 import google.genai as genai
 import os
 import logging
-from scrapper import scrape_all_advanced
+from .scrapper import scrape_all_advanced
 from tqdm import tqdm
 
 # Setup logger

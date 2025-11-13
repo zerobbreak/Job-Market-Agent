@@ -12,17 +12,23 @@ from agno.models.openrouter import OpenRouter
 logging.getLogger('agno').setLevel(logging.WARNING)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
-# Get OpenRouter API key - required for agent functionality
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-if not OPENROUTER_API_KEY:
-    # Allow import for testing, but will fail when agent is actually used
-    OPENROUTER_API_KEY = None
+# Function to create the agent with proper API key loading
+def _create_cv_rewriter():
+    """Create CV Rewriter Agent with proper API key loading"""
+    # Import cached API key from main module
+    try:
+        from main import _OPENROUTER_API_KEY
+        OPENROUTER_API_KEY = _OPENROUTER_API_KEY
+    except ImportError:
+        # Fallback to environment loading if main module not available
+        OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
-# Create CV Content Optimizer Agent
-# Note: Will raise error if OPENROUTER_API_KEY is not set when agent is used
-cv_rewriter = Agent(
-    name="CV Content Optimizer",
-    model=OpenRouter(id="deepseek/deepseek-chat", api_key=OPENROUTER_API_KEY or "placeholder"),
+    if not OPENROUTER_API_KEY:
+        raise ValueError("OPENROUTER_API_KEY not found. Please set it in environment or .env file")
+
+    return Agent(
+        name="CV Content Optimizer",
+        model=OpenRouter(id="deepseek/deepseek-chat", api_key=OPENROUTER_API_KEY),
     instructions="""Rewrite CV content for maximum impact:
 
     TRANSFORMATION RULES:
@@ -65,3 +71,6 @@ cv_rewriter = Agent(
 
     Maintain authenticity - never fabricate experience!"""
 )
+
+# Create the cv rewriter instance
+cv_rewriter = _create_cv_rewriter()

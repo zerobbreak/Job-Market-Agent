@@ -1,0 +1,65 @@
+NDAEDZO AUSTIN MUKHUBA 
+CONTACT DETAILS 
+Phone: 0648134267 
+Email: ndaemukhuba@gmail.com  
+Address: Kempton Park, Gauteng, South Africa 
+Portfolio Website: https://ndaedzoaustin.netlify.app/
+GitHub: github.com/ndaedxo 
+LinkedIn: linkedin.com/in/ndaedzomukhuba-71759033b 
+
+PERSONAL PROFILE 
+Aspiring software developer with a proficiency in Python, JavaScript, Java, React.js, Django, and Laravel. Skilled in Git, SQL, and MySQL Workbench. Proven problem-solving with projects like secure file transfers and analytics dashboards. Strong team player with leadership experience from VC Cares. Eager to learn and contribute to innovative software solutions. I am eager to leverage my skills and enthusiasm to contribute to your organisation, delivering innovative software solutions and driving meaningful results. Resilient and purpose-driven, I am a final-year Computer and Information Science student with a strong academic record, leadership experience, and a passion for full-stack development and DevOps. I thrive on solving real-world problems through technology and aim to build impactful, scalable software solutions.
+
+SKILLS 
+1.	TECHNICAL SKILLS: 
+•	Programming Languages: HTML, CSS, JavaScript, Python, Java, C/C++, C#, PHP, dart
+•	Frameworks & Libraries: React.js, Vue.js, Laravel, Django, Flask, Next.js, ASP .NET, node.js, Flutter, .NET MAUI
+•	Development Concepts: Object-Oriented Programming, Data Structures & Algorithms 
+•	Database Management: SQL, SSMS, Oracle, MySQL Workbench, PostgreSQL 
+•	Tools and Environments: Linux, Vim, Git, Visual Studio, Visual Studio Code, NetBeans
+ 
+2.	PERSONAL SKILLS: 
+•	Attention to Detail: Ensuring precision and thoroughness in every task 
+•	Accountability: Regular self-evaluation to acknowledge strengths and areas for growth 
+•	Teamwork: Able to work collaboratively and contribute to team success 
+•	Curiosity: Eager to learn, grow, and adapt in various environments 
+•	Organisational Skills: Excellent time management and ability to multitask in a dynamic environment 
+•	Problem-Solving: Quick thinker with a logical approach to resolving issues  
+
+EDUCATION 
+IIE BACHELOR OF COMPUTER AND INFORMATION SCIENCES | 2023 - 2025
+IIE Varsity College Waterfall | Final Year Student 
+•	Programming: Java, C#, JavaScript, HTML, CSS 
+•	Database Management: SSMS, Oracle, MySQL Workbench, MongoDB 
+•	Networking 
+•	Security: Principles of cybersecurity 
+•	Cloud Computing: Microsoft Azure 
+•	Software Engineering: Development best practices 
+•	Mobile Development: Android Studio 
+•	Enterprise Applications 
+•	Project Management 
+•	Cross Platform Development: .NET MAUI
+ 
+EXPERIENCE 
+1.	VC Cares Committee Vice Chairperson IIE Varsity College | January 2023 – November 2025 
+•	Organised and led student activities such as fundraisers and awareness campaigns, contributing to the success of community outreach programs. 
+•	Coordinated school visits and engaged students in educational activities, including reading and classroom improvement projects. 
+•	Developed leadership, teamwork, and organisational skills by managing events that fostered meaningful student and community engagement. 
+ 
+2.	Developer Intern Information Security Architects | January 2025 to February 2025 
+•	During my internship, I gained hands-on experience in full-stack development and worked on various projects with a focus on web application development and system optimisation.  
+•	I Built and maintained server-side applications using PHP and the Laravel framework, focusing on clean, scalable code and implementing RESTful APIs. Developed responsive user interfaces using Vue.js, ensuring optimal performance and user experience across devices.  
+•	Utilised Linux for environment setup, deployment, and troubleshooting, enhancing my skills in shell scripting and server management.  
+•	This role allowed me to refine my technical skills, improve my understanding of secure application development, and gain insight into real-world software engineering workflows.
+
+3.	HIVE: IIIE Varsity college| January 2025 to December 2025 
+• Worked on a myriad of real-world projects for different companies, gaining experience in cross platform development and full-stack engineering. 
+• Designed and implemented mobile and web applications using .NET MAUI, Flutter, and React.js, ensuring seamless user experiences across platforms. 
+• Built and deployed scalable backend services with Node.js, integrating APIs and databases for robust system performance. 
+• Collaborated with cross-functional teams to gather requirements, design solutions, and deliver projects within deadlines. 
+• Applied industry best practices in version control, agile methodologies, and cloud-based deployments.
+
+REFERENCES 
+1.	Mrs Nozipho Nkosi: Committee Manger and on campus Therapy provider Used to work at Varsity college during my 2023 working with the committee contact: available on request 
+2.	Mrs Nzulu Skosana: Committee Manger and on campus Therapy provider Currently working at Varsity college as of my 2024 working with the committee contact: available on request 
+3.	Mr Philip Green: He is the Founder and Technical director of Information Security Architects.  contact: available on request 

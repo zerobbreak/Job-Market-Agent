@@ -10,6 +10,8 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
+import chromadb
+
 # Import ChromaDB client
 from utils.database import chroma_client
 

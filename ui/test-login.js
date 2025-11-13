@@ -1,0 +1,5 @@
+console.log("Testing login page access...")
+fetch("/login")
+    .then((r) => r.text())
+    .then((html) => console.log("Login page loaded:", html.length > 0 ? "YES" : "NO"))
+    .catch((e) => console.error("Error:", e))

@@ -9,10 +9,17 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# Load environment variables FIRST (before any imports that need them)
+if os.path.exists('.env'):
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path='.env', override=True)
+
+# Cache API key to avoid repeated file reads
+_OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+
 # Third-party imports
 import fitz  # PyMuPDF
 from cachetools import TTLCache
-from dotenv import load_dotenv
 from tqdm import tqdm
 
 # Optional web server imports (only imported if web server mode is used)
@@ -39,7 +46,7 @@ from agents import (
     job_matcher,
     profile_builder,
 )
-from scrapper import scrape_all_advanced
+from utils.scrapper import scrape_all_advanced
 from utils import (
     CVTailoringEngine,
     MockInterviewSimulator,
@@ -51,10 +58,6 @@ from utils import (
     sa_customizations,
     store_jobs_in_db,
 )
-
-# Load environment variables
-if os.path.exists('.env'):
-    load_dotenv(dotenv_path='.env', override=True)
 
 # Setup logging early
 try:
@@ -347,12 +350,16 @@ def parse_profile_analysis(profile_content: Optional[str]) -> Dict[str, Any]:
             break
 
     # Extract experience level
+    # NOTE: Even if profile shows senior experience, we focus on junior/intermediate opportunities
     if 'senior' in content or 'experienced' in content:
-        profile_data['experience_level'] = 'Senior'
+        profile_data['experience_level'] = 'Senior (will search junior/intermediate positions)'
+        profile_data['search_focus'] = 'junior_intermediate'  # Flag for search filtering
     elif 'junior' in content or 'entry' in content:
         profile_data['experience_level'] = 'Entry Level'
+        profile_data['search_focus'] = 'junior_intermediate'
     else:
         profile_data['experience_level'] = 'Mid Level'
+        profile_data['search_focus'] = 'junior_intermediate'
 
     return profile_data
 
@@ -517,6 +524,80 @@ def start_web_server(port: int = 8000):
 
     app = create_health_app()
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+def generate_expanded_search_terms(desired_role: str, experience_level: str, skills: List[str]) -> List[str]:
+    """
+    Generate expanded search terms for worldwide job search focusing on junior and intermediate levels only
+    EXCLUDES senior positions from all search terms
+    """
+    base_terms = []
+
+    # Convert desired role to base terms
+    role_lower = desired_role.lower()
+    if 'software engineer' in role_lower:
+        base_terms.extend([
+            'software engineer', 'software developer', 'full stack developer',
+            'backend developer', 'frontend developer', 'web developer',
+            'application developer', 'systems developer'
+        ])
+    elif 'developer' in role_lower:
+        base_terms.extend([
+            desired_role, 'software developer', 'web developer', 'application developer'
+        ])
+    else:
+        base_terms.append(desired_role)
+
+    # EXCLUDE senior positions - focus only on junior and intermediate levels
+    experience_modifiers = []
+    if experience_level.lower() in ['entry level', 'junior', 'beginner', 'internship']:
+        experience_modifiers.extend([
+            'junior', 'entry level', 'graduate', 'trainee', 'intern',
+            'associate', 'junior developer', 'entry level developer'
+        ])
+    elif experience_level.lower() in ['mid level', 'intermediate', 'mid-level']:
+        experience_modifiers.extend([
+            'mid level', 'intermediate', 'junior developer', 'entry level developer'
+        ])
+    else:
+        # Default to junior/intermediate focus - NO senior positions
+        experience_modifiers.extend(['junior', 'entry level', 'mid level', 'intermediate'])
+
+    # Add explicit exclusion of senior terms
+    excluded_terms = ['senior', 'experienced', 'lead', 'principal', 'staff', 'architect']
+
+    # Generate combinations
+    search_terms = []
+
+    # Add base terms with experience modifiers
+    for term in base_terms:
+        search_terms.append(term)
+        for modifier in experience_modifiers:
+            if modifier not in term:  # Avoid duplicates
+                search_terms.append(f"{modifier} {term}")
+                search_terms.append(f"{term} {modifier}")
+
+    # Add skill-specific combinations for top skills
+    top_skills = skills[:3] if skills else ['python', 'javascript', 'react']
+    for skill in top_skills:
+        skill_lower = skill.lower()
+        if skill_lower in ['python', 'javascript', 'java', 'c#', 'php', 'ruby', 'go']:
+            for exp_mod in experience_modifiers[:2]:  # Limit to avoid too many combinations
+                search_terms.append(f"{skill} {exp_mod} developer")
+                search_terms.append(f"{exp_mod} {skill} developer")
+
+    # Filter out senior positions - ensure NO senior jobs are included
+    filtered_terms = []
+    for term in search_terms:
+        term_lower = term.lower()
+        # Exclude any term that contains senior-related keywords
+        if not any(excluded in term_lower for excluded in excluded_terms):
+            filtered_terms.append(term)
+
+    # Remove duplicates and limit to reasonable number
+    unique_terms = list(set(filtered_terms))
+    return unique_terms[:15]  # Limit to 15 search terms for performance
+
 
 def sanitize_input(text: str, max_length: int = 10000) -> str:
     """
@@ -850,13 +931,15 @@ class JobMarketAnalyzer:
         # Build intelligent search terms
         search_terms = []
 
-        # Primary search: role + experience level
+        # Primary search: role + experience level (EXCLUDE senior positions)
         if experience_level == 'Entry Level':
             search_terms.extend([f"junior {desired_role}", f"entry level {desired_role}", desired_role])
         elif experience_level == 'Senior':
-            search_terms.extend([f"senior {desired_role}", f"experienced {desired_role}", desired_role])
+            # Convert senior profiles to junior/intermediate focus - NO senior positions
+            search_terms.extend([f"junior {desired_role}", f"entry level {desired_role}", desired_role])
         else:
-            search_terms.append(desired_role)
+            # Mid level also focuses on junior/intermediate opportunities
+            search_terms.extend([f"junior {desired_role}", f"mid level {desired_role}", desired_role])
 
         # Add skill-based searches
         for skill in skills:
@@ -1385,6 +1468,15 @@ class CareerBoostPlatform:
 
         # Use parsed profile data for job matching
         parsed_profile = student.get('parsed_profile', {})
+        experience_level = parsed_profile.get('experience_level', 'Entry Level')
+
+        # Generate expanded search terms for worldwide job search
+        search_terms = generate_expanded_search_terms(
+            desired_role=parsed_profile.get('desired_role', 'Software Engineer'),
+            experience_level=experience_level,
+            skills=parsed_profile.get('skills', ['Python', 'JavaScript', 'SQL'])
+        )
+
         student_profile = {
             'summary': student['cv_text'][:500],
             'cv_text': student['cv_text'],
@@ -1392,35 +1484,54 @@ class CareerBoostPlatform:
             'skills': parsed_profile.get('skills', ['Python', 'JavaScript', 'SQL']),
             'desired_role': parsed_profile.get('desired_role', 'Software Engineer'),
             'industry': parsed_profile.get('industry', 'Technology'),
-            'experience_level': parsed_profile.get('experience_level', 'Entry Level'),
-            'location': parsed_profile.get('location', location),
+            'experience_level': experience_level,
+            'location': 'Worldwide',  # Changed from South Africa specific to worldwide
+            'search_terms': search_terms,  # Add expanded search terms
             'career_goals': student.get('career_goals', '')
         }
 
-        # Discover new jobs
-        matched_jobs = discover_new_jobs(student_profile, location, verbose=True, max_jobs=MAX_JOBS_PER_SITE)
+        # Discover new jobs worldwide
+        matched_jobs = discover_new_jobs(student_profile, location="Worldwide", verbose=True, max_jobs=MAX_JOBS_PER_SITE)
 
-        # Filter and rank top matches with SA customizations
+        # Filter and rank top matches for worldwide job search
         top_matches = []
-        for job in matched_jobs[:num_jobs * 2]:  # Get more jobs to allow for SA filtering
+        for job in matched_jobs[:num_jobs * 2]:  # Get more jobs for better filtering
             base_score = job.get('match_score', 0)
 
-            # Apply SA customizations to enhance job matching
-            enhanced_job = self.sa_customizations.enhance_job_matching(job, student_profile)
+            # Apply basic job matching enhancements
+            enhanced_job = job.copy()  # Start with the original job data
 
-            # Calculate SA-adjusted score
-            sa_adjustments = enhanced_job.get('sa_score_adjustments', [])
-            total_adjustment = sum(adj.get('adjustment', 0) for adj in sa_adjustments)
-            adjusted_score = min(100, base_score + total_adjustment)  # Cap at 100
+            # Add location flexibility for worldwide search
+            enhanced_job['location_flexibility'] = 'Worldwide'
+            enhanced_job['remote_work_available'] = 'remote' in job.get('title', '').lower() or 'remote' in job.get('description', '').lower()
 
-            # Prioritize first job opportunities for graduates
-            if student_profile.get('is_recent_graduate', True):
-                job_title = job.get('title', '').lower()
-                if any(keyword in job_title for keyword in ['learnership', 'internship', 'graduate', 'junior', 'entry']):
-                    adjusted_score += 10  # Bonus for first job opportunities
+            # Calculate adjusted score based on experience level matching
+            adjusted_score = base_score
 
-            # Apply minimum threshold with SA considerations
-            min_score = 40 if student_profile.get('is_recent_graduate', True) else 50
+            # Boost score for junior/intermediate level jobs if student is at that level
+            experience_level = student_profile.get('experience_level', '').lower()
+            job_title = job.get('title', '').lower()
+
+            if experience_level in ['entry level', 'junior', 'beginner', 'internship']:
+                if any(keyword in job_title for keyword in ['junior', 'entry', 'graduate', 'trainee', 'intern', 'associate']):
+                    adjusted_score += 15  # Bonus for entry-level jobs
+            elif experience_level in ['mid level', 'intermediate', 'mid-level']:
+                if any(keyword in job_title for keyword in ['mid', 'intermediate', 'senior junior', 'experienced']):
+                    adjusted_score += 10  # Bonus for mid-level jobs
+
+            # Boost for remote work opportunities
+            if enhanced_job.get('remote_work_available'):
+                adjusted_score += 5
+
+            adjusted_score = min(100, adjusted_score)  # Cap at 100
+
+            # Filter out senior positions - NO senior jobs allowed
+            senior_keywords = ['senior', 'experienced', 'lead', 'principal', 'staff', 'architect', 'manager', 'director']
+            if any(keyword in job_title for keyword in senior_keywords):
+                continue  # Skip this job entirely
+
+            # Apply minimum threshold
+            min_score = 35 if experience_level in ['entry level', 'junior'] else 45
 
             if adjusted_score >= min_score:
                 job_id = f"{job.get('company', 'Unknown')}_{hash(job.get('url', ''))}"
@@ -1433,8 +1544,11 @@ class CareerBoostPlatform:
                     'job': enhanced_job,
                     'base_match_score': base_score,
                     'adjusted_match_score': adjusted_score,
-                    'sa_adjustments': sa_adjustments,
-                    'sa_recommendations': self._get_sa_job_recommendations(enhanced_job, student_profile)
+                    'match_reasons': [
+                        f"Experience level match: {experience_level}",
+                        f"Remote work: {enhanced_job.get('remote_work_available', False)}",
+                        f"Location: Worldwide"
+                    ]
                 }
 
                 top_matches.append(match_data)
@@ -1443,7 +1557,7 @@ class CareerBoostPlatform:
         top_matches.sort(key=lambda x: x['adjusted_match_score'], reverse=True)
         top_matches = top_matches[:num_jobs]
 
-        print(f"✅ Found {len(top_matches)} SA-tailored job matches!")
+        print(f"✅ Found {len(top_matches)} worldwide job matches!")
         return top_matches
 
     def _get_sa_job_recommendations(self, job: Dict, student_profile: Dict) -> List[str]:
@@ -2163,7 +2277,8 @@ def main():
         show_cost_estimation()
 
     # Check if user wants to test a specific model (OpenRouter CLI interface)
-    if len(sys.argv) > 1:
+    # Only handle --test and --list before argument parsing, let other args go through
+    if len(sys.argv) > 1 and sys.argv[1] in ["--test", "--list"]:
         if sys.argv[1] == "--test":
             # Test all models or a specific one
             if len(sys.argv) > 2:
@@ -2193,9 +2308,7 @@ def main():
             print("  python main.py --list              # List all models")
             print("  python main.py                     # Start AgentOS server")
             return
-        else:
-            print("❌ Unknown argument. Use --test, --list, or no arguments to start server.")
-            return
+        # Let other arguments pass through to the proper argument parser
 
     # Check if using CareerBoost Platform
     if args.platform:
@@ -2272,6 +2385,82 @@ def run_careerboost_platform(args):
             print("❌ Onboarding cancelled.")
             return
 
+    elif args.knowledge_stats:
+        # Show knowledge base statistics (available without student_id)
+        stats = platform.get_knowledge_stats()
+        print(f"\n🧠 KNOWLEDGE BASE STATISTICS")
+        print("=" * 50)
+        print(f"📊 Total Documents: {stats.get('total_documents', 0)}")
+        print(f"📚 Active Sources: {stats.get('active_sources', 0)}")
+        print(f"🕒 Last Updated: {stats.get('last_updated', 'Unknown')}")
+
+        if 'sources' in stats:
+            print(f"\n📋 SOURCES:")
+            for source_name, source_stats in stats['sources'].items():
+                if source_stats:
+                    print(f"   • {source_name}: {source_stats['document_count']} documents")
+                    print(f"     {source_stats['description']}")
+                else:
+                    print(f"   • {source_name}: Not initialized")
+        print()
+
+    elif args.knowledge_search:
+        # Search knowledge base (available without student_id)
+        query = args.knowledge_search
+        print(f"🔍 Searching knowledge base for: '{query}'")
+
+        results = platform.search_knowledge_base(query)
+        if results:
+            for source, docs in results.items():
+                if docs:
+                    print(f"\n📚 {source.upper()}:")
+                    for i, doc in enumerate(docs[:2], 1):  # Show top 2 per source
+                        print(f"   {i}. {doc['text'][:100]}...")
+                        print(f"     Similarity: {doc['similarity_score']:.2f}")
+                        print()
+        else:
+            print("❌ No results found")
+
+    elif args.ethical_audit:
+        # Generate ethical audit report (available without student_id)
+        audit_report = platform.ethical_guidelines.get_ethical_audit_report()
+        print(f"\n🛡️  ETHICAL COMPLIANCE AUDIT REPORT")
+        print("=" * 50)
+        print(f"📊 Compliance Rate: {audit_report.get('compliance_rate', 0):.1f}%")
+        print(f"⚠️  Warnings: {audit_report.get('warnings_count', 0)}")
+        print(f"🚨 Critical Issues: {audit_report.get('critical_issues', 0)}")
+        print(f"📝 Total Audits: {audit_report.get('total_checks', 0)}")
+
+        if audit_report.get('recommendations'):
+            print(f"\n💡 RECOMMENDATIONS:")
+            for rec in audit_report['recommendations']:
+                print(f"   • {rec}")
+
+        if audit_report.get('category_breakdown'):
+            print(f"\n📋 CATEGORY BREAKDOWN:")
+            for category, count in audit_report['category_breakdown'].items():
+                print(f"   • {category}: {count} checks")
+        print()
+
+    elif args.consent_status:
+        # Check consent status (available without student_id)
+        active_consents = len([c for c in platform.ethical_guidelines.consent_records.values()
+                             if not c.get('consent_withdrawn', False)])
+        total_consents = len(platform.ethical_guidelines.consent_records)
+
+        print(f"\n🔒 CONSENT MANAGEMENT STATUS")
+        print("=" * 50)
+        print(f"📋 Active Consents: {active_consents}")
+        print(f"📊 Total Consents: {total_consents}")
+        print(f"🔄 Withdrawn: {total_consents - active_consents}")
+
+        print(f"\n🛡️  DATA PROTECTION:")
+        print("• End-to-end encryption (AES-256)")
+        print("• POPIA (South Africa) and GDPR compliant")
+        print("• Secure storage in South Africa")
+        print("• Right to withdraw consent anytime")
+        print()
+
     elif args.student_id:
         student_id = args.student_id
 
@@ -2333,23 +2522,6 @@ def run_careerboost_platform(args):
             except ValueError as e:
                 print(f"❌ Error: {e}")
 
-        elif args.knowledge_search:
-            # Search knowledge base
-            query = args.knowledge_search
-            print(f"🔍 Searching knowledge base for: '{query}'")
-
-            results = platform.search_knowledge_base(query)
-            if results:
-                for source, docs in results.items():
-                    if docs:
-                        print(f"\n📚 {source.upper()}:")
-                        for i, doc in enumerate(docs[:2], 1):  # Show top 2 per source
-                            print(f"   {i}. {doc['text'][:100]}...")
-                            print(f"     Similarity: {doc['similarity_score']:.2f}")
-                            print()
-            else:
-                print("❌ No results found")
-
         elif args.market_insights or args.sa_insights:
             # Get comprehensive market insights
             try:
@@ -2408,46 +2580,6 @@ def run_careerboost_platform(args):
             except ValueError as e:
                 print(f"❌ Error: {e}")
 
-        elif args.knowledge_stats:
-            # Show knowledge base statistics
-            stats = platform.get_knowledge_stats()
-            print(f"\n🧠 KNOWLEDGE BASE STATISTICS")
-            print("=" * 50)
-            print(f"📊 Total Documents: {stats.get('total_documents', 0)}")
-            print(f"📚 Active Sources: {stats.get('active_sources', 0)}")
-            print(f"🕒 Last Updated: {stats.get('last_updated', 'Unknown')}")
-
-            if 'sources' in stats:
-                print(f"\n📋 SOURCES:")
-                for source_name, source_stats in stats['sources'].items():
-                    if source_stats:
-                        print(f"   • {source_name}: {source_stats['document_count']} documents")
-                        print(f"     {source_stats['description']}")
-                    else:
-                        print(f"   • {source_name}: Not initialized")
-            print()
-
-        elif args.ethical_audit:
-            # Generate ethical audit report
-            audit_report = platform.ethical_guidelines.get_ethical_audit_report()
-            print(f"\n🛡️  ETHICAL COMPLIANCE AUDIT REPORT")
-            print("=" * 50)
-            print(f"📊 Compliance Rate: {audit_report.get('compliance_rate', 0):.1f}%")
-            print(f"⚠️  Warnings: {audit_report.get('warnings_count', 0)}")
-            print(f"🚨 Critical Issues: {audit_report.get('critical_issues', 0)}")
-            print(f"📝 Total Audits: {audit_report.get('total_checks', 0)}")
-
-            if audit_report.get('recommendations'):
-                print(f"\n💡 RECOMMENDATIONS:")
-                for rec in audit_report['recommendations']:
-                    print(f"   • {rec}")
-
-            if audit_report.get('category_breakdown'):
-                print(f"\n📋 CATEGORY BREAKDOWN:")
-                for category, count in audit_report['category_breakdown'].items():
-                    print(f"   • {category}: {count} checks")
-            print()
-
         elif args.withdraw_consent:
             # Withdraw data consent
             consent_id = args.withdraw_consent
@@ -2460,25 +2592,6 @@ def run_careerboost_platform(args):
             else:
                 print(f"❌ Consent ID not found: {consent_id}")
                 print("💡 Check your consent ID from the onboarding process")
-
-        elif args.consent_status:
-            # Check consent status
-            active_consents = len([c for c in platform.ethical_guidelines.consent_records.values()
-                                 if not c.get('consent_withdrawn', False)])
-            total_consents = len(platform.ethical_guidelines.consent_records)
-
-            print(f"\n🔒 CONSENT MANAGEMENT STATUS")
-            print("=" * 50)
-            print(f"📋 Active Consents: {active_consents}")
-            print(f"📊 Total Consents: {total_consents}")
-            print(f"🔄 Withdrawn: {total_consents - active_consents}")
-
-            print(f"\n🛡️  DATA PROTECTION:")
-            print("• End-to-end encryption (AES-256)")
-            print("• POPIA (South Africa) and GDPR compliant")
-            print("• Secure storage in South Africa")
-            print("• Right to withdraw consent anytime")
-            print()
 
         elif args.export_data:
             # Export student data

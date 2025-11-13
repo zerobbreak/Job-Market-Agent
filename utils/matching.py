@@ -40,15 +40,50 @@ def match_student_to_jobs(student_profile):
             query_text = f"{student_profile.get('desired_role', '')} {student_profile.get('industry', '')}"
 
         if os.getenv('OPENROUTER_ONLY', 'true').lower() == 'true':
-            # Basic metadata-only scan in OpenRouter-only mode
-            # Note: Without embeddings, perform a naive filter on stored metadatas
-            results = {'ids': [[]], 'metadatas': [[]]}
+            # In OpenRouter-only mode, retrieve all jobs and filter by relevance
             try:
-                # Chroma doesn't provide simple metadata scans in-memory here;
-                # rely on stored collection if available via get
-                pass
-            except Exception:
-                pass
+                # Get all jobs from the collection (limit to reasonable number for performance)
+                all_results = jobs_collection.get(limit=50, include=['metadatas'])
+
+                # Filter jobs based on basic relevance to student profile
+                relevant_jobs = []
+                query_keywords = set()
+                if student_profile.get('desired_role'):
+                    query_keywords.update(student_profile['desired_role'].lower().split())
+                if student_profile.get('industry'):
+                    query_keywords.update(student_profile['industry'].lower().split())
+                if student_profile.get('skills'):
+                    query_keywords.update([skill.lower() for skill in student_profile['skills']])
+
+                for job_id, metadata in zip(all_results['ids'], all_results['metadatas']):
+                    if metadata:
+                        # Check if job title, company, or description contains relevant keywords
+                        job_text = (
+                            metadata.get('title', '').lower() + ' ' +
+                            metadata.get('company', '').lower() + ' ' +
+                            metadata.get('description', '').lower()
+                        )
+
+                        # Calculate simple relevance score based on keyword matches
+                        matches = sum(1 for keyword in query_keywords if keyword in job_text)
+                        relevance_score = min(100, matches * 20)  # Scale to 0-100
+
+                        if relevance_score > 20:  # Only include somewhat relevant jobs
+                            relevant_jobs.append((job_id, metadata, relevance_score))
+
+                # Sort by relevance and take top matches
+                relevant_jobs.sort(key=lambda x: x[2], reverse=True)
+                top_jobs = relevant_jobs[:10]
+
+                # Format results to match the expected structure
+                results = {
+                    'ids': [[job_id for job_id, _, _ in top_jobs]],
+                    'metadatas': [[metadata for _, metadata, _ in top_jobs]]
+                }
+
+            except Exception as e:
+                print(f"OpenRouter-only job retrieval failed: {e}")
+                results = {'ids': [[]], 'metadatas': [[]]}
         else:
             query_response = get_client().models.embed_content(
                 model="text-embedding-004",
