@@ -7,11 +7,12 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "UTC"
     open-pull-requests-limit: 10
     reviewers:
-      - "your-username"  # Replace with your GitHub username
+      - "zerobbreak"
     assignees:
-      - "your-username"  # Replace with your GitHub username
+      - "zerobbreak"
     commit-message:
       prefix: "chore"
       prefix-development: "chore"
@@ -19,6 +20,7 @@ updates:
     labels:
       - "dependencies"
       - "python"
+      - "automated"
     ignore:
       # Ignore major version updates for critical dependencies
       - dependency-name: "agno"
@@ -27,6 +29,23 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "chromadb"
         update-types: ["version-update:semver-major"]
+    # Group minor and patch updates
+    groups:
+      development-dependencies:
+        patterns:
+          - "pytest*"
+          - "black"
+          - "flake8"
+          - "mypy"
+          - "isort"
+        update-types:
+          - "minor"
+          - "patch"
+      production-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -35,20 +54,41 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+      timezone: "UTC"
     open-pull-requests-limit: 5
     reviewers:
-      - "your-username"
+      - "zerobbreak"
     assignees:
-      - "your-username"
+      - "zerobbreak"
     commit-message:
       prefix: "ci"
       include: "scope"
     labels:
       - "github-actions"
       - "dependencies"
+      - "automated"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
-# Optional: Docker updates (if using Docker Hub)
-# - package-ecosystem: "docker"
-#   directory: "/"
-#   schedule:
-#     interval: "weekly"
+  # Docker dependencies (if using Docker Hub)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "zerobbreak"
+    assignees:
+      - "zerobbreak"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "docker"
+      - "dependencies"
+      - "automated"

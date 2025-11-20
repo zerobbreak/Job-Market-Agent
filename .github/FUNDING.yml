@@ -1,0 +1,29 @@
+# Funding options for Job Market Agent
+# These are supported funding model platforms
+
+# GitHub Sponsors
+github: # [zerobbreak]  # Uncomment and add your GitHub username
+
+# Patreon
+patreon: # your_patreon_username
+
+# Open Collective
+open_collective: # your_project_name
+
+# Ko-fi
+ko_fi: # your_kofi_username
+
+# Tidelift
+tidelift: # pypi/your-package-name
+
+# Community Bridge
+community_bridge: # your_project_name
+
+# Liberapay
+liberapay: # your_username
+
+# IssueHunt
+issuehunt: # your_username
+
+# Buy Me a Coffee
+custom: # ['https://www.buymeacoffee.com/your_username']

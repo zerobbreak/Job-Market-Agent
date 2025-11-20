@@ -1,0 +1,57 @@
+# Auto-labeling configuration for pull requests
+# This file is used by the labeler action in the CI/CD workflow
+
+# Documentation changes
+documentation:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*.md', 'docs/**/*']
+
+# Python code changes
+python:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*.py']
+
+# Tests
+tests:
+  - changed-files:
+    - any-glob-to-any-file: ['tests/**/*', '**/test_*.py', '**/*_test.py']
+
+# CI/CD changes
+ci-cd:
+  - changed-files:
+    - any-glob-to-any-file: ['.github/**/*', 'Dockerfile', 'docker-compose.yml', '.dockerignore']
+
+# Dependencies
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file: ['requirements*.txt', 'setup.py', 'pyproject.toml']
+
+# Configuration
+configuration:
+  - changed-files:
+    - any-glob-to-any-file: ['*.yml', '*.yaml', '*.json', '*.toml', '.env*', 'config/**/*']
+
+# Utilities
+utils:
+  - changed-files:
+    - any-glob-to-any-file: ['utils/**/*']
+
+# Agents
+agents:
+  - changed-files:
+    - any-glob-to-any-file: ['agents/**/*']
+
+# Scraping
+scraping:
+  - changed-files:
+    - any-glob-to-any-file: ['**/scrap*.py', 'utils/scraping.py']
+
+# Database
+database:
+  - changed-files:
+    - any-glob-to-any-file: ['**/*db*.py', '**/*.sql', '**/*.sqlite', 'data/**/*']
+
+# Security
+security:
+  - changed-files:
+    - any-glob-to-any-file: ['.github/SECURITY.md', '**/security*.py']

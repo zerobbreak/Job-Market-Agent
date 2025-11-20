@@ -78,6 +78,5 @@ job_cache/
 
 # Development files
 .env.example
-requirements-dev.txt
 docker-compose.yml
 docker-compose.*.yml

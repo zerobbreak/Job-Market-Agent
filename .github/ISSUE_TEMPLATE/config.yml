@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Ask a Question
+    url: https://github.com/zerobbreak/Job-Market-Agent/discussions/new?category=q-a
+    about: Ask questions and discuss with the community
+  - name: 💡 Ideas & Suggestions
+    url: https://github.com/zerobbreak/Job-Market-Agent/discussions/new?category=ideas
+    about: Share ideas and suggestions for the project
+  - name: 📚 Documentation
+    url: https://github.com/zerobbreak/Job-Market-Agent#readme
+    about: Check out the project documentation
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/zerobbreak/Job-Market-Agent/security/advisories/new
+    about: Report a security vulnerability privately

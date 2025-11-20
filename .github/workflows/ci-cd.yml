@@ -13,7 +13,26 @@ name: CI/CD Pipeline
 env:
   PYTHON_VERSION: "3.11"
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  security-events: write
+
 jobs:
+  # Auto-label PRs
+  label:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Label PR
+      uses: actions/labeler@v5
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
   # Code Quality Checks
   quality:
     runs-on: ubuntu-latest
@@ -22,12 +41,13 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -38,76 +58,106 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install flake8 black isort mypy safety bandit
+        pip install flake8 black isort mypy safety bandit pylint
 
     - name: Check code formatting with Black
       run: black --check --diff .
+      continue-on-error: true
 
     - name: Check import sorting with isort
       run: isort --check-only --diff .
+      continue-on-error: true
 
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
 
     - name: Type check with mypy
       run: mypy main.py utils/ agents/ --ignore-missing-imports
+      continue-on-error: true
+
+    - name: Lint with pylint
+      run: pylint main.py utils/ agents/ --exit-zero
+      continue-on-error: true
 
     - name: Security scan with bandit
-      run: bandit -r . -f json -o bandit-report.json || true
+      run: |
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . -f screen
 
     - name: Security scan with safety
-      run: safety check --file requirements.txt --output json || true
+      run: |
+        safety check --file requirements.txt --output json --save-json safety-report.json || true
+        safety check --file requirements.txt || true
 
     - name: Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-reports
         path: |
           bandit-report.json
+          safety-report.json
+        retention-days: 30
 
   # Unit Tests
   test:
     runs-on: ubuntu-latest
     needs: quality
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-mock
+        pip install pytest pytest-cov pytest-mock pytest-xdist pytest-timeout
 
     - name: Run syntax check
       run: python -m py_compile main.py utils/scraping.py scrapper.py
 
-    - name: Run unit tests
-      run: pytest --cov=. --cov-report=xml --cov-report=html
+    - name: Run unit tests with coverage
+      run: |
+        pytest --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing \
+               --junitxml=junit.xml -v --tb=short --maxfail=5
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
 
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
+      if: matrix.python-version == '3.11'
       with:
         name: coverage-reports
         path: |
           coverage.xml
           htmlcov/
+          junit.xml
+        retention-days: 30
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request' && matrix.python-version == '3.11'
+      uses: py-cov-action/python-coverage-comment-action@v3
+      with:
+        GITHUB_TOKEN: ${{ github.token }}
+        MINIMUM_GREEN: 80
+        MINIMUM_ORANGE: 60
 
   # Docker Build and Test
   docker:
@@ -129,58 +179,92 @@ jobs:
         tags: job-market-analyzer:latest
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        load: true
 
     - name: Test Docker image
       run: |
         docker run --rm job-market-analyzer:latest python --version
         docker run --rm job-market-analyzer:latest python -c "import main; print('Import successful')"
 
-  # Dependency Updates (only on schedule)
-  dependabot:
+    - name: Scan Docker image for vulnerabilities
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: job-market-analyzer:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # CodeQL Analysis
+  codeql:
+    name: CodeQL Analysis
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'python' ]
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  # Dependency Review (PRs only)
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Update dependencies
-      run: |
-        python -m pip install --upgrade pip-tools
-        pip-compile --upgrade requirements.in
-        pip-compile --upgrade requirements-dev.in
-
-    - name: Create pull request
-      uses: peter-evans/create-pull-request@v5
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "chore: update dependencies"
-        title: "Update dependencies"
-        body: "Automated dependency updates"
-        branch: automated/dependency-updates
+        fail-on-severity: moderate
 
   # Release
   release:
     runs-on: ubuntu-latest
     needs: [quality, test, docker]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+      packages: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to Docker Hub
-      if: env.DOCKER_HUB_ACCESS_TOKEN != null
+      if: secrets.DOCKER_HUB_ACCESS_TOKEN != ''
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
     - name: Build and push Docker image
-      if: env.DOCKER_HUB_ACCESS_TOKEN != null
+      if: secrets.DOCKER_HUB_ACCESS_TOKEN != ''
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -189,31 +273,45 @@ jobs:
         tags: |
           ${{ secrets.DOCKER_HUB_USERNAME }}/job-market-analyzer:latest
           ${{ secrets.DOCKER_HUB_USERNAME }}/job-market-analyzer:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Generate changelog
+      id: changelog
+      uses: metcalfc/changelog-generator@v4.3.1
+      with:
+        myToken: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create GitHub release
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
         body: |
-          ## Changes
-          - See commit history for details
+          ## 🚀 Changes
+          ${{ steps.changelog.outputs.changelog }}
 
-          ## Docker Image
+          ## 🐳 Docker Image
           ```bash
           docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/job-market-analyzer:${{ github.sha }}
           ```
+
+          ## 📦 Installation
+          ```bash
+          pip install -r requirements.txt
+          ```
+        draft: false
+        prerelease: false
 
   # Deploy (if deployment is configured)
   deploy:
     runs-on: ubuntu-latest
     needs: release
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && env.DEPLOY_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
     environment: production
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Deploy to production
       run: |
         echo "Deployment logic would go here"

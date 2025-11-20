@@ -1,0 +1,50 @@
+# Code Owners for Job Market Agent
+# These owners will be automatically requested for review when someone opens a pull request.
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @zerobbreak
+
+# Core application files
+/main.py @zerobbreak
+/scrapper.py @zerobbreak
+
+# Utilities and helpers
+/utils/ @zerobbreak
+
+# Agent implementations
+/agents/ @zerobbreak
+
+# Configuration files
+/.env.example @zerobbreak
+/config/ @zerobbreak
+
+# Docker and deployment
+/Dockerfile @zerobbreak
+/docker-compose.yml @zerobbreak
+/.dockerignore @zerobbreak
+
+# CI/CD workflows
+/.github/workflows/ @zerobbreak
+
+# Documentation
+/README.md @zerobbreak
+/docs/ @zerobbreak
+*.md @zerobbreak
+
+# Tests
+/tests/ @zerobbreak
+/run_tests.py @zerobbreak
+
+# Dependencies
+/requirements.txt @zerobbreak
+/requirements-dev.txt @zerobbreak
+
+# Security and governance
+/.github/SECURITY.md @zerobbreak
+/.github/CONTRIBUTING.md @zerobbreak
+
+# Database and data files
+/data/ @zerobbreak
+*.db @zerobbreak
+*.sqlite @zerobbreak

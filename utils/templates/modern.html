@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+        .container {
+            display: table;
+            width: 100%;
+            height: 100%;
+        }
+        .sidebar {
+            display: table-cell;
+            width: 30%;
+            background-color: #2c3e50;
+            color: white;
+            padding: 30px;
+            vertical-align: top;
+        }
+        .main-content {
+            display: table-cell;
+            width: 70%;
+            padding: 40px;
+            vertical-align: top;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            text-transform: uppercase;
+        }
+        .sidebar h1 {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 18px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 5px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            text-transform: uppercase;
+        }
+        .sidebar h2 {
+            color: #ecf0f1;
+            border-bottom: 1px solid #7f8c8d;
+            font-size: 16px;
+        }
+        p {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        ul {
+            margin: 0;
+            padding-left: 20px;
+            margin-bottom: 10px;
+        }
+        li {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .contact-info {
+            margin-bottom: 30px;
+        }
+        .contact-item {
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .sidebar a {
+            color: #ecf0f1;
+        }
+        .job-meta {
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .job-dates {
+            color: #7f8c8d;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Note: Since we are converting Markdown to HTML, we might not easily split content 
+             into sidebar/main without structured data. 
+             For this first iteration, we will use a single column layout for safety 
+             if we can't reliably extract sidebar content, OR we assume the Markdown 
+             is rendered into the main area. 
+             
+             Actually, for a true Modern layout with a sidebar, we need structured data.
+             Since we have Markdown, a single-column clean layout is safer for now 
+             unless we parse the Markdown sections.
+             
+             Let's stick to a nice single-column layout that LOOKS modern 
+             but handles the Markdown blob gracefully. -->
+    </div>
+    
+    <!-- Redesigning for Markdown Blob Compatibility -->
+    <div style="padding: 40px; max-width: 800px; margin: 0 auto;">
+        <!-- The Markdown content will be injected here, converted to HTML -->
+        {{ content }}
+    </div>
+</body>
+</html>

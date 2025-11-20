@@ -1,0 +1,58 @@
+name: Greet New Contributors
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Greet first-time contributors
+      uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: |
+          👋 **Welcome to Job Market Agent!**
+          
+          Thank you for opening your first issue! We appreciate you taking the time to contribute to this project.
+          
+          **What happens next?**
+          - A maintainer will review your issue soon
+          - Please provide any additional information if requested
+          - Feel free to ask questions if anything is unclear
+          
+          **Helpful Resources:**
+          - 📚 [Contributing Guide](.github/CONTRIBUTING.md)
+          - 🔒 [Security Policy](.github/SECURITY.md)
+          - 💬 [Discussions](https://github.com/zerobbreak/Job-Market-Agent/discussions)
+          
+          We're excited to have you here! 🎉
+        pr-message: |
+          👋 **Welcome to Job Market Agent!**
+          
+          Thank you for opening your first pull request! We're thrilled to have your contribution.
+          
+          **Before we review:**
+          - ✅ Make sure all CI checks pass
+          - ✅ Ensure you've filled out the PR template
+          - ✅ Link any related issues
+          - ✅ Update documentation if needed
+          
+          **What happens next?**
+          - A maintainer will review your PR soon
+          - We may request changes or ask questions
+          - Once approved, your PR will be merged!
+          
+          **Helpful Resources:**
+          - 📚 [Contributing Guide](.github/CONTRIBUTING.md)
+          - 🎨 [Code Style Guidelines](.github/CONTRIBUTING.md#coding-standards)
+          - ✅ [Testing Guidelines](.github/CONTRIBUTING.md#testing-guidelines)
+          
+          Thank you for contributing! 🙏
