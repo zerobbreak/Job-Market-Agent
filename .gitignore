@@ -41,6 +41,15 @@ MANIFEST
 # Virtual Environments
 # =============================================================================
 
+# Virtual environment directories
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
 # pipenv
 Pipfile.lock
 
