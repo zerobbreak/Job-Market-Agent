@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Install all dependencies
 # -----------------------------------------------------------------------------
-FROM python:3.11-slim as builder
+FROM python:3.14-slim as builder
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -42,7 +42,7 @@ RUN python -m playwright install --with-deps chromium
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Create minimal production image
 # -----------------------------------------------------------------------------
-FROM python:3.11-slim as runtime
+FROM python:3.14-slim as runtime
 
 # Install only runtime system dependencies (much fewer)
 RUN apt-get update && apt-get install -y \

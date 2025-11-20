@@ -4,7 +4,7 @@
 # Lightweight version for development - excludes heavy ML libraries
 # Build time: ~3-5 minutes (vs 15-25 minutes for full version)
 
-FROM python:3.11-slim as development
+FROM python:3.14-slim as development
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
