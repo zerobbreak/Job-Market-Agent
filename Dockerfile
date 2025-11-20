@@ -3,7 +3,7 @@
 # =============================================================================
 # Optimized for better caching and faster rebuilds while maintaining full functionality
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
