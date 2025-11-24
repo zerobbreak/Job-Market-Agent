@@ -321,47 +321,14 @@ class CVTailoringEngine:
         Research company for personalization using knowledge base
         """
         try:
-            # Try to get company information from knowledge base first
-            from . import knowledge_base
-
-            # Search for company-specific information
-            company_info = knowledge_base.retrieve_context(
-                f"{company_name} company information mission values culture",
-                sources=['sa_context', 'job_descriptions'],
-                n_results=2
-            )
-
-            # Extract relevant company details
-            company_details = []
-            for source, results in company_info.items():
-                # Handle both old and new knowledge base formats
-                documents = []
-                if 'results' in results:
-                    # New simplified KB format
-                    documents = [doc['text'] for doc in results['results']]
-                elif 'documents' in results:
-                    # Old ChromaDB format
-                    documents = results['documents']
-
-                for doc in documents:
-                    if company_name.lower() in doc.lower():
-                        company_details.append(doc[:300])  # First 300 chars
-
-            if company_details:
-                return f"""
-                Company: {company_name}
-                Research Findings: {' '.join(company_details[:2])}
-                """
-            else:
-                # Fallback to basic information
-                return f"""
-                Company: {company_name}
-                Mission: Technology innovation and customer success
-                Values: Innovation, collaboration, excellence
-                Recent Focus: Digital transformation and AI solutions
-                Culture: Dynamic, fast-paced, employee-focused
-                """
-
+            # Fallback to basic company information for now
+            return f"""
+            Company: {company_name}
+            Mission: Technology innovation and customer success
+            Values: Innovation, collaboration, excellence
+            Recent Focus: Digital transformation and AI solutions
+            Culture: Dynamic, fast-paced, employee-focused
+            """
         except Exception as e:
             print(f"Error researching company: {e}")
             return f"Company: {company_name} - Technology company focused on innovation"

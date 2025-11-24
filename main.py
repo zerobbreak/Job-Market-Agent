@@ -239,7 +239,44 @@ class JobApplicationPipeline:
             if i < len(jobs) - 1:
                 time.sleep(2)
                 
-        self.print_summary()
+    def prepare_interview(self, job):
+        """Generate interview preparation materials for a job"""
+        job_title = job.get('title', 'Unknown Position')
+        company = job.get('company', 'Unknown Company')
+        
+        logger.info(f"Preparing interview materials for: {job_title} at {company}")
+        print(f"\n🎯 Preparing interview materials for: {job_title} at {company}")
+        
+        try:
+            # Generate interview prep using the interview_prep_agent
+            response = interview_prep_agent.run(f"""
+            Prepare comprehensive interview materials for this position:
+            
+            Job: {job_title}
+            Company: {company}
+            Description: {job.get('description', 'Not provided')}
+            
+            Generate:
+            1. Likely interview questions (8-10 questions)
+            2. Suggested answers based on the job requirements
+            3. Questions the candidate should ask the interviewer
+            4. Key topics to research about the company
+            5. Technical concepts to review
+            """)
+            
+            # Save interview prep to file
+            prep_filename = f"Interview_Prep_{company.replace(' ', '_')}_{job_title.replace(' ', '_')}.txt"
+            prep_path = self.output_dir / prep_filename
+            with open(prep_path, 'w', encoding='utf-8') as f:
+                f.write(response.content)
+            
+            print(f"✓ Interview prep saved: {prep_path}")
+            return str(prep_path)
+            
+        except Exception as e:
+            logger.error(f"Error preparing interview materials: {e}")
+            print(f"✗ Error preparing interview materials: {e}")
+            return None
 
     def print_summary(self):
         """Print pipeline summary"""

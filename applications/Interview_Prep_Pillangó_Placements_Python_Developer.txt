@@ -1,0 +1,77 @@
+Okay, here's a comprehensive set of interview materials tailored for a Mid-Senior level Python Developer role at a rapidly growing African scale-up in the solar energy and smartphone access space, as advertised by Pillangó Placements/Chanel Bedeker.
+
+**1. Likely Interview Questions (8-10 Questions)**
+
+| Question                                                                                                             | Category     | Likelihood | Why It's Asked                                                                                           | Framework     | Talking Points (General)                                                                                                                   |
+| :------------------------------------------------------------------------------------------------------------------- | :----------- | :--------- | :------------------------------------------------------------------------------------------------------- | :------------ | :------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. "Tell me about a time you took end-to-end ownership of a feature, from design to deployment."                                                 | Behavioral   | High       | Assesses ownership, problem-solving, and ability to deliver.                                              | STAR          |  Emphasize a project where you handled requirements gathering, design, coding, testing, and deployment. Quantify the impact (e.g., improved efficiency, new users).                                                                |
+| 2. "Describe a complex system you designed, including the technology choices you made and why."                                                                | Technical | High       | Gauges architectural skills, technical depth, and decision-making.                                           | PAR (Problem, Action, Result)      | Highlight your experience with system design. Focus on the choices you made, and explain your reasons.  Mention the specific databases you used, the frameworks, and the APIs. Show an understanding of scaleability.  |
+| 3. "Explain your experience with AWS services.  Have you used Terraform? If so, in what capacity?"                    | Technical   | High       | Validates cloud experience, infrastructure-as-code skills, and overall DevOps understanding.          | N/A           | Detail specific AWS services used (e.g., EC2, Lambda, S3, DynamoDB). Describe Terraform projects – provisioning, configuration management. |
+| 4. "We use Python and JavaScript.  Walk me through your experience with a backend framework like FastAPI (or similar)." | Technical   | High       | Checks core coding skills, backend development experience, and understanding of modern frameworks.   | N/A           | Discuss specific projects using FastAPI (or Flask, Django). Mention database interactions (e.g., SQLAlchemy, ORM), API design (REST/GraphQL). |
+| 5. "How have you designed solutions for users with diverse contexts and constraints, particularly in an African context?" | Behavioral   | Medium     | Explores empathy, user-centered design, and awareness of the target market.                           | STAR          |  Give an example where you modified or designed a solution for someone in an African country. Emphasize your consideration of slow internet connections, low end devices, limited bandwidth and other potential constraints.  |
+| 6. "Tell me about a time you had to work with a legacy codebase or system. What challenges did you face, and how did you overcome them?"                       | Behavioral | Medium     | Assesses problem-solving, adaptability, and ability to handle technical debt.                               | STAR          | Discuss challenges like outdated documentation, complex dependencies, and performance issues. Focus on refactoring, testing, and collaboration.  |
+| 7. "Why are you interested in working for a company that focuses on providing access to solar energy and smartphones in Africa?" | Company/Role | Medium     | Gauges genuine interest in the company's mission and values.                                           | N/A           | Express your passion for using technology for social impact. Research the company's specific initiatives and mention them. Connect your skills to their mission. |
+| 8. "Describe your experience with TDD (Test-Driven Development) and building solid developer workflows."                                   | Technical   | Medium     | Evaluates commitment to quality, testing methodologies, and efficient development practices.              | N/A           | Explain your TDD process, including unit testing, integration testing, and CI/CD pipelines. Mention tools used (e.g., pytest, Jest, Jenkins, GitLab CI). |
+| 9. "How do you stay up-to-date with the latest trends and technologies in software development, specifically within the Python and JavaScript ecosystems?"                                      | General | Medium     | Checks your commitment to continuous learning and staying relevant in a fast-paced field.           | N/A          | Mention specific blogs, conferences, online courses, or open-source contributions. Show enthusiasm for learning.                                     |
+| 10. "South Africa faces unique challenges such as loadshedding. How would you ensure your work remains productive, and that deadlines are met?" | SA Specific  | Low       |  Assess ability to work around external South African factors.            | N/A          | Mention battery backups, data backups, and alternative work locations. |
+
+**2. Suggested Answers (Key Points)**
+
+*   **Ownership:**  "In my previous role at [Previous Company], I owned the development of a new user authentication service.  This involved designing the API, implementing the backend in Python using Flask, integrating with a PostgreSQL database, and deploying it on AWS using Docker and ECS. The result was a 40% reduction in user login errors."
+*   **AWS/Terraform:** "I have extensive experience with AWS, particularly EC2, S3, Lambda, and RDS.  I've used Terraform to automate the provisioning and configuration of our entire AWS infrastructure, ensuring consistency and reproducibility across environments.  For example, I created a Terraform module to deploy a multi-tier web application with load balancing and auto-scaling."
+*   **FastAPI/Backend:**  "I'm proficient with FastAPI for building RESTful APIs.  I appreciate its speed, asynchronous support, and automatic data validation.  I've used it to develop microservices that handle data processing and integration with third-party APIs. I can also work with Flask and Django."
+*   **Front-end/UX:**  "I have worked with Vue.js, React, and Angular. I focus on making intuitive and efficient solutions for the user."
+*   **African Context:** "I'm aware of the challenges of limited bandwidth and device capabilities in certain African regions. When designing solutions, I prioritize optimization, efficient data transfer, and responsive design to ensure a good user experience even on low-end devices and slow connections."
+*   **Loadshedding:** "I know that loadshedding is a problem in South Africa. If I'm in the office, I plan on using battery backups and the company's generator. If I am working from home, I plan on having a dedicated Wifi hotspot, so I can continue to work."
+
+**3. Questions the Candidate Should Ask the Interviewer**
+
+*   "Can you describe the current tech stack in more detail, particularly the versions of Python and JavaScript frameworks used?"
+*   "What are the biggest technical challenges the team is currently facing?"
+*   "How is code review and testing handled in the team?"
+*   "What opportunities are there for professional development and training?"
+*   "Can you describe the team's culture and how collaboration is fostered?"
+*   "What does a typical day/week look like in this role?"
+*   "What is the company's vision for using technology to improve access to solar energy and smartphones in Africa?"
+*   "How does the company measure the impact of its technology initiatives?"
+*   "What are the biggest opportunities for growth within the company?"
+
+**4. Key Topics to Research About the Company**
+
+*   **Company Mission & Values:** Understand their commitment to providing access to solar energy and smartphones in Africa.
+*   **Technology Stack:**  Specifically, what versions of Python, JavaScript, and other frameworks they use.
+*   **Recent Projects:**  Look for news or blog posts about their latest initiatives and technology deployments.
+*   **Partnerships:**  Who are their key partners in distribution, financing, and technology?
+*   **Market Landscape:** Research the challenges and opportunities of providing these services in the African market.
+*   **Company Culture:** Look for information on Glassdoor or LinkedIn about employee reviews and company culture.
+
+**5. Technical Concepts to Review**
+
+*   **Python:**
+    *   Asynchronous programming (async/await)
+    *   Web frameworks (FastAPI, Flask, Django)
+    *   ORM/Database interactions (SQLAlchemy, Django ORM)
+    *   Testing (pytest, unittest)
+    *   Data structures and algorithms
+*   **JavaScript:**
+    *   Modern JavaScript syntax (ES6+)
+    *   Front-end frameworks (Vue.js, React, Angular)
+    *   Testing (Jest, Mocha)
+    *   API interaction (REST, GraphQL)
+*   **AWS:**
+    *   EC2, S3, Lambda, RDS, DynamoDB
+    *   IAM (Identity and Access Management)
+    *   CloudFormation/Terraform
+    *   Docker and containerization
+*   **Databases:**
+    *   Relational databases (PostgreSQL, MySQL)
+    *   NoSQL databases (MongoDB, DynamoDB)
+*   **DevOps:**
+    *   CI/CD pipelines (Jenkins, GitLab CI)
+    *   Infrastructure as Code (Terraform, CloudFormation)
+    *   Docker and container orchestration (Kubernetes, ECS)
+*   **System Design:**
+    *   Microservices architecture
+    *   API design (REST, GraphQL)
+    *   Scalability and performance optimization
+    *   Security best practices

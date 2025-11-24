@@ -15,6 +15,7 @@ from .scraping import (
     API_CONFIG
 )
 from .cv_tailoring import CVTailoringEngine
+from .tracker import ApplicationTracker
 
 __all__ = [
     # Memory Store
@@ -32,5 +33,8 @@ __all__ = [
     'API_CONFIG',
     
     # CV Tailoring
-    'CVTailoringEngine'
+    'CVTailoringEngine',
+    
+    # Application Tracking
+    'ApplicationTracker'
 ]
