@@ -16,7 +16,7 @@ class PDFGenerator:
         else:
             self.templates_dir = templates_dir
             
-    def generate_pdf(self, markdown_content, output_path, template_name='professional'):
+    def generate_pdf(self, markdown_content, output_path, template_name='modern'):
         """
         Convert Markdown content to PDF using a specific template.
         
@@ -37,8 +37,12 @@ class PDFGenerator:
             template_path = os.path.join(self.templates_dir, template_file)
             
             if not os.path.exists(template_path):
-                print(f"⚠️ Template '{template_name}' not found, falling back to professional.")
-                template_path = os.path.join(self.templates_dir, 'professional.html')
+                print(f"⚠️ Template '{template_name}' not found, falling back to modern.")
+                template_path = os.path.join(self.templates_dir, 'modern.html')
+                
+                # Double fallback
+                if not os.path.exists(template_path):
+                     template_path = os.path.join(self.templates_dir, 'professional.html')
                 
             with open(template_path, 'r', encoding='utf-8') as f:
                 template_html = f.read()

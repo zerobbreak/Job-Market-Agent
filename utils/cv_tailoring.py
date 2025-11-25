@@ -71,8 +71,31 @@ class CVTailoringEngine:
             5. Highlight most relevant skills
             6. Add relevant projects/coursework if needed
             
-            Return both the optimized CV and ATS analysis.
+            Return the response in strict JSON format with the following structure:
+            {{
+                "cv_content": "The full markdown content of the CV",
+                "ats_analysis": "A brief analysis of the ATS score and improvements made"
+            }}
             """)
+
+            # Parse the response
+            try:
+                import json
+                content = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
+                # Clean up potential markdown code blocks
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0].strip()
+                
+                parsed_result = json.loads(content)
+                cv_content = parsed_result.get('cv_content', content)
+                ats_analysis = parsed_result.get('ats_analysis', "Analysis not available")
+            except Exception as e:
+                print(f"Error parsing AI response: {e}")
+                # Fallback: treat the whole response as CV content if parsing fails
+                cv_content = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
+                ats_analysis = "Parsing failed"
 
             # Generate version ID
             company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
@@ -80,8 +103,8 @@ class CVTailoringEngine:
             version_id = f"{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
             self.cv_versions[version_id] = {
-                'cv_content': tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result),
-                'ats_analysis': tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result),
+                'cv_content': cv_content,
+                'ats_analysis': ats_analysis,
                 'job_match_score': job_posting.get('match_score', 0),
                 'job_keywords': job_keywords,
                 'created_at': datetime.now(),
@@ -283,7 +306,28 @@ class CVTailoringEngine:
             prompt = self._build_cover_letter_prompt(job_posting, cv_content, company_research)
 
             cover_letter = application_writer.run(prompt)
-            return self._extract_content(cover_letter)
+            content = self._extract_content(cover_letter)
+            
+            # Save as PDF
+            company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
+            role_name = job_posting.get('title', 'Position').replace(' ', '_').replace('/', '_')
+            version_id = f"CL_{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+            
+            output_dir = 'tailored_cvs'
+            os.makedirs(output_dir, exist_ok=True)
+            pdf_path = f"{output_dir}/{version_id}.pdf"
+            
+            generator = PDFGenerator()
+            success = generator.generate_pdf(
+                markdown_content=content,
+                output_path=pdf_path,
+                template_name='cover_letter'
+            )
+            
+            if success:
+                return pdf_path
+            else:
+                return content # Fallback to text content if PDF fails
 
         except Exception as e:
             print(f"Error generating cover letter: {e}")
@@ -308,6 +352,7 @@ class CVTailoringEngine:
         - Professional yet authentic voice
         - 250-400 words
         - Uses STAR method for examples
+        - Format as Markdown with bolding for emphasis
         """
 
     def _extract_content(self, response):
@@ -355,6 +400,5 @@ Thank you for considering my application. I look forward to the possibility of s
 Best regards,
 {self.profile.get('name', 'Applicant')}
 """
-
         return fallback_letter
 

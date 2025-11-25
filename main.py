@@ -17,6 +17,12 @@ import pypdf
 # Load environment variables
 load_dotenv()
 
+# Ensure both key names are available (some agents use GEMINI_API_KEY, others GOOGLE_API_KEY)
+if os.getenv('GOOGLE_API_KEY') and not os.getenv('GEMINI_API_KEY'):
+    os.environ['GEMINI_API_KEY'] = os.getenv('GOOGLE_API_KEY')
+if os.getenv('GEMINI_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+    os.environ['GOOGLE_API_KEY'] = os.getenv('GEMINI_API_KEY')
+
 # Import consolidated agents
 from agents import (
     profile_builder,
@@ -97,16 +103,18 @@ class JobApplicationPipeline:
         
         try:
             response = profile_builder.run(f"""
-            Analyze this CV and create a comprehensive candidate profile:
+            Analyze this CV and create a comprehensive candidate profile.
+            Return the response in strict JSON format with the following structure:
+            {{
+                "skills": ["skill1", "skill2", ...],
+                "experience_level": "Senior/Mid/Junior",
+                "education": "Highest degree/qualification",
+                "strengths": ["strength1", "strength2", ...],
+                "career_goals": "Summary of career goals"
+            }}
             
+            CV Content:
             {cv_content}
-            
-            Extract:
-            - Skills and expertise
-            - Experience level
-            - Career goals and aspirations
-            - Education background
-            - Key strengths
             """)
             
             # Parse the response to get a dictionary if possible, or just use the text
@@ -176,14 +184,19 @@ class JobApplicationPipeline:
             print(f"✓ CV generated: {pdf_path}")
             
             # 2. Generate Cover Letter
-            cover_letter = self.cv_engine.generate_cover_letter(job, tailored_cv=cv_content)
+            cover_letter_result = self.cv_engine.generate_cover_letter(job, tailored_cv=cv_content)
             
-            # Save Cover Letter
-            cl_filename = f"Cover_Letter_{company.replace(' ', '_')}_{job_title.replace(' ', '_')}.txt"
-            cl_path = self.output_dir / cl_filename
-            with open(cl_path, 'w', encoding='utf-8') as f:
-                f.write(cover_letter)
-            print(f"✓ Cover Letter saved: {cl_path}")
+            # Handle Cover Letter (PDF path or Text content)
+            if cover_letter_result.endswith('.pdf') and os.path.exists(cover_letter_result):
+                cl_path = Path(cover_letter_result)
+                print(f"✓ Cover Letter generated: {cl_path}")
+            else:
+                # Fallback to text saving
+                cl_filename = f"Cover_Letter_{company.replace(' ', '_')}_{job_title.replace(' ', '_')}.txt"
+                cl_path = self.output_dir / cl_filename
+                with open(cl_path, 'w', encoding='utf-8') as f:
+                    f.write(cover_letter_result)
+                print(f"✓ Cover Letter saved: {cl_path}")
             
             # 3. Track Application
             app_id = self.tracker.add_application(

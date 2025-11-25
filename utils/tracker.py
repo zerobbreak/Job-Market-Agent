@@ -55,6 +55,7 @@ class ApplicationTracker:
         Returns:
             int: The ID of the new application record
         """
+        # 1. Save to Local SQLite (Legacy/Offline support)
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -83,6 +84,36 @@ class ApplicationTracker:
         app_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        
+        # 2. Sync to Appwrite (if enabled)
+        try:
+            from .appwrite_client import AppwriteService
+            appwrite = AppwriteService()
+            
+            if appwrite.enabled:
+                print("☁️ Syncing to Appwrite...")
+                
+                # Upload files
+                cv_file_id = appwrite.upload_file(cv_path)
+                cl_file_id = None
+                if cover_letter_path and os.path.exists(cover_letter_path):
+                    cl_file_id = appwrite.upload_file(cover_letter_path)
+                
+                # Create DB Record
+                # TODO: Get actual user_id from session/auth context. 
+                # For now using a placeholder or 'anonymous'
+                user_id = 'anonymous_user' 
+                
+                appwrite_id = appwrite.save_application(
+                    user_id=user_id,
+                    job_data=job_data,
+                    cv_file_id=cv_file_id,
+                    cl_file_id=cl_file_id
+                )
+                print(f"✓ Synced to Appwrite (ID: {appwrite_id})")
+                
+        except Exception as e:
+            print(f"⚠️ Failed to sync to Appwrite: {e}")
         
         print(f"✓ Application tracked: {job_data.get('company')} - {job_data.get('title')} (ID: {app_id})")
         return app_id

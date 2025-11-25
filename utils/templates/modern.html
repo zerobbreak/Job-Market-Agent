@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <style>
@@ -7,115 +8,159 @@
             size: A4;
             margin: 0;
         }
+
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
             color: #333;
+            line-height: 1.5;
             margin: 0;
             padding: 0;
-            line-height: 1.5;
         }
+
         .container {
-            display: table;
             width: 100%;
             height: 100%;
         }
+
+        .header {
+            background-color: #2563eb;
+            /* Blue-600 */
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28pt;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .header p {
+            margin: 10px 0 0;
+            font-size: 12pt;
+            opacity: 0.9;
+        }
+
+        .content-wrapper {
+            padding: 40px;
+            display: table;
+            /* For 2-column layout in pisa */
+            width: 100%;
+        }
+
         .sidebar {
             display: table-cell;
             width: 30%;
-            background-color: #2c3e50;
-            color: white;
-            padding: 30px;
+            padding-right: 20px;
             vertical-align: top;
+            border-right: 1px solid #e5e7eb;
         }
+
         .main-content {
             display: table-cell;
             width: 70%;
-            padding: 40px;
+            padding-left: 20px;
             vertical-align: top;
         }
-        h1 {
-            font-size: 32px;
-            margin-bottom: 5px;
-            color: #2c3e50;
-            text-transform: uppercase;
-        }
-        .sidebar h1 {
-            color: white;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
+
         h2 {
-            font-size: 18px;
-            border-bottom: 2px solid #2c3e50;
+            color: #2563eb;
+            font-size: 14pt;
+            border-bottom: 2px solid #2563eb;
             padding-bottom: 5px;
-            margin-top: 25px;
+            margin-top: 0;
             margin-bottom: 15px;
-            color: #2c3e50;
             text-transform: uppercase;
         }
-        .sidebar h2 {
-            color: #ecf0f1;
-            border-bottom: 1px solid #7f8c8d;
-            font-size: 16px;
+
+        h3 {
+            font-size: 12pt;
+            margin-bottom: 5px;
+            color: #1f2937;
         }
-        p {
-            margin-bottom: 10px;
-            font-size: 14px;
+
+        .job-title {
+            font-weight: bold;
+            color: #111827;
         }
+
+        .company {
+            color: #4b5563;
+            font-style: italic;
+        }
+
+        .date {
+            color: #6b7280;
+            font-size: 10pt;
+            float: right;
+        }
+
         ul {
-            margin: 0;
-            padding-left: 20px;
-            margin-bottom: 10px;
+            padding-left: 15px;
+            margin-top: 5px;
         }
+
         li {
             margin-bottom: 5px;
-            font-size: 14px;
+            font-size: 10pt;
         }
+
+        .skill-tag {
+            background-color: #eff6ff;
+            color: #1e40af;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 9pt;
+            display: inline-block;
+            margin: 2px;
+            border: 1px solid #dbeafe;
+        }
+
         .contact-info {
-            margin-bottom: 30px;
+            margin-top: 20px;
+            font-size: 10pt;
         }
+
         .contact-item {
-            margin-bottom: 8px;
-            font-size: 13px;
-        }
-        a {
-            color: #3498db;
-            text-decoration: none;
-        }
-        .sidebar a {
-            color: #ecf0f1;
-        }
-        .job-meta {
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        .job-dates {
-            color: #7f8c8d;
-            font-size: 12px;
             margin-bottom: 5px;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <!-- Note: Since we are converting Markdown to HTML, we might not easily split content 
-             into sidebar/main without structured data. 
-             For this first iteration, we will use a single column layout for safety 
-             if we can't reliably extract sidebar content, OR we assume the Markdown 
-             is rendered into the main area. 
+        <!-- We'll inject the structured HTML here. 
+             Note: The markdown converter produces simple HTML. 
+             For a true 2-column layout with specific sections (Skills in sidebar), 
+             we ideally need to parse the profile data and inject it into this template 
+             rather than just dumping the markdown HTML. 
              
-             Actually, for a true Modern layout with a sidebar, we need structured data.
-             Since we have Markdown, a single-column clean layout is safer for now 
-             unless we parse the Markdown sections.
+             However, for this iteration, we will wrap the markdown content 
+             in a way that looks better, or rely on the markdown having specific structure.
              
-             Let's stick to a nice single-column layout that LOOKS modern 
-             but handles the Markdown blob gracefully. -->
-    </div>
-    
-    <!-- Redesigning for Markdown Blob Compatibility -->
-    <div style="padding: 40px; max-width: 800px; margin: 0 auto;">
-        <!-- The Markdown content will be injected here, converted to HTML -->
-        {{ content }}
+             BETTER APPROACH: The PDF generator should accept structured data, not just markdown.
+             But to keep it simple with existing pipeline, we'll style the standard markdown output 
+             to look good in a single column first, or try to split it if possible.
+             
+             Let's stick to a clean single-column modern layout for the raw markdown content,
+             as parsing arbitrary markdown into sidebar/main is risky.
+        -->
+
+        <!-- Header Section (Placeholder - strictly speaking we'd want to extract name/contact) -->
+        <!-- Since we only have 'content', we'll wrap it all in a nice container -->
+
+        <div class="content-wrapper" style="display: block; width: auto;">
+            {{ content }}
+        </div>
+
+        <!-- Footer -->
+        <div
+            style="position: fixed; bottom: 20px; left: 0; right: 0; text-align: center; color: #9ca3af; font-size: 9pt;">
+            Generated by Job Market Agent
+        </div>
     </div>
 </body>
+
 </html>
