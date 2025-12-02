@@ -1,0 +1,54 @@
+# Frontend files (not needed for backend)
+frontend/
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+pipeline.log
+scraper.log
+
+# Database files (will be created at runtime)
+*.db
+chroma_db/
+
+# Application outputs (will be created at runtime)
+applications/
+job_cache/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+tests/
+test_*.py
+
+# Environment files (should be set via Render env vars)
+.env
+.env.example
+
+# Other
+.DS_Store
+*.swp
+*.swo
+
