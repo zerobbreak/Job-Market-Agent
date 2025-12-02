@@ -20,4 +20,4 @@ RUN apt-get update && apt-get purge -y gcc python3-dev libcairo2-dev && \
     rm -rf /var/lib/apt/lists/*
 
 COPY . .
-CMD ["gunicorn", "api_server:app", "--bind", "0.0.0.0:${PORT}"]
+CMD ["sh", "-c", "gunicorn api_server:app --bind 0.0.0.0:${PORT:-8000}"]
