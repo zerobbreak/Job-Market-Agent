@@ -3,11 +3,21 @@ import os
 import hashlib
 import re
 import requests
+import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from jobspy import scrape_jobs
 import pandas as pd
-import logging
+
+# Try to import jobspy, make it optional
+try:
+    from jobspy import scrape_jobs
+    JOBSPY_AVAILABLE = True
+except ImportError:
+    JOBSPY_AVAILABLE = False
+    logging.warning("jobspy not available. Job scraping features will be limited.")
+    # Create a dummy function to prevent errors
+    def scrape_jobs(*args, **kwargs):
+        raise ImportError("jobspy package is not installed. Please install it with: pip install git+https://github.com/engineerjoe440/jobspy.git")
 import numpy as np
 import google.genai as genai
 from tqdm import tqdm
@@ -868,6 +878,11 @@ class AdvancedJobScraper:
         }
 
         try:
+            # Check if jobspy is available
+            if not JOBSPY_AVAILABLE:
+                self.logger.error("jobspy is not installed. Cannot scrape jobs.")
+                raise ImportError("jobspy package is required for job scraping. Please install it with: pip install git+https://github.com/engineerjoe440/jobspy.git")
+            
             # Scrape jobs using jobspy
             jobs_df = scrape_jobs(**params)
 
