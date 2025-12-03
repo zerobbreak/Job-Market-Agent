@@ -13,21 +13,21 @@ export const apiClient = async (endpoint: string, options: ApiOptions = {}) => {
         const token = jwt.jwt;
 
         // Prepare headers
-        const headers = {
-            ...options.headers,
+        const headers: Record<string, string> = {
+            ...(options.headers || {}),
             'Authorization': `Bearer ${token}`,
         };
 
         // If body is JSON and Content-Type is not set, set it to application/json
         // Note: FormData should NOT have Content-Type set manually (browser does it)
-        if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+        if (!(options.body instanceof FormData) && !('Content-Type' in headers)) {
             headers['Content-Type'] = 'application/json';
         }
 
         // Make the request
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             ...options,
-            headers,
+            headers: headers as HeadersInit,
         });
 
         // Handle 401 Unauthorized (optional: trigger logout or refresh)

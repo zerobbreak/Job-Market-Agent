@@ -4,6 +4,19 @@
 
 Your Vercel deployment is showing a 404 because the project settings need to be configured correctly. Here's how to fix it:
 
+### ⚠️ IMPORTANT: During Initial Setup
+
+If you're importing the project for the first time, you'll see a configuration page. Make sure to:
+
+1. **Change Framework Preset**
+   - Currently shows: `Flask` ❌
+   - Change to: `Vite` or `Other` ✅
+   
+2. **Change Root Directory**
+   - Currently shows: `./` ❌
+   - Click "Edit" and change to: `frontend` ✅
+   - This tells Vercel to deploy from the `frontend` folder
+
 ### Step 1: Update Vercel Project Settings
 
 1. **Go to Vercel Dashboard**
