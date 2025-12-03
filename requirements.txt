@@ -4,7 +4,7 @@ google-genai
 python-dotenv
 cachetools
 tqdm
-git+https://github.com/engineerjoe440/jobspy.git
+# jobspy - install manually if needed: pip install git+https://github.com/engineerjoe440/jobspy.git
 pandas
 numpy
 beautifulsoup4
