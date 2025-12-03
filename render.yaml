@@ -1,0 +1,23 @@
+services:
+  # Backend API Service
+  - type: web
+    name: job-market-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn api_server:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: PYTHONUNBUFFERED
+        value: 1
+      # Add your other environment variables in Render dashboard
+
+  # Frontend Static Site
+  - type: web
+    name: job-market-frontend
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    # Environment variables should be set in Render dashboard
+    # VITE_API_URL, VITE_APPWRITE_* etc.
+

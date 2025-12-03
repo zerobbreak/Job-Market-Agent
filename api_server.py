@@ -18,7 +18,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# Configure CORS for production
+allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',')
+CORS(app, resources={
+    r"/api/*": {
+        "origins": allowed_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
 app.secret_key = os.urandom(24)  # For session management
 
 # Initialize Appwrite Client
