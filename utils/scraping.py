@@ -31,14 +31,15 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Initialize Gemini client
-# The client gets the API key from the environment variable `GEMINI_API_KEY`
+# The client gets the API key from the environment variable `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 try:
-    gemini_api_key = os.getenv('GEMINI_API_KEY')
+    # Check both GEMINI_API_KEY and GOOGLE_API_KEY (code supports both)
+    gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
     if gemini_api_key and gemini_api_key != 'your_google_api_key_here':
         client = genai.Client(api_key=gemini_api_key)
     else:
         client = None
-        logging.warning("GEMINI_API_KEY not set or is placeholder. AI features will be disabled.")
+        logging.warning("GEMINI_API_KEY or GOOGLE_API_KEY not set or is placeholder. AI features will be disabled.")
 except Exception as e:
     client = None
     logging.warning(f"Failed to initialize Gemini client: {e}. AI features will be disabled.")
