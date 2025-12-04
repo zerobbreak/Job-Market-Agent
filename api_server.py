@@ -1,6 +1,16 @@
+import os
+from dotenv import load_dotenv
+
+# Load env vars first
+load_dotenv()
+
+# Ensure GOOGLE_API_KEY is set for agno/Gemini BEFORE importing agents
+if os.getenv('GEMINI_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+    os.environ['GOOGLE_API_KEY'] = os.getenv('GEMINI_API_KEY')
+    print("✓ Polyfilled GOOGLE_API_KEY from GEMINI_API_KEY")
+
 from flask import Flask, request, jsonify, send_file, g
 from flask_cors import CORS
-import os
 import json
 import re
 from werkzeug.utils import secure_filename
