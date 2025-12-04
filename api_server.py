@@ -266,10 +266,15 @@ def analyze_cv():
                 return jsonify({'success': False, 'error': 'Failed to load CV'})
             
             # Build profile using AI
+            # Ensure API keys are set (redundant check)
+            if os.getenv('GEMINI_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+                os.environ['GOOGLE_API_KEY'] = os.getenv('GEMINI_API_KEY')
+                
             profile_text = pipeline.build_profile(cv_content)
             
             if not profile_text:
-                return jsonify({'success': False, 'error': 'Failed to build profile'})
+                # Check if there was an error logged in the pipeline
+                return jsonify({'success': False, 'error': 'Failed to build profile. Check server logs for details.'})
             
             # Parse profile text to extract structured data
             profile_data = parse_profile(profile_text)

@@ -21,3 +21,4 @@ services:
     # Environment variables should be set in Render dashboard
     # VITE_API_URL, VITE_APPWRITE_* etc.
 
+

@@ -130,7 +130,7 @@ class JobApplicationPipeline:
         except Exception as e:
             logger.error(f"Error building profile: {e}")
             print(f"✗ Error building profile: {e}")
-            return None
+            raise e
     
     def search_jobs(self, query, location, max_results):
         """Search for jobs using the scraper"""
