@@ -24,6 +24,7 @@ from tqdm import tqdm
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 import time
+import random
 from functools import wraps
 from dataclasses import dataclass, field
 from threading import Lock
@@ -59,12 +60,14 @@ class ScraperConfig:
     # Scraping settings
     default_results_wanted: int = 20
     default_hours_old: int = 72
-    default_sites: List[str] = field(default_factory=lambda: ["indeed", "linkedin", "google"])
+    default_sites: List[str] = field(default_factory=lambda: ["indeed", "linkedin", "google", "glassdoor", "zip_recruiter"])
     default_country: str = "USA"
     
-    # Rate limiting
+    # Rate limiting & Anti-blocking
     max_requests_per_minute: int = 10
-    url_scraping_delay: float = 1.0
+    url_scraping_delay: float = 2.0
+    rotation_enabled: bool = True
+    proxies: List[str] = field(default_factory=list)
     
     # AI settings
     enable_ai_descriptions: bool = True
@@ -197,6 +200,30 @@ class AdvancedJobScraper:
         )
         self.setup_logging(self.config.log_level)
         self.setup_cache()
+
+    def _get_random_header(self) -> Dict[str, str]:
+        """Generate random User-Agent headers to avoid detection"""
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15'
+        ]
+        
+        return {
+            'User-Agent': random.choice(user_agents),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1'
+        }
 
     def setup_logging(self, log_level: int):
         """Setup advanced logging without affecting global config"""
@@ -497,6 +524,12 @@ class AdvancedJobScraper:
                    min_description_length: int = 100) -> List[Dict[str, Any]]:
         """Enrich jobs with additional metadata and enhanced descriptions"""
         enriched_jobs = []
+        
+        # Calculate dynamic delay based on number of jobs
+        # More jobs = slightly faster per job to keep total time reasonable, but never below safe minimum
+        base_delay = self.config.url_scraping_delay
+        if len(jobs) > 10:
+             base_delay = max(0.5, base_delay * 0.8)
 
         for job in tqdm(jobs, desc="Enriching jobs", unit="job"):
             try:
@@ -510,6 +543,10 @@ class AdvancedJobScraper:
                         job['description_source'] = 'original'
                 else:
                     job['description_source'] = 'original'
+                
+                # Polite delay between requests
+                if enable_url_scraping and job.get('url') and job['url'] != 'N/A':
+                    time.sleep(base_delay)
 
                 # If description is still insufficient and AI descriptions are enabled, try AI enhancement
                 if enable_ai_descriptions and len(job.get('description', '')) < min_description_length:
@@ -547,17 +584,28 @@ class AdvancedJobScraper:
         self.logger.info(f"Enriched {len(enriched_jobs)} jobs with metadata")
         return enriched_jobs
 
+    @retry_with_backoff(max_retries=3, base_delay=2.0, exceptions=(requests.exceptions.RequestException,))
     def scrape_full_job_description(self, url: str) -> Optional[str]:
         """Scrape full job description from job posting URL with rate limiting"""
         if not url or url == 'N/A':
             return None
 
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+            if self.config.rotation_enabled:
+                 headers = self._get_random_header()
+            else:
+                 headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                 }
 
             response = requests.get(url, headers=headers, timeout=10)
+            
+            # Handle rate limiting specifically
+            if response.status_code == 429:
+                self.logger.warning(f"Rate limit hit for {url}. Waiting longer...")
+                time.sleep(5) # Extra penalty wait
+                response.raise_for_status() # Trigger retry
+                
             response.raise_for_status()
 
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -877,6 +925,11 @@ class AdvancedJobScraper:
             'site_name': scrape_params.get('site_name', self.config.default_sites),
             'country_indeed': scrape_params.get('country_indeed', self.config.default_country),
         }
+        
+        # Add proxies if configured
+        if self.config.proxies:
+            params['proxies'] = self.config.proxies
+            self.logger.info(f" Using {len(self.config.proxies)} proxies for scraping")
 
         try:
             # Check if jobspy is available
