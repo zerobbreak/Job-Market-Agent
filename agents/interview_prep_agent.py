@@ -17,7 +17,7 @@ logging.getLogger('agno').setLevel(logging.WARNING)
 # Interview Preparation Coach
 interview_prep_agent = Agent(
     name="Interview Intelligence Coach",
-    model=Gemini(id="gemini-1.5-flash-001"),
+    model=Gemini(id="gemini-1.5-pro"),
     instructions="""Predict interview questions and provide comprehensive preparation:
 
     QUESTION CATEGORIES:

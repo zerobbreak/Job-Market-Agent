@@ -22,7 +22,7 @@ if 'GEMINI_API_KEY' in os.environ:
 # Create Application Writer Agent
 application_writer = Agent(
     name="Application Writer",
-    model=Gemini(id="gemini-1.5-flash-001"),
+    model=Gemini(id="gemini-1.5-pro"),
     instructions="""You are the Application Writer, creating optimized job application packages.
 
     YOUR CAPABILITIES:
