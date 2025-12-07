@@ -32,6 +32,7 @@ from agents import (
 
 # Import utilities
 from utils import memory, AdvancedJobScraper, CVTailoringEngine, ApplicationTracker
+from utils.scraping import extract_skills_from_description
 from utils.ai_retries import retry_ai_call
 
 # Configure logging
@@ -132,7 +133,19 @@ class JobApplicationPipeline:
         except Exception as e:
             logger.error(f"Error building profile: {e}")
             print(f"✗ Error building profile: {e}")
-            raise e
+            # Fallback: build a minimal profile from CV content without AI
+            skills = extract_skills_from_description(cv_content)
+            fallback_profile = {
+                "skills": skills,
+                "experience_level": "N/A",
+                "education": "",
+                "strengths": [],
+                "career_goals": ""
+            }
+            self.profile = fallback_profile
+            self.cv_engine = CVTailoringEngine(cv_content, self.profile)
+            print("✓ Fallback profile built from CV content")
+            return self.profile
     
     def search_jobs(self, query, location, max_results):
         """Search for jobs using the scraper"""

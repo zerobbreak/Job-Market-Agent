@@ -67,6 +67,7 @@ class ScraperConfig:
     max_requests_per_minute: int = 10
     url_scraping_delay: float = 2.0
     rotation_enabled: bool = True
+    safe_mode: bool = False
     proxies: List[str] = field(default_factory=list)
     
     # AI settings
@@ -527,9 +528,12 @@ class AdvancedJobScraper:
         
         # Calculate dynamic delay based on number of jobs
         # More jobs = slightly faster per job to keep total time reasonable, but never below safe minimum
-        base_delay = self.config.url_scraping_delay
         if len(jobs) > 10:
              base_delay = max(0.5, base_delay * 0.8)
+        
+        # In safe mode, triple the delay
+        if self.config.safe_mode:
+            base_delay *= 3.0
 
         for job in tqdm(jobs, desc="Enriching jobs", unit="job"):
             try:
@@ -880,6 +884,11 @@ class AdvancedJobScraper:
         # Extract required arguments or use defaults
         search_term = kwargs.pop('search_term', 'Python Developer')
         location = kwargs.pop('location', 'South Africa')
+        safe_mode = kwargs.pop('safe_mode', False)
+        
+        # Update config if safe_mode is requested
+        if safe_mode:
+            self.config.safe_mode = True
         
         return self.scrape_with_advanced_features(
             search_term=search_term,
@@ -935,10 +944,19 @@ class AdvancedJobScraper:
             # Check if jobspy is available
             if not JOBSPY_AVAILABLE:
                 self.logger.error("jobspy is not installed. Cannot scrape jobs.")
-                raise ImportError("jobspy package is required for job scraping. Please install it with: pip install git+https://github.com/engineerjoe440/jobspy.git")
+                raise ImportError("jobspy package is required for job scraping. Please install it with: pip install python-jobspy")
             
             # Scrape jobs using jobspy
-            jobs_df = scrape_jobs(**params)
+            # In safe mode, we can try to slow down via proxies or just be aware it might fail
+            try:
+                jobs_df = scrape_jobs(**params)
+            except Exception as e:
+                # Catch 429s specifically if they bubble up from jobspy
+                if "429" in str(e):
+                    self.logger.warning("Captured 429 error from jobspy. Engaging emergency cooldown...")
+                    time.sleep(30) # Emergency cooldown
+                    return []
+                raise e
 
             if jobs_df is None or jobs_df.empty:
                 self.logger.warning("  No jobs returned from scraping")

@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 class MemoryStore:
     def __init__(self, persist_directory: str = "./chroma_db"):
         """Initialize ChromaDB client"""
-        self.client = chromadb.PersistentClient(path=persist_directory)
+        self.client = chromadb.PersistentClient(
+            path=persist_directory,
+            settings=Settings(anonymized_telemetry=False)
+        )
         
         # Create or get collections
         self.jobs_collection = self.client.get_or_create_collection(

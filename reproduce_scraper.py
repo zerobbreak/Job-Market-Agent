@@ -23,7 +23,8 @@ try:
             search_term="Python", 
             location="South Africa", 
             results_wanted=1,
-            site_name=["indeed", "linkedin", "google", "glassdoor", "zip_recruiter"] # Try all supported sites
+            site_name=["indeed", "linkedin", "google", "glassdoor", "zip_recruiter"],
+            safe_mode=True # Enable safe mode for testing
         )
         print(f"✅ Scrape returned {len(jobs)} jobs")
     except Exception as e:

@@ -17,11 +17,10 @@ def is_rate_limit_error(exception):
     return "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str or "too many requests" in error_str
 
 # Reusable decorator for AI calls
-# Waits 15s, then 30s, then 60s, etc. (up to 60s max delay)
-# Retries 5 times total
+# Faster backoff to avoid long request blocks; retries up to 3 times
 retry_ai_call = retry(
     retry=retry_if_exception(is_rate_limit_error),
-    wait=wait_exponential(multiplier=2, min=15, max=60),
-    stop=stop_after_attempt(10),
+    wait=wait_exponential(multiplier=1, min=5, max=30),
+    stop=stop_after_attempt(3),
     before_sleep=before_sleep_log(logger, logging.WARNING)
 )

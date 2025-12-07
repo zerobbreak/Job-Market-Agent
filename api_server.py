@@ -255,7 +255,6 @@ def get_applications():
 
 @app.route('/api/analyze-cv', methods=['POST'])
 @login_required
-@retry_ai_call
 def analyze_cv():
     """Analyze uploaded CV and build candidate profile"""
     try:

@@ -195,3 +195,4 @@ VITE_APPWRITE_DATABASE_ID=job-market-db
 **Need more help?** Check the browser console for specific error messages!
 
 
+
