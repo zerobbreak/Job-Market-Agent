@@ -22,6 +22,6 @@ def is_rate_limit_error(exception):
 retry_ai_call = retry(
     retry=retry_if_exception(is_rate_limit_error),
     wait=wait_exponential(multiplier=2, min=15, max=60),
-    stop=stop_after_attempt(5),
+    stop=stop_after_attempt(10),
     before_sleep=before_sleep_log(logger, logging.WARNING)
 )
