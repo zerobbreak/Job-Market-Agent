@@ -43,8 +43,11 @@ interface Application {
   id: string
   jobTitle: string
   company: string
+  jobUrl?: string
+  location?: string
   status: 'pending' | 'applied' | 'interview' | 'rejected'
   appliedDate: string
+  files?: { cv: string, cover_letter: string, interview_prep?: string }
 }
 
 type UploadStep = 'upload' | 'analyzing' | 'profile' | 'matching' | 'results'
@@ -65,6 +68,7 @@ function App() {
   // New state for Apply with AI
   const [applying, setApplying] = useState(false)
   const [generatedFiles, setGeneratedFiles] = useState<{ cv: string, cover_letter: string, interview_prep?: string } | null>(null)
+  const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
 
   // Manual search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -223,7 +227,8 @@ function App() {
           jobTitle: job.title,
           company: job.company,
           status: 'applied',
-          appliedDate: new Date().toISOString().split('T')[0]
+          appliedDate: new Date().toISOString().split('T')[0],
+          files: result.files
         };
         setApplications([...applications, newApplication]);
 
@@ -348,7 +353,7 @@ function App() {
               {generatedFiles && (
                 <>
                   <a
-                    href={`http://localhost:8000${generatedFiles.cv}`}
+                    href={`${API_ORIGIN}${generatedFiles.cv}`}
                     download
                     className="flex items-center justify-between p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
                   >
@@ -360,7 +365,7 @@ function App() {
                   </a>
 
                   <a
-                    href={`http://localhost:8000${generatedFiles.cover_letter}`}
+                    href={`${API_ORIGIN}${generatedFiles.cover_letter}`}
                     download
                     className="flex items-center justify-between p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
                   >
@@ -373,7 +378,7 @@ function App() {
 
                   {generatedFiles.interview_prep && (
                     <a
-                      href={`http://localhost:8000${generatedFiles.interview_prep}`}
+                      href={`${API_ORIGIN}${generatedFiles.interview_prep}`}
                       download
                       className="flex items-center justify-between p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
                     >
@@ -736,7 +741,7 @@ function App() {
                       <div className="flex justify-between items-start">
                         <div>
                           <CardTitle>{application.jobTitle}</CardTitle>
-                          <CardDescription>{application.company}</CardDescription>
+                          <CardDescription>{application.company}{application.location ? ` • ${application.location}` : ''}</CardDescription>
                           <p className="text-sm text-muted-foreground mt-1">
                             Applied on {application.appliedDate}
                           </p>
@@ -746,6 +751,62 @@ function App() {
                         </Badge>
                       </div>
                     </CardHeader>
+                    {application.files && (
+                      <CardContent>
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <a
+                            href={`${API_ORIGIN}${application.files.cv}`}
+                            download
+                            className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                          >
+                            <div className="flex items-center">
+                              <FileText className="h-5 w-5 text-blue-600 mr-3" />
+                              <span className="font-medium text-blue-900">Tailored CV</span>
+                            </div>
+                            <Upload className="h-4 w-4 text-blue-500 rotate-180" />
+                          </a>
+                          <a
+                            href={`${API_ORIGIN}${application.files.cover_letter}`}
+                            download
+                            className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                          >
+                            <div className="flex items-center">
+                              <FileText className="h-5 w-5 text-purple-600 mr-3" />
+                              <span className="font-medium text-purple-900">Cover Letter</span>
+                            </div>
+                            <Upload className="h-4 w-4 text-purple-500 rotate-180" />
+                          </a>
+                          {application.files.interview_prep && (
+                            <a
+                              href={`${API_ORIGIN}${application.files.interview_prep}`}
+                              download
+                              className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                            >
+                              <div className="flex items-center">
+                                <Sparkles className="h-5 w-5 text-green-600 mr-3" />
+                                <span className="font-medium text-green-900">Interview Prep</span>
+                              </div>
+                              <Upload className="h-4 w-4 text-green-500 rotate-180" />
+                            </a>
+                          )}
+                        </div>
+                      </CardContent>
+                    )}
+                    <CardFooter className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => application.jobUrl ? window.open(application.jobUrl, '_blank') : undefined}
+                      >
+                        View Job
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => handleApply({ id: application.id, title: application.jobTitle, company: application.company, location: application.location || '', description: '', url: application.jobUrl || '' })}
+                      >
+                        Apply Again
+                      </Button>
+                    </CardFooter>
                   </Card>
                 ))}
               </div>
