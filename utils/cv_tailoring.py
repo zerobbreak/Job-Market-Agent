@@ -72,30 +72,44 @@ class CVTailoringEngine:
             6. Add relevant projects/coursework if needed
             
             Return the response in strict JSON format with the following structure:
-            {{
+            {
                 "cv_content": "The full markdown content of the CV",
-                "ats_analysis": "A brief analysis of the ATS score and improvements made"
-            }}
+                "ats_analysis": "A brief analysis of the ATS score and improvements made",
+                "ats_score": 0
+            }
             """)
 
             # Parse the response
             try:
                 import json
                 content = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
-                # Clean up potential markdown code blocks
                 if "```json" in content:
                     content = content.split("```json")[1].split("```")[0].strip()
-                elif "```" in content:
-                    content = content.split("```")[1].split("```")[0].strip()
+                elif "{" in content and "}" in content:
+                    # Attempt to extract JSON object even without code fences
+                    start = content.find("{")
+                    end = content.rfind("}") + 1
+                    content = content[start:end]
                 
                 parsed_result = json.loads(content)
-                cv_content = parsed_result.get('cv_content', content)
+                cv_content = (
+                    parsed_result.get('cv_content')
+                    or parsed_result.get('optimized_cv')
+                    or parsed_result.get('cv_markdown')
+                    or parsed_result.get('cv')
+                    or content
+                )
                 ats_analysis = parsed_result.get('ats_analysis', "Analysis not available")
+                ats_score = parsed_result.get('ats_score')
             except Exception as e:
                 print(f"Error parsing AI response: {e}")
                 # Fallback: treat the whole response as CV content if parsing fails
                 cv_content = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
                 ats_analysis = "Parsing failed"
+                ats_score = None
+
+            # Sanitize markdown to remove artifacts
+            cv_content = self._sanitize_markdown(cv_content)
 
             # Generate version ID
             company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
@@ -105,12 +119,14 @@ class CVTailoringEngine:
             self.cv_versions[version_id] = {
                 'cv_content': cv_content,
                 'ats_analysis': ats_analysis,
+                'ats_score': ats_score,
                 'job_match_score': job_posting.get('match_score', 0),
                 'job_keywords': job_keywords,
                 'created_at': datetime.now(),
                 'job_url': job_posting.get('url', ''),
                 'job_title': job_posting.get('title', ''),
-                'company': job_posting.get('company', '')
+                'company': job_posting.get('company', ''),
+                'template_type': template_type.lower()
             }
 
             return self.cv_versions[version_id]['cv_content'], self.cv_versions[version_id]['ats_analysis']
@@ -210,12 +226,7 @@ class CVTailoringEngine:
         # Or better, let's update generate_tailored_cv to store 'template_type' in cv_data
         # But for now, let's just use a heuristic or default.
         
-        template_type = 'professional' # Default
-        title = cv_data.get('job_title', '').lower()
-        if any(x in title for x in ['developer', 'engineer', 'programmer', 'data', 'tech', 'software']):
-            template_type = 'modern'
-        elif any(x in title for x in ['professor', 'researcher', 'lecturer', 'academic', 'scientist']):
-            template_type = 'academic'
+        template_type = cv_data.get('template_type', 'professional')
             
         generator = PDFGenerator()
         success = generator.generate_pdf(
@@ -296,7 +307,7 @@ class CVTailoringEngine:
 
         return comparison
 
-    def generate_cover_letter(self, job_posting, tailored_cv=None):
+    def generate_cover_letter(self, job_posting, tailored_cv=None, output_dir='tailored_cvs'):
         """
         Create job-specific cover letter
         """
@@ -307,13 +318,27 @@ class CVTailoringEngine:
 
             cover_letter = application_writer.run(prompt)
             content = self._extract_content(cover_letter)
+            # Attempt to parse JSON and extract 'cover_letter'
+            try:
+                import json
+                raw = content
+                if "```json" in raw:
+                    raw = raw.split("```json")[1].split("```")[0].strip()
+                elif "{" in raw and "}" in raw:
+                    start = raw.find("{")
+                    end = raw.rfind("}") + 1
+                    raw = raw[start:end]
+                parsed = json.loads(raw)
+                content = parsed.get('cover_letter', content)
+            except Exception:
+                pass
+            content = self._sanitize_markdown(content)
             
             # Save as PDF
             company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
             role_name = job_posting.get('title', 'Position').replace(' ', '_').replace('/', '_')
             version_id = f"CL_{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
             
-            output_dir = 'tailored_cvs'
             os.makedirs(output_dir, exist_ok=True)
             pdf_path = f"{output_dir}/{version_id}.pdf"
             
@@ -360,6 +385,35 @@ class CVTailoringEngine:
         Extract content from agent response
         """
         return response.content if hasattr(response, 'content') else str(response)
+
+    def _sanitize_markdown(self, text: str) -> str:
+        """
+        Clean up common artifacts (JSON wrappers, placeholders) and ensure readable markdown.
+        """
+        if not text:
+            return ""
+        # Strip surrounding backticks/code fences
+        if text.strip().startswith("```"):
+            try:
+                inner = text.strip().split("```", 1)[1]
+                # Remove potential language tag
+                inner = inner.split("\n", 1)[1] if "\n" in inner else inner
+                # Remove trailing fence
+                if "```" in inner:
+                    inner = inner.rsplit("```", 1)[0]
+                text = inner
+            except Exception:
+                pass
+        # Remove obvious placeholder markers
+        import re
+        text = re.sub(r"\(placeholder\)", "", text)
+        text = re.sub(r"\[placeholder\]", "", text)
+        # Collapse excessive backslashes
+        text = text.replace("\\n", "\n").replace("\\t", "\t")
+        # Remove leading/trailing quotes if present
+        if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+            text = text[1:-1]
+        return text.strip()
 
     def _research_company(self, company_name):
         """

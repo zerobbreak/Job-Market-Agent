@@ -91,6 +91,12 @@ application_writer = Agent(
     
     OUTPUT FORMAT:
     
+    IMPORTANT:
+    - Do NOT include any placeholders like '(placeholder)' or '[placeholder]'.
+    - Do NOT wrap outputs in Markdown code fences.
+    - All text MUST be fully written, polished, and ready-to-send.
+    - Use professional HR tone with quantified achievements and clear section headings.
+
     For CV optimization:
     ```json
     {

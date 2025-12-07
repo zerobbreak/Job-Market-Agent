@@ -183,52 +183,86 @@ class JobApplicationPipeline:
         """Generate optimized CV (PDF) and cover letter for a specific job"""
         job_title = job.get('title', 'Unknown Position')
         company = job.get('company', 'Unknown Company')
-        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+        app_dir_name = f"{company.replace(' ', '_').replace('/', '_')}_{job_title.replace(' ', '_').replace('/', '_')}_{timestamp}"
+        app_dir = self.output_dir / app_dir_name
+        app_dir.mkdir(parents=True, exist_ok=True)
+
         logger.info(f"Generating application for: {job_title} at {company}")
         print(f"\n✍️  Generating application for: {job_title} at {company}")
-        
+
         try:
-            # 1. Generate Tailored CV Content & PDF
-            # The engine handles template selection and PDF generation internally
             cv_content, ats_analysis = self.cv_engine.generate_tailored_cv(job, template_type)
-            
-            # Get the version ID that was just created (it's the last key)
             version_id = list(self.cv_engine.cv_versions.keys())[-1]
-            
-            # Export PDF
-            pdf_path = self.cv_engine.export_cv(version_id, format='pdf', output_dir=str(self.output_dir))
-            print(f"✓ CV generated: {pdf_path}")
-            
-            # 2. Generate Cover Letter
-            cover_letter_result = self.cv_engine.generate_cover_letter(job, tailored_cv=cv_content)
-            
-            # Handle Cover Letter (PDF path or Text content)
-            if cover_letter_result.endswith('.pdf') and os.path.exists(cover_letter_result):
-                cl_path = Path(cover_letter_result)
-                print(f"✓ Cover Letter generated: {cl_path}")
+            cv_data = self.cv_engine.get_cv_version(version_id) or {}
+
+            pdf_path = self.cv_engine.export_cv(version_id, format='pdf', output_dir=str(app_dir))
+            final_cv_path = app_dir / 'cv.pdf'
+            try:
+                os.replace(pdf_path, final_cv_path)
+            except Exception:
+                final_cv_path = Path(pdf_path)
+            print(f"✓ CV generated: {final_cv_path}")
+
+            cover_letter_result = self.cv_engine.generate_cover_letter(job, tailored_cv=cv_content, output_dir=str(app_dir))
+            if isinstance(cover_letter_result, str) and cover_letter_result.endswith('.pdf') and os.path.exists(cover_letter_result):
+                cl_temp = Path(cover_letter_result)
+                final_cl_path = app_dir / 'cover_letter.pdf'
+                try:
+                    os.replace(cl_temp, final_cl_path)
+                except Exception:
+                    final_cl_path = cl_temp
+                print(f"✓ Cover Letter generated: {final_cl_path}")
             else:
-                # Fallback to text saving
-                cl_filename = f"Cover_Letter_{company.replace(' ', '_')}_{job_title.replace(' ', '_')}.txt"
-                cl_path = self.output_dir / cl_filename
-                with open(cl_path, 'w', encoding='utf-8') as f:
-                    f.write(cover_letter_result)
-                print(f"✓ Cover Letter saved: {cl_path}")
-            
-            # 3. Track Application
+                final_cl_path = app_dir / 'cover_letter.txt'
+                with open(final_cl_path, 'w', encoding='utf-8') as f:
+                    f.write(cover_letter_result if isinstance(cover_letter_result, str) else str(cover_letter_result))
+                print(f"✓ Cover Letter saved: {final_cl_path}")
+
+            metadata = {
+                'job': {
+                    'title': job_title,
+                    'company': company,
+                    'location': job.get('location', ''),
+                    'url': job.get('url', '')
+                },
+                'cv': {
+                    'version_id': version_id,
+                    'ats_analysis': ats_analysis,
+                    'ats_score': cv_data.get('ats_score'),
+                    'job_keywords': cv_data.get('job_keywords')
+                },
+                'relevance_score': job.get('relevance_score'),
+                'paths': {
+                    'cv': str(final_cv_path),
+                    'cover_letter': str(final_cl_path)
+                }
+            }
+            metadata_path = app_dir / 'metadata.json'
+            with open(metadata_path, 'w', encoding='utf-8') as mf:
+                json.dump(metadata, mf, ensure_ascii=False, indent=2, default=str)
+
             app_id = self.tracker.add_application(
                 job_data=job,
-                cv_path=str(pdf_path),
-                cover_letter_path=str(cl_path)
+                cv_path=str(final_cv_path),
+                cover_letter_path=str(final_cl_path),
+                ats_score=cv_data.get('ats_score'),
+                metadata_path=str(metadata_path),
+                app_dir=str(app_dir)
             )
-            
+
             return {
                 'job_title': job_title,
                 'company': company,
-                'cv_path': str(pdf_path),
-                'cover_letter_path': str(cl_path),
+                'cv_path': str(final_cv_path),
+                'cover_letter_path': str(final_cl_path),
+                'app_dir': str(app_dir),
+                'metadata_path': str(metadata_path),
+                'ats_score': cv_data.get('ats_score'),
+                'ats_analysis': ats_analysis,
                 'app_id': app_id
             }
-            
+
         except Exception as e:
             logger.error(f"Error generating application: {e}")
             print(f"✗ Error generating application: {e}")
@@ -269,7 +303,7 @@ class JobApplicationPipeline:
                 time.sleep(2)
                 
     @retry_ai_call
-    def prepare_interview(self, job):
+    def prepare_interview(self, job, output_dir=None):
         """Generate interview preparation materials for a job"""
         job_title = job.get('title', 'Unknown Position')
         company = job.get('company', 'Unknown Company')
@@ -295,8 +329,9 @@ class JobApplicationPipeline:
             """)
             
             # Save interview prep to file
-            prep_filename = f"Interview_Prep_{company.replace(' ', '_')}_{job_title.replace(' ', '_')}.txt"
-            prep_path = self.output_dir / prep_filename
+            out_dir = Path(output_dir) if output_dir else self.output_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            prep_path = out_dir / 'interview_prep.txt'
             with open(prep_path, 'w', encoding='utf-8') as f:
                 f.write(response.content)
             

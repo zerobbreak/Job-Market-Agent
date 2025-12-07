@@ -182,7 +182,7 @@ def apply_job():
                 return jsonify({'success': False, 'error': 'Failed to generate application materials'})
             
             # Generate interview prep
-            interview_prep_path = pipeline.prepare_interview(job_data)
+            interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
             
             # --- Appwrite Integration: Save Application ---
             try:
@@ -207,7 +207,8 @@ def apply_job():
                         'files': {
                             'cv': f"/api/download?path={app_result['cv_path']}",
                             'cover_letter': f"/api/download?path={app_result['cover_letter_path']}",
-                            'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None
+                            'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None,
+                            'metadata': f"/api/download?path={app_result.get('metadata_path')}"
                         }
                     }
                 )
@@ -217,10 +218,15 @@ def apply_job():
             return jsonify({
                 'success': True,
                 'message': 'Application generated successfully',
+                'ats': {
+                    'score': app_result.get('ats_score'),
+                    'analysis': app_result.get('ats_analysis')
+                },
                 'files': {
                     'cv': f"/api/download?path={app_result['cv_path']}",
                     'cover_letter': f"/api/download?path={app_result['cover_letter_path']}",
-                    'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None
+                    'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None,
+                    'metadata': f"/api/download?path={app_result.get('metadata_path')}"
                 }
             })
 

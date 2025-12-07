@@ -16,13 +16,8 @@ class ApplicationTracker:
         self._init_db()
 
     def _init_db(self):
-        """
-        Initialize the database schema if it doesn't exist.
-        """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        
-        # Create applications table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS applications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,11 +34,21 @@ class ApplicationTracker:
             match_score INTEGER
         )
         ''')
-        
+        try:
+            cursor.execute("PRAGMA table_info(applications)")
+            cols = {row[1] for row in cursor.fetchall()}
+            if 'ats_score' not in cols:
+                cursor.execute("ALTER TABLE applications ADD COLUMN ats_score INTEGER")
+            if 'metadata_path' not in cols:
+                cursor.execute("ALTER TABLE applications ADD COLUMN metadata_path TEXT")
+            if 'app_dir' not in cols:
+                cursor.execute("ALTER TABLE applications ADD COLUMN app_dir TEXT")
+        except Exception:
+            pass
         conn.commit()
         conn.close()
 
-    def add_application(self, job_data: Dict[str, Any], cv_path: str, cover_letter_path: Optional[str] = None) -> int:
+    def add_application(self, job_data: Dict[str, Any], cv_path: str, cover_letter_path: Optional[str] = None, ats_score: Optional[int] = None, metadata_path: Optional[str] = None, app_dir: Optional[str] = None) -> int:
         """
         Add a new application record.
         
@@ -63,14 +68,14 @@ class ApplicationTracker:
         
         cursor.execute('''
         INSERT INTO applications (
-            company, role, job_url, location, status, 
-            date_created, date_updated, cv_path, cover_letter_path, 
-            job_description, match_score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            company, role, job_url, location, status,
+            date_created, date_updated, cv_path, cover_letter_path,
+            job_description, match_score, ats_score, metadata_path, app_dir
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             job_data.get('company', 'Unknown'),
             job_data.get('title', 'Unknown'),
-            job_data.get('job_url', ''),
+            job_data.get('url', ''),
             job_data.get('location', ''),
             'generated',
             now,
@@ -78,7 +83,10 @@ class ApplicationTracker:
             cv_path,
             cover_letter_path,
             job_data.get('description', ''),
-            job_data.get('match_score', 0)
+            job_data.get('relevance_score', 0),
+            ats_score,
+            metadata_path,
+            app_dir
         ))
         
         app_id = cursor.lastrowid
