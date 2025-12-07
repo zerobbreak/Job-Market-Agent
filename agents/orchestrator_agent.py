@@ -97,7 +97,7 @@ def get_market_insights(query: str) -> str:
 # Create the Orchestrator Agent
 orchestrator_agent = Agent(
     name="Career Concierge",
-    model=Gemini(id="gemini-2.0-flash"),
+    model=Gemini(id="gemini-1.5-flash"),
     instructions="""You are the Career Concierge, a personal career manager for the user.
     Your goal is to help the user navigate their career journey by coordinating a team of specialist agents.
 
