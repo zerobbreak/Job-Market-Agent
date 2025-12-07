@@ -157,7 +157,8 @@ class JobApplicationPipeline:
                 site_name=['linkedin', 'indeed'],
                 search_term=query,
                 location=location,
-                results_wanted=max_results
+                results_wanted=max_results,
+                country_indeed=location
             )
             
             if jobs:

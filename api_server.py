@@ -452,9 +452,24 @@ def match_jobs():
             location=location,
             max_results=max_results
         )
-        
+
+        # Fallback: broaden query if no results
         if not jobs:
-            return jsonify({'success': True, 'matches': []})
+            fallback_queries = [
+                'Python Developer',
+                'Software Engineer',
+                'Software Developer'
+            ]
+            for fq in fallback_queries:
+                jobs = pipeline.search_jobs(
+                    query=fq,
+                    location=location,
+                    max_results=max_results
+                )
+                if jobs:
+                    break
+            if not jobs:
+                return jsonify({'success': True, 'matches': []})
         
         print(f"Found {len(jobs)} jobs, scoring matches...")
         
