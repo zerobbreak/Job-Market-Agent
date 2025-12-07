@@ -154,6 +154,26 @@ def apply_job():
             
             pipeline = pipeline_store[session_id]
             
+            # Ensure pipeline has CV engine initialized
+            try:
+                if not getattr(pipeline, 'cv_engine', None):
+                    # Try to use previously analyzed profile and CV if available
+                    profile_info = profile_store.get(session_id)
+                    if profile_info and profile_info.get('cv_content'):
+                        from utils.cv_tailoring import CVTailoringEngine
+                        pipeline.cv_engine = CVTailoringEngine(
+                            profile_info['cv_content'],
+                            profile_info.get('profile_data', {})
+                        )
+                        pipeline.profile = profile_info.get('profile_data', {})
+                    else:
+                        # Load default CV and build a profile (has offline fallback)
+                        cv_content = pipeline.load_cv()
+                        pipeline.build_profile(cv_content)
+            except Exception as init_err:
+                print(f"Initialization error for Apply with AI: {init_err}")
+                return jsonify({'success': False, 'error': 'Failed to initialize application pipeline'}), 500
+
             # Generate application materials
             print(f"Generating application for {job_data.get('company')} using session {session_id}")
             app_result = pipeline.generate_application_package(job_data)
@@ -181,8 +201,14 @@ def apply_job():
                         'userId': g.user_id,
                         'jobTitle': job_data.get('title', 'Unknown'),
                         'company': job_data.get('company', 'Unknown'),
+                        'jobUrl': job_data.get('url', ''),
+                        'location': job_data.get('location', ''),
                         'status': 'applied',
-                        # 'files': ... (store file IDs)
+                        'files': {
+                            'cv': f"/api/download?path={app_result['cv_path']}",
+                            'cover_letter': f"/api/download?path={app_result['cover_letter_path']}",
+                            'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None
+                        }
                     }
                 )
             except Exception as e:
@@ -241,9 +267,11 @@ def get_applications():
                 'id': doc['$id'],
                 'jobTitle': doc.get('jobTitle', 'Unknown Position'),
                 'company': doc.get('company', 'Unknown Company'),
+                'jobUrl': doc.get('jobUrl', ''),
+                'location': doc.get('location', ''),
                 'status': doc.get('status', 'applied'),
                 'appliedDate': doc.get('$createdAt', '').split('T')[0], # Format date
-                # 'files': ... 
+                'files': doc.get('files')
             })
             
         return jsonify({'applications': applications})
