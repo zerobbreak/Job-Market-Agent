@@ -32,6 +32,7 @@ from agents import (
 
 # Import utilities
 from utils import memory, AdvancedJobScraper, CVTailoringEngine, ApplicationTracker
+from utils.ai_retries import retry_ai_call
 
 # Configure logging
 logging.basicConfig(
@@ -96,6 +97,7 @@ class JobApplicationPipeline:
             print(f"✓ CV loaded ({len(content)} characters)")
             return content
     
+    @retry_ai_call
     def build_profile(self, cv_content):
         """Build student profile using Profile Builder agent"""
         logger.info("Building candidate profile...")
@@ -252,6 +254,7 @@ class JobApplicationPipeline:
             if i < len(jobs) - 1:
                 time.sleep(2)
                 
+    @retry_ai_call
     def prepare_interview(self, job):
         """Generate interview preparation materials for a job"""
         job_title = job.get('title', 'Unknown Position')

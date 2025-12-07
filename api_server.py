@@ -15,6 +15,7 @@ import json
 import re
 from werkzeug.utils import secure_filename
 from main import JobApplicationPipeline
+from utils.ai_retries import retry_ai_call
 from appwrite.client import Client
 from appwrite.services.account import Account
 from appwrite.services.databases import Databases
@@ -254,6 +255,7 @@ def get_applications():
 
 @app.route('/api/analyze-cv', methods=['POST'])
 @login_required
+@retry_ai_call
 def analyze_cv():
     """Analyze uploaded CV and build candidate profile"""
     try:
