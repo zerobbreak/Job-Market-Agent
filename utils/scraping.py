@@ -879,6 +879,30 @@ class AdvancedJobScraper:
         except Exception as e:
             self.logger.warning(f"Error saving cache: {e}")
 
+    def load_recent_cache(self, location_hint: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+        """Load most recent cached jobs, optionally filtered by location hint"""
+        if not os.path.exists(self.cache_dir):
+            return None
+        try:
+            files = [f for f in os.listdir(self.cache_dir) if f.endswith('.json')]
+            # Prefer files that include the location hint in filename
+            if location_hint:
+                loc_files = [f for f in files if location_hint.lower() in f.lower()]
+                files = loc_files or files
+            # Sort by modified time, newest first
+            files.sort(key=lambda f: os.path.getmtime(os.path.join(self.cache_dir, f)), reverse=True)
+            for fname in files:
+                path = os.path.join(self.cache_dir, fname)
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list) and len(data) > 0:
+                        self.logger.info(f" Using recent cached jobs from {fname}")
+                        self.metrics.total_cache_hits += 1
+                        return data
+        except Exception as e:
+            self.logger.warning(f"Error loading recent cache: {e}")
+        return None
+
     def scrape_jobs(self, **kwargs) -> List[Dict[str, Any]]:
         """Wrapper for scrape_with_advanced_features to match expected interface"""
         # Extract required arguments or use defaults
@@ -960,6 +984,10 @@ class AdvancedJobScraper:
 
             if jobs_df is None or jobs_df.empty:
                 self.logger.warning("  No jobs returned from scraping")
+                # Try recent cache as fallback
+                recent = self.load_recent_cache(location_hint=location)
+                if recent:
+                    return recent
                 return []
 
             # Convert DataFrame to list of dictionaries with CORRECT column names
@@ -996,6 +1024,10 @@ class AdvancedJobScraper:
         except Exception as e:
             self.logger.error(f" Error during scraping: {e}")
             self.metrics.total_errors += 1
+            # Try recent cache as fallback
+            recent = self.load_recent_cache(location_hint=location)
+            if recent:
+                return recent
             return []
 
         if not raw_jobs:
