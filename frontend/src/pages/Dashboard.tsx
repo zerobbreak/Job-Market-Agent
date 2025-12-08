@@ -38,7 +38,7 @@ export default function Dashboard() {
   const [uploadStep, setUploadStep] = useState<UploadStep>('upload')
   // Profile state managed by OutletContext
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
-  const [loading, setLoading] = useState(false)
+  const [_loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
   
   // Filtering state for matches
