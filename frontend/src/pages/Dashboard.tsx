@@ -1,0 +1,518 @@
+import React, { useState, useEffect, Suspense } from 'react'
+import { Upload, Sparkles, CheckCircle, Award, Briefcase, FileText, TrendingUp, Target, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { useAuth } from '@/context/AuthContext'
+import { useToast } from '@/components/ui/toast'
+import { apiClient } from '@/utils/api'
+import { track } from '@/utils/analytics'
+import { useOutletContext } from 'react-router-dom'
+import type { OutletContextType } from '@/components/layout/RootLayout'
+
+// Redefine interfaces if not easily imported, or move to types file later.
+// Job interface matches MatchedResults internal type
+export interface Job {
+  id: string
+  title: string
+  company: string
+  location: string
+  description: string
+  url: string
+}
+
+interface MatchedJob {
+  job: Job
+  match_score: number
+  match_reasons: string[]
+}
+
+type UploadStep = 'upload' | 'analyzing' | 'profile' | 'matching' | 'results'
+
+export default function Dashboard() {
+  const { user } = useAuth()
+  const { profile, setProfile } = useOutletContext<OutletContextType>()
+  const toast = useToast()
+  
+  const [uploadStep, setUploadStep] = useState<UploadStep>('upload')
+  // Profile state managed by OutletContext
+  const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>('')
+  
+  // Filtering state for matches
+  const [minMatchScore, setMinMatchScore] = useState(0)
+  const [useDemoJobs, setUseDemoJobs] = useState(false)
+  const [location, setLocation] = useState('South Africa')
+  const [manualTitle, setManualTitle] = useState('')
+  const [manualDescription, setManualDescription] = useState('')
+
+  // Applying state
+  const [applying, setApplying] = useState(false)
+  const [generatedFiles, setGeneratedFiles] = useState<{ cv: string, cover_letter: string, interview_prep?: string } | null>(null)
+  const [generatedATS, setGeneratedATS] = useState<{ score?: number, analysis?: string } | null>(null)
+  const [applyAttempts, setApplyAttempts] = useState(0)
+  const [applyMaxAttempts, setApplyMaxAttempts] = useState(40)
+  const [currentApplyJobId, setCurrentApplyJobId] = useState<string | null>(null)
+  const [applyCancelled, setApplyCancelled] = useState(false)
+
+  const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
+  const MatchedResults = React.lazy(() => import('@/components/MatchedResults'))
+
+  useEffect(() => {
+    if (user && matchedJobs.length === 0) {
+      recoverMatches()
+    }
+  }, [user])
+
+  const recoverMatches = async () => {
+    try {
+      const response = await apiClient(`/matches/last?location=${encodeURIComponent(location)}`)
+      const data = await response.json()
+      if (data.success && Array.isArray(data.matches) && data.matches.length > 0) {
+        setMatchedJobs(data.matches)
+        setUploadStep('results')
+        // toast.show({ title: 'Resumed', description: 'Loaded your last matches', variant: 'success' })
+      }
+    } catch (e) {
+      console.error('Recover matches failed', e)
+    }
+  }
+
+  const handleCVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File is too large. Max 10MB.')
+      toast.show({ title: 'Upload failed', description: 'File is too large. Max 10MB.', variant: 'error' })
+      return
+    }
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    if (file.type && !allowed.includes(file.type)) {
+      setError('Invalid file type. Please upload PDF, DOC, or DOCX.')
+      toast.show({ title: 'Upload failed', description: 'Invalid file type. Use PDF, DOC, or DOCX.', variant: 'error' })
+      return
+    }
+
+    setError('')
+    setUploadStep('analyzing')
+    setLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('cv', file)
+      const response = await apiClient('/analyze-cv', { method: 'POST', body: formData })
+      const data = await response.json()
+
+      if (data.success) {
+        setProfile(data.profile)
+        setUploadStep('profile')
+        setTimeout(() => findMatches(), 1500)
+      } else {
+        setError(data.error || 'Failed to analyze CV')
+        setUploadStep('upload')
+      }
+    } catch (err) {
+      setError('Error uploading CV. Please try again.')
+      setUploadStep('upload')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const findMatches = async () => {
+    setUploadStep('matching')
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await apiClient('/match-jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+          location: location,
+          max_results: 20,
+          use_demo: useDemoJobs
+        }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setMatchedJobs(data.matches || [])
+        setUploadStep('results')
+        track('matches_search', { location, count: (data.matches || []).length, use_demo: useDemoJobs }, 'app')
+      } else {
+        setError(data.error || 'Failed to find matches')
+        setUploadStep('profile')
+      }
+    } catch (err) {
+      setError('Error finding job matches. Please try again.')
+      setUploadStep('profile')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApply = async (job: Job) => {
+    setApplying(true)
+    setError('')
+    setApplyCancelled(false)
+    setGeneratedFiles(null)
+    setGeneratedATS(null)
+
+    try {
+      const start = await apiClient('/apply-job', {
+        method: 'POST',
+        body: JSON.stringify({ job }),
+      })
+      const startData = await start.json()
+      if (!startData.success || !startData.job_id) {
+        setError(startData.error || 'Failed to start application')
+        setApplying(false)
+        return
+      }
+      const jobId = startData.job_id
+      setCurrentApplyJobId(jobId)
+
+      let attempts = 0
+      const maxAttempts = 40
+      setApplyMaxAttempts(maxAttempts)
+      const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
+      
+      while (attempts < maxAttempts) {
+        if (applyCancelled) break
+
+        const statusResp = await apiClient(`/apply-status?job_id=${jobId}`, { method: 'GET' })
+        const statusData = await statusResp.json()
+        
+        if (statusData.status === 'done' && statusData.files) {
+            setGeneratedFiles({
+            cv: statusData.files.cv,
+            cover_letter: statusData.files.cover_letter,
+            interview_prep: statusData.files.interview_prep
+          })
+          if (statusData.ats) {
+            setGeneratedATS({ score: statusData.ats.score, analysis: statusData.ats.analysis })
+          }
+          track('apply_complete', { jobId, title: job.title, company: job.company }, 'app')
+          break
+        }
+        if (statusData.status === 'error') {
+          setError(statusData.error || 'Application failed')
+          break
+        }
+        if (statusData.status === 'not_found') {
+          attempts += 1
+          await delay(1000)
+          continue
+        }
+        attempts += 1
+        setApplyAttempts(attempts)
+        const backoff = Math.min(1000 * Math.pow(1.3, attempts), 5000)
+        await delay(backoff)
+      }
+    } catch (error) {
+      console.error('Error applying to job:', error)
+      setError('Error submitting application. Please try again.')
+    } finally {
+      setApplying(false)
+      setCurrentApplyJobId(null)
+    }
+  }
+
+  const handleCancelApply = async () => {
+    try {
+      setApplyCancelled(true)
+      if (currentApplyJobId) {
+        await apiClient(`/apply-cancel?job_id=${currentApplyJobId}`, { method: 'POST' })
+      }
+      toast.show({ title: 'Cancelled', description: 'Application process cancelled', variant: 'error' })
+    } catch (e) {
+      console.error('Cancel apply failed', e)
+    }
+  }
+
+  const filteredMatchedJobs = matchedJobs.filter(match => match.match_score >= minMatchScore)
+
+  return (
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent">Dashboard</h1>
+          <p className="text-muted-foreground">Manage your job search and applications</p>
+        </div>
+        {uploadStep === 'results' && (
+             <Button onClick={() => setUploadStep('upload')} variant="outline">
+                <Upload className="mr-2 h-4 w-4" /> Upload New CV
+             </Button>
+        )}
+      </div>
+
+        {/* Error/Loading Banners */}
+        {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-fade-in">
+              {error}
+            </div>
+        )}
+        {applying && (
+            <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl flex items-center justify-between animate-fade-in p-6 shadow-lg shadow-blue-100/50">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 rounded-full">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                </div>
+                <div>
+                    <h3 className="font-semibold text-blue-900">Generating Application...</h3>
+                    <p className="text-sm text-blue-700">Tailoring your CV and writing a cover letter ({Math.min(100, Math.round((applyAttempts / applyMaxAttempts) * 100))}%)</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleCancelApply} className="hover:bg-blue-100 border-blue-300">
+                  Cancel
+              </Button>
+            </div>
+        )}
+
+      {/* Main Content Area */}
+      <div className="min-h-[500px]">
+        {/* Step 1: Upload */}
+        {uploadStep === 'upload' && (
+          <div className="text-center py-20 px-4 glass-panel rounded-2xl">
+            <div className="bg-gradient-to-br from-blue-500 to-purple-600 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-blue-500/20 animate-in zoom-in duration-500">
+              <Sparkles className="h-12 w-12 text-white" />
+            </div>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4 tracking-tight">
+              Find Your Perfect Job Match
+            </h2>
+            <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+              Upload your CV and let our AI analyze your skills, experience, and career goals to find the best job opportunities tailored for you.
+            </p>
+
+            <div className="max-w-xl mx-auto transform transition-all hover:scale-[1.02]">
+              <label className="flex flex-col items-center justify-center w-full h-72 border-2 border-dashed rounded-2xl cursor-pointer bg-white/50 hover:bg-blue-50/50 transition-all border-blue-200 hover:border-blue-400 group">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <div className="p-4 bg-blue-50 rounded-full mb-4 group-hover:bg-blue-100 transition-colors">
+                     <Upload className="w-10 h-10 text-blue-600" />
+                  </div>
+                  <p className="mb-2 text-xl font-semibold text-gray-700">
+                    Click to upload your CV
+                  </p>
+                  <p className="text-sm text-gray-500">PDF, DOC, or DOCX (Max 10MB)</p>
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx"
+                  onChange={handleCVUpload}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Analyzing */}
+        {uploadStep === 'analyzing' && (
+          <div className="text-center py-32 animate-fade-in">
+             <div className="relative w-24 h-24 mx-auto mb-8">
+                <div className="absolute inset-0 border-4 border-blue-100 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+                <Loader2 className="h-10 w-10 text-blue-600 absolute inset-0 m-auto animate-pulse" />
+             </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">Analyzing Your CV...</h3>
+            <p className="text-gray-600">Our AI is extracting your skills, experience, and strengths</p>
+          </div>
+        )}
+
+        {/* Step 3: Profile Review */}
+        {uploadStep === 'profile' && profile && (
+          <Card className="animate-fade-in overflow-hidden border-2 border-blue-100 shadow-xl">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 p-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                     <div className="p-3 bg-white rounded-xl shadow-sm">
+                        <CheckCircle className="h-8 w-8 text-green-500" />
+                     </div>
+                     <div>
+                        <CardTitle className="text-2xl">Profile Analyzed</CardTitle>
+                        <CardDescription>We found the following details from your CV</CardDescription>
+                     </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-8 p-8">
+              <div className="grid md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-lg">
+                    <Award className="h-5 w-5 mr-2 text-blue-500" />
+                    Skills & Expertise
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.skills.map((skill, idx) => (
+                      <Badge key={idx} variant="secondary" className="px-3 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100">{skill}</Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-lg">
+                    <Briefcase className="h-5 w-5 mr-2 text-purple-500" />
+                    Experience Level
+                  </h4>
+                  <p className="text-gray-700 bg-purple-50 p-3 rounded-lg border border-purple-100 inline-block">{profile.experience_level || 'Not specified'}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-lg">
+                    <FileText className="h-5 w-5 mr-2 text-green-500" />
+                    Education
+                  </h4>
+                   <p className="text-gray-700 bg-green-50 p-3 rounded-lg border border-green-100">{profile.education || 'Not specified'}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center text-lg">
+                    <TrendingUp className="h-5 w-5 mr-2 text-orange-500" />
+                    Key Strengths
+                  </h4>
+                  <ul className="space-y-2">
+                    {profile.strengths.map((strength, idx) => (
+                      <li key={idx} className="text-gray-700 text-sm flex items-start gap-2">
+                         <div className="h-1.5 w-1.5 rounded-full bg-orange-400 mt-2 flex-shrink-0" />
+                         {strength}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {profile.career_goals && (
+                <div className="pt-6 border-t border-gray-100">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center text-lg">
+                    <Target className="h-5 w-5 mr-2 text-red-500" />
+                    Career Goals
+                  </h4>
+                  <p className="text-gray-700 bg-gray-50 p-4 rounded-xl">{profile.career_goals}</p>
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="bg-gray-50/50 p-6 border-t">
+              <Button onClick={findMatches} className="w-full h-12 text-lg shadow-lg shadow-blue-900/10 hover:shadow-blue-900/20" size="lg">
+                Find Matching Jobs
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
+        {/* Step 4: Matching */}
+        {uploadStep === 'matching' && (
+          <div className="text-center py-32 animate-fade-in">
+             <div className="relative w-24 h-24 mx-auto mb-8">
+                <div className="absolute inset-0 border-4 border-purple-100 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-purple-600 rounded-full border-t-transparent animate-spin"></div>
+                <Sparkles className="h-10 w-10 text-purple-600 absolute inset-0 m-auto animate-pulse" />
+             </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2">Finding Your Perfect Matches...</h3>
+            <p className="text-gray-600">Analyzing thousands of jobs to find the best fit for you</p>
+          </div>
+        )}
+
+        {/* Step 5: Results */}
+        {uploadStep === 'results' && (
+          <Suspense fallback={<div className="p-12 text-center text-muted-foreground">Loading results component...</div>}>
+            <MatchedResults
+              filteredMatchedJobs={filteredMatchedJobs}
+              minMatchScore={minMatchScore}
+              setMinMatchScore={setMinMatchScore}
+              useDemoJobs={useDemoJobs}
+              setUseDemoJobs={setUseDemoJobs}
+              location={location}
+              setLocation={setLocation}
+              manualTitle={manualTitle}
+              setManualTitle={setManualTitle}
+              manualDescription={manualDescription}
+              setManualDescription={setManualDescription}
+              findMatches={findMatches}
+              handleApply={handleApply}
+            />
+          </Suspense>
+        )}
+      </div>
+
+       {/* Generated Files Dialog */}
+       <Dialog open={!!generatedFiles} onOpenChange={() => { setGeneratedFiles(null); setGeneratedATS(null) }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <div className="flex items-center justify-center mb-4">
+                <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center animate-in zoom-in">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
+              </div>
+              <DialogTitle className="text-center text-2xl">Application Generated!</DialogTitle>
+              <DialogDescription className="text-center">
+                Your tailored documents are ready for download.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 mt-4">
+              {generatedATS && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <div className="font-medium text-yellow-900">ATS Score: {generatedATS.score ?? 'N/A'}%</div>
+                  {generatedATS.analysis && (
+                    <p className="text-yellow-800 text-sm mt-1">{generatedATS.analysis}</p>
+                  )}
+                </div>
+              )}
+              {generatedFiles && (
+                <>
+                  <a
+                    href={`${API_ORIGIN}${generatedFiles.cv}`}
+                    download
+                    className="flex items-center justify-between p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors group"
+                  >
+                    <div className="flex items-center">
+                      <FileText className="h-5 w-5 text-blue-600 mr-3 group-hover:scale-110 transition-transform" />
+                      <span className="font-medium text-blue-900">Tailored CV</span>
+                    </div>
+                    <Upload className="h-4 w-4 text-blue-500 rotate-180" />
+                  </a>
+
+                  <a
+                    href={`${API_ORIGIN}${generatedFiles.cover_letter}`}
+                    download
+                    className="flex items-center justify-between p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors group"
+                  >
+                     <div className="flex items-center">
+                      <FileText className="h-5 w-5 text-purple-600 mr-3 group-hover:scale-110 transition-transform" />
+                      <span className="font-medium text-purple-900">Cover Letter</span>
+                    </div>
+                    <Upload className="h-4 w-4 text-purple-500 rotate-180" />
+                  </a>
+
+                  {generatedFiles.interview_prep && (
+                    <a
+                      href={`${API_ORIGIN}${generatedFiles.interview_prep}`}
+                      download
+                      className="flex items-center justify-between p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors group"
+                    >
+                      <div className="flex items-center">
+                        <Sparkles className="h-5 w-5 text-green-600 mr-3 group-hover:scale-110 transition-transform" />
+                        <span className="font-medium text-green-900">Interview Prep</span>
+                      </div>
+                      <Upload className="h-4 w-4 text-green-500 rotate-180" />
+                    </a>
+                  )}
+                </>
+              )}
+            </div>
+
+            <Button
+              onClick={() => setGeneratedFiles(null)}
+              className="w-full mt-4"
+              variant="outline"
+            >
+              Close
+            </Button>
+          </DialogContent>
+        </Dialog>
+    </div>
+  )
+}

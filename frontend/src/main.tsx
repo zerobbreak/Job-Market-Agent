@@ -19,7 +19,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50">Loading...</div>}>
             <Routes>
               <Route path="/" element={<Landing />} />
-              <Route path="/app" element={<App />} />
+              <Route path="/app/*" element={<App />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
             <Route path="/faq" element={<FAQ />} />
