@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import { Suspense } from 'react'
 import { Search, Upload, FileText, Briefcase, User, Sparkles, CheckCircle, TrendingUp, Target, Award, Loader2, LogOut } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
+import { useToast } from './components/ui/toast'
 import Login from './components/Login'
 import Register from './components/Register'
 import { apiClient } from './utils/api'
+import { track } from './utils/analytics'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -54,6 +57,7 @@ type UploadStep = 'upload' | 'analyzing' | 'profile' | 'matching' | 'results'
 
 function App() {
   const { user, loading: authLoading, logout } = useAuth()
+  const toast = useToast()
   const [showRegister, setShowRegister] = useState(false)
 
   const [activeTab, setActiveTab] = useState<'home' | 'search' | 'applications' | 'profile'>('home')
@@ -62,13 +66,20 @@ function App() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
   const [applications, setApplications] = useState<Application[]>([])
+  const [appsPage, setAppsPage] = useState(1)
+  const [appsLimit] = useState(10)
+  const [appsTotal, setAppsTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
+  const [success, setSuccess] = useState<string>('')
 
   // New state for Apply with AI
   const [applying, setApplying] = useState(false)
   const [generatedFiles, setGeneratedFiles] = useState<{ cv: string, cover_letter: string, interview_prep?: string } | null>(null)
+  const [generatedATS, setGeneratedATS] = useState<{ score?: number, analysis?: string } | null>(null)
   const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
+
+  const ApplicationsList = React.lazy(() => import('./components/ApplicationsList'))
 
   // Manual search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -77,6 +88,9 @@ function App() {
 
   // Filtering state
   const [minMatchScore, setMinMatchScore] = useState(0)
+  const [useDemoJobs, setUseDemoJobs] = useState(false)
+  const [manualDescription, setManualDescription] = useState('')
+  const [manualTitle, setManualTitle] = useState('')
 
   // Profile editing state
   const [isEditing, setIsEditing] = useState(false)
@@ -84,21 +98,41 @@ function App() {
   // Load initial data
   useEffect(() => {
     if (user) {
-      fetchApplications();
+      fetchApplications(1);
+      if (matchedJobs.length === 0) {
+        recoverMatches();
+      }
     }
   }, [user]);
 
-  const fetchApplications = async () => {
+  const fetchApplications = async (page?: number) => {
     try {
-      const response = await apiClient('/applications');
+      const p = page ?? appsPage
+      const response = await apiClient(`/applications?page=${p}&limit=${appsLimit}`);
       const data = await response.json();
       if (data.applications) {
         setApplications(data.applications);
+        setAppsPage(data.page || p)
+        setAppsTotal(data.total || data.applications.length)
       }
     } catch (err) {
       console.error('Error fetching applications:', err);
     }
   };
+
+  const recoverMatches = async () => {
+    try {
+      const response = await apiClient(`/matches/last?location=${encodeURIComponent(location)}`)
+      const data = await response.json()
+      if (data.success && Array.isArray(data.matches) && data.matches.length > 0) {
+        setMatchedJobs(data.matches)
+        setUploadStep('results')
+        toast.show({ title: 'Resumed', description: 'Loaded your last matches', variant: 'success' })
+      }
+    } catch (e) {
+      console.error('Recover matches failed', e)
+    }
+  }
 
   const handleSaveProfile = async () => {
     if (!profile) return;
@@ -112,9 +146,13 @@ function App() {
       const data = await response.json();
       if (data.success) {
         setIsEditing(false);
-        alert('Profile updated successfully!');
+        setSuccess('Profile updated successfully!');
+        toast.show({ title: 'Profile saved', description: 'Your changes have been saved', variant: 'success' })
+        track('profile_saved', { notification_enabled: profile.notification_enabled, threshold: profile.notification_threshold }, 'app')
       } else {
         setError(data.error || 'Failed to update profile');
+        toast.show({ title: 'Save failed', description: data.error || 'Failed to update profile', variant: 'error' })
+        track('profile_save_failed', { error: data.error }, 'app')
       }
     } catch (err) {
       console.error('Error saving profile:', err);
@@ -142,8 +180,23 @@ function App() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File is too large. Max 10MB.')
+      toast.show({ title: 'Upload failed', description: 'File is too large. Max 10MB.', variant: 'error' })
+      track('cv_upload_invalid', { reason: 'size', size: file.size }, 'app')
+      return
+    }
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    if (file.type && !allowed.includes(file.type)) {
+      setError('Invalid file type. Please upload PDF, DOC, or DOCX.')
+      toast.show({ title: 'Upload failed', description: 'Invalid file type. Use PDF, DOC, or DOCX.', variant: 'error' })
+      track('cv_upload_invalid', { reason: 'type', type: file.type }, 'app')
+      return
+    }
+
     setCvFile(file)
     setError('')
+    setSuccess('')
     setUploadStep('analyzing')
     setLoading(true)
 
@@ -187,7 +240,8 @@ function App() {
         method: 'POST',
         body: JSON.stringify({
           location: location,
-          max_results: 20
+          max_results: 20,
+          use_demo: useDemoJobs
         }),
       })
 
@@ -196,6 +250,7 @@ function App() {
       if (data.success) {
         setMatchedJobs(data.matches || [])
         setUploadStep('results')
+        track('matches_search', { location, count: (data.matches || []).length, use_demo: useDemoJobs }, 'app')
       } else {
         setError(data.error || 'Failed to find matches')
         setUploadStep('profile')
@@ -212,44 +267,101 @@ function App() {
   const handleApply = async (job: Job) => {
     setApplying(true)
     setError('')
+    setApplyCancelled(false)
 
     try {
-      const response = await apiClient('/apply-job', {
+      const start = await apiClient('/apply-job', {
         method: 'POST',
         body: JSON.stringify({ job }),
-      });
+      })
+      const startData = await start.json()
+      if (!startData.success || !startData.job_id) {
+        setError(startData.error || 'Failed to start application')
+        setApplying(false)
+        track('apply_start_failed', { error: startData.error }, 'app')
+        return
+      }
+      const jobId = startData.job_id
+      setCurrentApplyJobId(jobId)
+      track('apply_start', { jobId, title: job.title, company: job.company }, 'app')
 
-      const result = await response.json();
-
-      if (result.success) {
-        const newApplication: Application = {
-          id: Date.now().toString(),
-          jobTitle: job.title,
-          company: job.company,
-          status: 'applied',
-          appliedDate: new Date().toISOString().split('T')[0],
-          files: result.files
-        };
-        setApplications([...applications, newApplication]);
-
-        // Show generated files
-        if (result.files) {
-          setGeneratedFiles({
-            cv: result.files.cv,
-            cover_letter: result.files.cover_letter,
-            interview_prep: result.files.interview_prep
-          });
-        } else {
-          alert('Application submitted successfully!');
+      let attempts = 0
+      const maxAttempts = 40
+      setApplyMaxAttempts(maxAttempts)
+      const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
+      while (attempts < maxAttempts) {
+        if (applyCancelled) {
+          setError('Application cancelled')
+          break
         }
-      } else {
-        setError(result.error || 'Failed to apply');
+        const statusResp = await apiClient(`/apply-status?job_id=${jobId}`, { method: 'GET' })
+        const statusData = await statusResp.json()
+        if (statusData.status === 'done' && statusData.files) {
+          const newApplication: Application = {
+            id: Date.now().toString(),
+            jobTitle: job.title,
+            company: job.company,
+            status: 'applied',
+            appliedDate: new Date().toISOString().split('T')[0],
+            files: statusData.files
+          }
+          setApplications([...applications, newApplication])
+          setGeneratedFiles({
+            cv: statusData.files.cv,
+            cover_letter: statusData.files.cover_letter,
+            interview_prep: statusData.files.interview_prep
+          })
+          if (statusData.ats) {
+            setGeneratedATS({ score: statusData.ats.score, analysis: statusData.ats.analysis })
+          }
+          track('apply_complete', { jobId, title: job.title, company: job.company }, 'app')
+          break
+        }
+        if (statusData.status === 'error') {
+          setError(statusData.error || 'Application failed')
+          track('apply_error', { jobId, error: statusData.error }, 'app')
+          break
+        }
+        if (statusData.status === 'not_found') {
+          // Short backoff if status not yet registered
+          attempts += 1
+          await delay(1000)
+          continue
+        }
+        attempts += 1
+        setApplyAttempts(attempts)
+        const backoff = Math.min(1000 * Math.pow(1.3, attempts), 5000)
+        await delay(backoff)
+      }
+      if (attempts >= maxAttempts) {
+        setError('Application is taking longer than expected. Please check again later.')
+        toast.show({ title: 'Application delayed', description: 'Please check again later', variant: 'error' })
       }
     } catch (error) {
-      console.error('Error applying to job:', error);
-      setError('Error submitting application. Please try again.');
+      console.error('Error applying to job:', error)
+      setError('Error submitting application. Please try again.')
+      toast.show({ title: 'Application failed', description: 'Please try again later', variant: 'error' })
+      track('apply_exception', {}, 'app')
     } finally {
-      setApplying(false);
+      setApplying(false)
+      setCurrentApplyJobId(null)
+    }
+  }
+
+  const [currentApplyJobId, setCurrentApplyJobId] = useState<string | null>(null)
+  const [applyAttempts, setApplyAttempts] = useState(0)
+  const [applyMaxAttempts, setApplyMaxAttempts] = useState(40)
+  const [applyCancelled, setApplyCancelled] = useState(false)
+
+  const handleCancelApply = async () => {
+    try {
+      setApplyCancelled(true)
+      if (currentApplyJobId) {
+        await apiClient(`/apply-cancel?job_id=${currentApplyJobId}`, { method: 'POST' })
+      }
+      toast.show({ title: 'Cancelled', description: 'Application process cancelled', variant: 'error' })
+    } catch (e) {
+      console.error('Cancel apply failed', e)
     }
   }
 
@@ -269,18 +381,9 @@ function App() {
     }
   }
 
-  const getMatchBadgeVariant = (score: number): "default" | "secondary" | "destructive" | "outline" => {
-    if (score >= 80) return 'default'
-    if (score >= 60) return 'secondary'
-    return 'outline'
-  }
+  // moved to MatchedResults
 
-  const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (status === 'applied') return 'default'
-    if (status === 'interview') return 'secondary'
-    if (status === 'rejected') return 'destructive'
-    return 'outline'
-  }
+  
 
   // Filter matched jobs based on minMatchScore
   const filteredMatchedJobs = matchedJobs.filter(match => match.match_score >= minMatchScore)
@@ -327,15 +430,29 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {error}
+      {/* Error Display */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+          {success}
+        </div>
+      )}
+      {applying && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Applying to job... ({Math.min(100, Math.round((applyAttempts / applyMaxAttempts) * 100))}%)</span>
           </div>
-        )}
+          <Button variant="outline" onClick={handleCancelApply}>Cancel</Button>
+        </div>
+      )}
 
         {/* Generated Files Dialog */}
-        <Dialog open={!!generatedFiles} onOpenChange={() => setGeneratedFiles(null)}>
+        <Dialog open={!!generatedFiles} onOpenChange={() => { setGeneratedFiles(null); setGeneratedATS(null) }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <div className="flex items-center justify-center mb-4">
@@ -350,6 +467,14 @@ function App() {
             </DialogHeader>
 
             <div className="space-y-3 mt-4">
+              {generatedATS && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <div className="font-medium text-yellow-900">ATS Score: {generatedATS.score ?? 'N/A'}%</div>
+                  {generatedATS.analysis && (
+                    <p className="text-yellow-800 text-sm mt-1">{generatedATS.analysis}</p>
+                  )}
+                </div>
+              )}
               {generatedFiles && (
                 <>
                   <a
@@ -440,6 +565,40 @@ function App() {
 
           {/* HOME TAB - CV Upload & Matches */}
           <TabsContent value="home" className="space-y-6">
+            {profile && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Settings</CardTitle>
+                  <CardDescription>Control email notifications for high-quality matches</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={!!profile.notification_enabled}
+                      onChange={(e) => setProfile({ ...profile, notification_enabled: e.target.checked })}
+                    />
+                    <span>Enable email notifications</span>
+                  </label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">Minimum Match Score</Label>
+                      <Badge variant="outline">{profile.notification_threshold ?? 70}%</Badge>
+                    </div>
+                    <Slider
+                      value={[profile.notification_threshold ?? 70]}
+                      onValueChange={(value) => setProfile({ ...profile, notification_threshold: value[0] })}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button onClick={handleSaveProfile} disabled={!profile}>Save Settings</Button>
+                </CardFooter>
+              </Card>
+            )}
             {uploadStep === 'upload' && (
               <div className="text-center py-12">
                 <div className="bg-gradient-to-br from-blue-500 to-purple-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
@@ -558,96 +717,23 @@ function App() {
             )}
 
             {uploadStep === 'results' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    Your Matched Jobs ({filteredMatchedJobs.length})
-                  </h3>
-                  <Button variant="ghost" onClick={() => setUploadStep('profile')}>
-                    View Profile
-                  </Button>
-                </div>
-
-                {/* Filter Slider */}
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Minimum Match Score</Label>
-                        <Badge variant="outline">{minMatchScore}%</Badge>
-                      </div>
-                      <Slider
-                        value={[minMatchScore]}
-                        onValueChange={(value) => setMinMatchScore(value[0])}
-                        max={100}
-                        step={1}
-                        className="w-full"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {filteredMatchedJobs.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No matches found</h3>
-                      <p className="text-gray-500">Try adjusting your filters or location</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4">
-                    {filteredMatchedJobs.map((match, idx) => (
-                      <Card key={idx} className="hover:shadow-lg transition-shadow">
-                        <CardHeader>
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <CardTitle className="text-xl">{match.job.title}</CardTitle>
-                                <Badge variant={getMatchBadgeVariant(match.match_score)}>
-                                  {match.match_score}% Match
-                                </Badge>
-                              </div>
-                              <CardDescription className="text-base">
-                                {match.job.company} • {match.job.location}
-                              </CardDescription>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="bg-muted/50 rounded-lg p-3">
-                            <p className="text-sm font-semibold mb-2">Why this matches:</p>
-                            <ul className="space-y-1">
-                              {match.match_reasons.map((reason, ridx) => (
-                                <li key={ridx} className="text-sm flex items-start">
-                                  <CheckCircle className="h-4 w-4 mr-2 mt-0.5 text-green-500 flex-shrink-0" />
-                                  {reason}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                          <p className="text-gray-700 line-clamp-2">{match.job.description}</p>
-                        </CardContent>
-                        <CardFooter className="flex gap-3">
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => window.open(match.job.url, '_blank')}
-                          >
-                            View Details
-                          </Button>
-                          <Button
-                            className="flex-1"
-                            onClick={() => handleApply(match.job)}
-                          >
-                            Apply with AI
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={<div className="p-6">Loading results...</div>}>
+                {React.createElement((React.lazy(() => import('./components/MatchedResults')) as any), {
+                  filteredMatchedJobs,
+                  minMatchScore,
+                  setMinMatchScore: (v: number) => setMinMatchScore(v),
+                  useDemoJobs,
+                  setUseDemoJobs: (v: boolean) => setUseDemoJobs(v),
+                  location,
+                  setLocation: (v: string) => setLocation(v),
+                  manualTitle,
+                  setManualTitle: (v: string) => setManualTitle(v),
+                  manualDescription,
+                  setManualDescription: (v: string) => setManualDescription(v),
+                  findMatches,
+                  handleApply,
+                })}
+              </Suspense>
             )}
           </TabsContent>
 
@@ -724,93 +810,16 @@ function App() {
 
           {/* APPLICATIONS TAB */}
           <TabsContent value="applications" className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Your Applications</h2>
-            {applications.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No applications yet</h3>
-                  <p className="text-gray-500">Start applying to jobs to see them here</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {applications.map((application) => (
-                  <Card key={application.id}>
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle>{application.jobTitle}</CardTitle>
-                          <CardDescription>{application.company}{application.location ? ` • ${application.location}` : ''}</CardDescription>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Applied on {application.appliedDate}
-                          </p>
-                        </div>
-                        <Badge variant={getStatusBadgeVariant(application.status)}>
-                          {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    {application.files && (
-                      <CardContent>
-                        <div className="grid sm:grid-cols-3 gap-3">
-                          <a
-                            href={`${API_ORIGIN}${application.files.cv}`}
-                            download
-                            className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
-                          >
-                            <div className="flex items-center">
-                              <FileText className="h-5 w-5 text-blue-600 mr-3" />
-                              <span className="font-medium text-blue-900">Tailored CV</span>
-                            </div>
-                            <Upload className="h-4 w-4 text-blue-500 rotate-180" />
-                          </a>
-                          <a
-                            href={`${API_ORIGIN}${application.files.cover_letter}`}
-                            download
-                            className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
-                          >
-                            <div className="flex items-center">
-                              <FileText className="h-5 w-5 text-purple-600 mr-3" />
-                              <span className="font-medium text-purple-900">Cover Letter</span>
-                            </div>
-                            <Upload className="h-4 w-4 text-purple-500 rotate-180" />
-                          </a>
-                          {application.files.interview_prep && (
-                            <a
-                              href={`${API_ORIGIN}${application.files.interview_prep}`}
-                              download
-                              className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                            >
-                              <div className="flex items-center">
-                                <Sparkles className="h-5 w-5 text-green-600 mr-3" />
-                                <span className="font-medium text-green-900">Interview Prep</span>
-                              </div>
-                              <Upload className="h-4 w-4 text-green-500 rotate-180" />
-                            </a>
-                          )}
-                        </div>
-                      </CardContent>
-                    )}
-                    <CardFooter className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => application.jobUrl ? window.open(application.jobUrl, '_blank') : undefined}
-                      >
-                        View Job
-                      </Button>
-                      <Button
-                        className="flex-1"
-                        onClick={() => handleApply({ id: application.id, title: application.jobTitle, company: application.company, location: application.location || '', description: '', url: application.jobUrl || '' })}
-                      >
-                        Apply Again
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            )}
+            <Suspense fallback={<div className="p-6">Loading applications...</div>}>
+              <ApplicationsList
+                applications={applications}
+                API_ORIGIN={API_ORIGIN}
+                onApply={(j: Job) => handleApply({ id: j.id, title: j.title, company: j.company, location: j.location, description: j.description, url: j.url })}
+                serverPage={appsPage}
+                serverTotalPages={Math.max(1, Math.ceil(appsTotal / appsLimit))}
+                onPageChange={(p: number) => { setAppsPage(p); fetchApplications(p) }}
+              />
+            </Suspense>
           </TabsContent>
 
           {/* PROFILE TAB */}
@@ -852,8 +861,8 @@ function App() {
                   )}
                 </div>
 
-                {profile && (
-                  <div className="border-t pt-6 space-y-6">
+              {profile && (
+                <div className="border-t pt-6 space-y-6">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-medium text-gray-900">Profile Analysis</h4>
                       {isEditing && <Badge variant="secondary">Editing Mode</Badge>}
@@ -914,6 +923,46 @@ function App() {
                         />
                       ) : (
                         <p className="text-gray-700">{profile.career_goals}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Notifications</Label>
+                      {isEditing ? (
+                        <div className="space-y-4">
+                          <label className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={!!profile.notification_enabled}
+                              onChange={(e) => setProfile({ ...profile, notification_enabled: e.target.checked })}
+                            />
+                            <span>Enable email notifications for high-quality matches</span>
+                          </label>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium">Minimum Match Score</Label>
+                              <Badge variant="outline">{profile.notification_threshold ?? 70}%</Badge>
+                            </div>
+                            <Slider
+                              value={[profile.notification_threshold ?? 70]}
+                              onValueChange={(value) => setProfile({ ...profile, notification_threshold: value[0] })}
+                              max={100}
+                              step={1}
+                              className="w-full"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-700">
+                          <p>
+                            Notifications: {profile.notification_enabled ? 'Enabled' : 'Disabled'}
+                          </p>
+                          {profile.notification_enabled && (
+                            <p>
+                              Threshold: {profile.notification_threshold ?? 70}% match
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

@@ -125,7 +125,7 @@ jobs:
         pip install pytest pytest-cov pytest-mock pytest-xdist pytest-timeout
 
     - name: Run syntax check
-      run: python -m py_compile main.py utils/scraping.py scrapper.py
+      run: python -m py_compile main.py utils/scraping.py api_server.py
 
     - name: Run unit tests with coverage
       run: |

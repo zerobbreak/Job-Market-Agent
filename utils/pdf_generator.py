@@ -16,7 +16,7 @@ class PDFGenerator:
         else:
             self.templates_dir = templates_dir
             
-    def generate_pdf(self, markdown_content, output_path, template_name='modern'):
+    def generate_pdf(self, markdown_content, output_path, template_name='modern', header=None):
         """
         Convert Markdown content to PDF using a specific template.
         
@@ -50,6 +50,9 @@ class PDFGenerator:
             # 3. Inject Content
             # Simple string replacement for now. Jinja2 could be used for more complex needs.
             full_html = template_html.replace('{{ content }}', html_content)
+            header = header or {}
+            for key in ['name', 'title', 'email', 'phone', 'location']:
+                full_html = full_html.replace(f'{{{{ {key} }}}}', str(header.get(key, '')))
             
             # 4. Generate PDF
             with open(output_path, "wb") as pdf_file:

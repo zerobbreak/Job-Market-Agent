@@ -148,8 +148,11 @@
              as parsing arbitrary markdown into sidebar/main is risky.
         -->
 
-        <!-- Header Section (Placeholder - strictly speaking we'd want to extract name/contact) -->
-        <!-- Since we only have 'content', we'll wrap it all in a nice container -->
+        <div class="header">
+            <h1>{{ name }}</h1>
+            <p>{{ title }}</p>
+            <p>{{ email }} • {{ phone }} • {{ location }}</p>
+        </div>
 
         <div class="content-wrapper" style="display: block; width: auto;">
             {{ content }}

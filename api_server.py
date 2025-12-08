@@ -9,11 +9,12 @@ if os.getenv('GEMINI_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
     os.environ['GOOGLE_API_KEY'] = os.getenv('GEMINI_API_KEY')
     print("✓ Polyfilled GOOGLE_API_KEY from GEMINI_API_KEY")
 
-from flask import Flask, request, jsonify, send_file, g
+from flask import Flask, request, jsonify, send_file, g, Response
 from flask_cors import CORS
 import json
 import re
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 from main import JobApplicationPipeline
 from utils.ai_retries import retry_ai_call
 from appwrite.client import Client
@@ -23,8 +24,14 @@ from appwrite.services.storage import Storage
 from appwrite.services.messaging import Messaging
 from appwrite.id import ID
 from appwrite.query import Query
+from appwrite.input_file import InputFile
 from functools import wraps
 from dotenv import load_dotenv
+import uuid
+import threading
+from datetime import datetime
+import time
+import time
 
 load_dotenv()
 
@@ -41,6 +48,7 @@ CORS(app, resources={
 })
 
 app.secret_key = os.urandom(24)  # For session management
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # Initialize Appwrite Client
 client = Client()
@@ -63,10 +71,104 @@ COLLECTION_ID_JOBS = 'jobs'
 COLLECTION_ID_APPLICATIONS = 'applications'
 COLLECTION_ID_PROFILES = 'profiles'
 BUCKET_ID_CVS = 'cv-bucket'
+COLLECTION_ID_ANALYTICS = 'analytics'
+COLLECTION_ID_MATCHES = 'matches'
+COLLECTION_ID_MATCHES = 'matches'
 
 # Global storage for pipelines and profiles (in production, use Redis or database)
 pipeline_store = {}
 profile_store = {}
+apply_jobs = {}
+APPLY_JOB_TIMEOUT_SECS = 300
+APPLY_JOB_CLEANUP_SECS = 600
+
+rate_limits = {}
+
+def check_rate(endpoint: str, limit: int, window_sec: int = 60):
+    try:
+        uid = getattr(g, 'user_id', None)
+        if not uid:
+            return True
+        now = time.time()
+        key = f"{uid}:{endpoint}"
+        bucket = rate_limits.get(key, [])
+        bucket = [t for t in bucket if now - t < window_sec]
+        if len(bucket) >= limit:
+            rate_limits[key] = bucket
+            return False
+        bucket.append(now)
+        rate_limits[key] = bucket
+        return True
+    except Exception:
+        return True
+
+MAX_RATE_ANALYTICS_PER_MIN = 60
+MAX_RATE_MATCHES_PER_MIN = 20
+MAX_RATE_APPLY_PER_MIN = 5
+MAX_RATE_ANALYZE_PER_MIN = 5
+
+# Simple in-memory rate limiting
+rate_limits = {}
+
+def check_rate(endpoint: str, limit: int, window_sec: int = 60):
+    try:
+        uid = getattr(g, 'user_id', None)
+        if not uid:
+            return True
+        now = time.time()
+        key = f"{uid}:{endpoint}"
+        bucket = rate_limits.get(key, [])
+        bucket = [t for t in bucket if now - t < window_sec]
+        if len(bucket) >= limit:
+            rate_limits[key] = bucket
+            return False
+        bucket.append(now)
+        rate_limits[key] = bucket
+        return True
+    except Exception:
+        return True
+
+MAX_RATE_ANALYTICS_PER_MIN = 60
+MAX_RATE_MATCHES_PER_MIN = 20
+MAX_RATE_APPLY_PER_MIN = 5
+MAX_RATE_ANALYZE_PER_MIN = 5
+
+def ensure_profile_schema():
+    try:
+        api_key = os.getenv('APPWRITE_API_KEY')
+        if not api_key:
+            return
+        admin_client = Client()
+        admin_client.set_endpoint(os.getenv('APPWRITE_API_ENDPOINT', 'https://cloud.appwrite.io/v1'))
+        admin_client.set_project(os.getenv('APPWRITE_PROJECT_ID'))
+        admin_client.set_key(api_key)
+        admin_db = Databases(admin_client)
+        try:
+            admin_db.create_boolean_attribute(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_PROFILES,
+                key='notification_enabled',
+                required=False,
+                default=False
+            )
+        except Exception as e:
+            print(f"Profiles boolean attribute exists or failed to create: {e}")
+        try:
+            admin_db.create_integer_attribute(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_PROFILES,
+                key='notification_threshold',
+                required=False,
+                min=0,
+                max=100,
+                default=70
+            )
+        except Exception as e:
+            print(f"Profiles integer attribute exists or failed to create: {e}")
+    except Exception as e:
+        print(f"ensure_profile_schema error: {e}")
+
+ensure_profile_schema()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -136,109 +238,133 @@ def search_jobs():
         print(f"Error searching jobs: {e}")
         return jsonify({'jobs': [], 'error': str(e)})
 
+def _process_application_async(job_data, session_id, client_jwt_client):
+    try:
+        if session_id not in pipeline_store:
+            pipeline_store[session_id] = JobApplicationPipeline()
+        pipeline = pipeline_store[session_id]
+        if not getattr(pipeline, 'cv_engine', None):
+            profile_info = profile_store.get(session_id)
+            if profile_info and profile_info.get('cv_content'):
+                from utils.cv_tailoring import CVTailoringEngine
+                pipeline.cv_engine = CVTailoringEngine(
+                    profile_info['cv_content'],
+                    profile_info.get('profile_data', {})
+                )
+                pipeline.profile = profile_info.get('profile_data', {})
+            else:
+                cv_content = pipeline.load_cv()
+                pipeline.build_profile(cv_content)
+        app_result = pipeline.generate_application_package(job_data)
+        interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
+        files_payload = {}
+        try:
+            databases = Databases(client_jwt_client)
+            storage = Storage(client_jwt_client)
+            cv_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['cv_path']))
+            cl_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['cover_letter_path']))
+            meta_upload = None
+            if app_result.get('metadata_path'):
+                meta_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['metadata_path']))
+            prep_upload = None
+            if interview_prep_path:
+                prep_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(interview_prep_path))
+            files_payload = {
+                'cv': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cv_upload['$id']}",
+                'cover_letter': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cl_upload['$id']}",
+                'interview_prep': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={prep_upload['$id']}" if prep_upload else None,
+                'metadata': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={meta_upload['$id']}" if meta_upload else None
+            }
+            databases.create_document(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_APPLICATIONS,
+                document_id=ID.unique(),
+                data={
+                    'userId': session_id,
+                    'jobTitle': job_data.get('title', 'Unknown'),
+                    'company': job_data.get('company', 'Unknown'),
+                    'jobUrl': job_data.get('url', ''),
+                    'location': job_data.get('location', ''),
+                    'status': 'applied',
+                    'files': files_payload
+                }
+            )
+        except Exception as e:
+            print(f"Error saving application to DB: {e}")
+        return {'files': files_payload, 'ats_score': app_result.get('ats_score'), 'ats_analysis': app_result.get('ats_analysis')}
+    except Exception as e:
+        print(f"Async apply error: {e}")
+        return {'error': str(e)}
+
 @app.route('/api/apply-job', methods=['POST'])
 @login_required
 def apply_job():
     try:
-        # Check if using session_id (Apply with AI)
+        if not check_rate('apply-job', MAX_RATE_APPLY_PER_MIN):
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
         if request.is_json:
             data = request.get_json()
-            session_id = g.user_id # Use user_id as session_id
+            session_id = g.user_id
             job_data = data.get('job')
-            
-            # Ensure pipeline exists
-            if session_id not in pipeline_store:
-                 # Try to reconstruct pipeline if profile exists in DB
-                 # For now, simplistic check
-                 pipeline_store[session_id] = JobApplicationPipeline()
-            
-            pipeline = pipeline_store[session_id]
-            
-            # Ensure pipeline has CV engine initialized
-            try:
-                if not getattr(pipeline, 'cv_engine', None):
-                    # Try to use previously analyzed profile and CV if available
-                    profile_info = profile_store.get(session_id)
-                    if profile_info and profile_info.get('cv_content'):
-                        from utils.cv_tailoring import CVTailoringEngine
-                        pipeline.cv_engine = CVTailoringEngine(
-                            profile_info['cv_content'],
-                            profile_info.get('profile_data', {})
-                        )
-                        pipeline.profile = profile_info.get('profile_data', {})
-                    else:
-                        # Load default CV and build a profile (has offline fallback)
-                        cv_content = pipeline.load_cv()
-                        pipeline.build_profile(cv_content)
-            except Exception as init_err:
-                print(f"Initialization error for Apply with AI: {init_err}")
-                return jsonify({'success': False, 'error': 'Failed to initialize application pipeline'}), 500
-
-            # Generate application materials
-            print(f"Generating application for {job_data.get('company')} using session {session_id}")
-            app_result = pipeline.generate_application_package(job_data)
-            
-            if not app_result:
-                return jsonify({'success': False, 'error': 'Failed to generate application materials'})
-            
-            # Generate interview prep
-            interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
-            
-            # --- Appwrite Integration: Save Application ---
-            try:
-                databases = Databases(g.client)
-                storage = Storage(g.client)
-                
-                # Upload generated files to Storage
-                # (Implementation omitted for brevity, but similar to CV upload)
-                
-                # Create Application Record
-                databases.create_document(
-                    database_id=DATABASE_ID,
-                    collection_id=COLLECTION_ID_APPLICATIONS,
-                    document_id=ID.unique(),
-                    data={
-                        'userId': g.user_id,
-                        'jobTitle': job_data.get('title', 'Unknown'),
-                        'company': job_data.get('company', 'Unknown'),
-                        'jobUrl': job_data.get('url', ''),
-                        'location': job_data.get('location', ''),
-                        'status': 'applied',
-                        'files': {
-                            'cv': f"/api/download?path={app_result['cv_path']}",
-                            'cover_letter': f"/api/download?path={app_result['cover_letter_path']}",
-                            'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None,
-                            'metadata': f"/api/download?path={app_result.get('metadata_path')}"
-                        }
+            job_id = str(uuid.uuid4())
+            apply_jobs[job_id] = {'status': 'processing', 'created_at': time.time()}
+            client_jwt_client = g.client
+            def _runner():
+                result = _process_application_async(job_data, session_id, client_jwt_client)
+                current = apply_jobs.get(job_id, {})
+                if current.get('status') == 'cancelled':
+                    return
+                if 'error' in result:
+                    apply_jobs[job_id] = {'status': 'error', 'error': result['error'], 'created_at': current.get('created_at', time.time())}
+                else:
+                    apply_jobs[job_id] = {
+                        'status': 'done',
+                        'files': result['files'],
+                        'ats': {'score': result.get('ats_score'), 'analysis': result.get('ats_analysis')},
+                        'created_at': current.get('created_at', time.time())
                     }
-                )
-            except Exception as e:
-                print(f"Error saving application to DB: {e}")
-
-            return jsonify({
-                'success': True,
-                'message': 'Application generated successfully',
-                'ats': {
-                    'score': app_result.get('ats_score'),
-                    'analysis': app_result.get('ats_analysis')
-                },
-                'files': {
-                    'cv': f"/api/download?path={app_result['cv_path']}",
-                    'cover_letter': f"/api/download?path={app_result['cover_letter_path']}",
-                    'interview_prep': f"/api/download?path={interview_prep_path}" if interview_prep_path else None,
-                    'metadata': f"/api/download?path={app_result.get('metadata_path')}"
-                }
-            })
-
-        # Fallback to file upload method (Legacy) - REMOVED or kept as is but less prioritized
-        # ... (Legacy code omitted for clarity, assuming JSON flow is primary now)
-        return jsonify({'success': False, 'error': 'Legacy upload method deprecated. Please use Apply with AI.'})
-    
+            threading.Thread(target=_runner, daemon=True).start()
+            return jsonify({'success': True, 'job_id': job_id})
+        return jsonify({'success': False, 'error': 'Invalid request'})
     except Exception as e:
-        print(f"Error applying to job: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error starting apply job: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/apply-status', methods=['GET'])
+@login_required
+def apply_status():
+    try:
+        job_id = request.args.get('job_id')
+        if not job_id or job_id not in apply_jobs:
+            return jsonify({'status': 'not_found'})
+        info = apply_jobs[job_id]
+        # Timeout processing jobs
+        if info.get('status') == 'processing':
+            created = info.get('created_at', time.time())
+            if time.time() - created > APPLY_JOB_TIMEOUT_SECS:
+                info = {'status': 'error', 'error': 'Job timed out. Please try again.'}
+                apply_jobs[job_id] = info
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)})
+
+# Cleanup thread for apply_jobs
+def _cleanup_apply_jobs():
+    while True:
+        try:
+            now = time.time()
+            to_delete = []
+            for jid, info in list(apply_jobs.items()):
+                created = info.get('created_at', now)
+                if info.get('status') in ('done', 'error') and (now - created) > APPLY_JOB_CLEANUP_SECS:
+                    to_delete.append(jid)
+            for jid in to_delete:
+                del apply_jobs[jid]
+        except Exception:
+            pass
+        time.sleep(60)
+
+threading.Thread(target=_cleanup_apply_jobs, daemon=True).start()
 
 @app.route('/api/download', methods=['GET'])
 def download_file():
@@ -256,6 +382,12 @@ def download_file():
 def get_applications():
     try:
         databases = Databases(g.client)
+        try:
+            page = int(request.args.get('page', '1'))
+            limit = int(request.args.get('limit', '10'))
+        except Exception:
+            page, limit = 1, 10
+        offset = max(0, (page - 1) * limit)
         
         # Query applications for the current user
         result = databases.list_documents(
@@ -263,7 +395,9 @@ def get_applications():
             collection_id=COLLECTION_ID_APPLICATIONS,
             queries=[
                 Query.equal('userId', g.user_id),
-                Query.order_desc('$createdAt')
+                Query.order_desc('$createdAt'),
+                Query.limit(limit),
+                Query.offset(offset)
             ]
         )
         
@@ -280,7 +414,7 @@ def get_applications():
                 'files': doc.get('files')
             })
             
-        return jsonify({'applications': applications})
+        return jsonify({'applications': applications, 'page': page, 'limit': limit, 'total': result.get('total', len(applications))})
     
     except Exception as e:
         print(f"Error getting applications: {e}")
@@ -293,10 +427,18 @@ def analyze_cv():
     """Analyze uploaded CV and build candidate profile"""
     try:
         cv_file = request.files['cv']
+        if not cv_file:
+            return jsonify({'success': False, 'error': 'Missing file'})
         
         if cv_file.filename == '':
             return jsonify({'success': False, 'error': 'No file selected'})
         
+        # Basic MIME/type validation
+        allowed_mimes = {'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}
+        content_type = cv_file.mimetype or ''
+        if content_type not in allowed_mimes:
+            return jsonify({'success': False, 'error': 'Invalid file type. Use PDF, DOC, or DOCX.'}), 400
+
         if cv_file and allowed_file(cv_file.filename):
             filename = secure_filename(cv_file.filename)
             cv_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -415,14 +557,45 @@ def analyze_cv():
 def match_jobs():
     """Find and rank jobs based on CV profile"""
     try:
+        if not check_rate('match-jobs', MAX_RATE_MATCHES_PER_MIN):
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
         data = request.get_json()
         # session_id is now effectively user_id
         session_id = g.user_id 
         location = data.get('location', 'South Africa')
         max_results = int(data.get('max_results', 20))
+        use_demo = bool(data.get('use_demo', False))
         
         profile_info = None
         
+        # 0. Try cache in database if available and recent
+        try:
+            databases = Databases(g.client)
+            cached = databases.list_documents(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_MATCHES,
+                queries=[
+                    Query.equal('userId', g.user_id),
+                    Query.equal('location', location),
+                    Query.order_desc('$createdAt'),
+                    Query.limit(1)
+                ]
+            )
+            if cached.get('total', 0) > 0 and not use_demo:
+                doc = cached['documents'][0]
+                created = doc.get('$createdAt')
+                if created:
+                    from datetime import datetime, timezone
+                    try:
+                        ts = datetime.fromisoformat(created.replace('Z', '+00:00')).timestamp()
+                        if time.time() - ts < 900:
+                            matches = json.loads(doc.get('matches', '[]'))
+                            return jsonify({'success': True, 'matches': matches, 'cached': True})
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Cache read error: {e}")
+
         # 1. Try to get from memory first
         if session_id in profile_store:
             profile_info = profile_store[session_id]
@@ -480,12 +653,14 @@ def match_jobs():
         print(f"Search query: {search_query}")
         print(f"Location: {location}")
         
-        # Search for jobs
-        jobs = pipeline.search_jobs(
-            query=search_query,
-            location=location,
-            max_results=max_results
-        )
+        if use_demo:
+            jobs = []
+        else:
+            jobs = pipeline.search_jobs(
+                query=search_query,
+                location=location,
+                max_results=max_results
+            )
 
         # Fallback: broaden query if no results
         if not jobs:
@@ -495,11 +670,14 @@ def match_jobs():
                 'Software Developer'
             ]
             for fq in fallback_queries:
-                jobs = pipeline.search_jobs(
-                    query=fq,
-                    location=location,
-                    max_results=max_results
-                )
+                if use_demo:
+                    jobs = []
+                else:
+                    jobs = pipeline.search_jobs(
+                        query=fq,
+                        location=location,
+                        max_results=max_results
+                    )
                 if jobs:
                     break
             # Final fallback: synthetic jobs derived from skills
@@ -552,23 +730,53 @@ def match_jobs():
         
         print(f"Returning {len(matches)} matched jobs")
         
-        # Send email notification for high-quality matches
+        # Send email notification for high-quality matches honoring user preferences
         try:
-            # Get user email and name from Appwrite account
             account = Account(g.client)
             user_account = account.get()
             user_email = user_account['email']
             user_name = user_account['name'] or 'there'
-            
-            # Send notification (async, won't block response)
-            send_job_match_notification(user_email, user_name, matches, threshold=70)
+
+            notify_enabled = False
+            notify_threshold = 70
+            try:
+                databases = Databases(g.client)
+                prefs = databases.list_documents(
+                    database_id=DATABASE_ID,
+                    collection_id=COLLECTION_ID_PROFILES,
+                    queries=[Query.equal('userId', g.user_id)]
+                )
+                if prefs['total'] > 0:
+                    doc = prefs['documents'][0]
+                    notify_enabled = bool(doc.get('notification_enabled', False))
+                    notify_threshold = int(doc.get('notification_threshold', 70))
+            except Exception as _pref_err:
+                print(f"Preferences fetch failed, using defaults: {_pref_err}")
+
+            if notify_enabled:
+                send_job_match_notification(user_email, user_name, matches, threshold=notify_threshold)
         except Exception as notify_error:
-            # Don't fail job matching if notification fails
             print(f"Note: Email notification skipped - {notify_error}")
         
+        # Persist matches for caching
+        try:
+            databases = Databases(g.client)
+            databases.create_document(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_MATCHES,
+                document_id=ID.unique(),
+                data={
+                    'userId': g.user_id,
+                    'location': location,
+                    'matches': json.dumps(matches)
+                }
+            )
+        except Exception as e:
+            print(f"Cache write error: {e}")
         return jsonify({
             'success': True,
-            'matches': matches
+            'matches': matches,
+            'cached': False
         })
     
     except Exception as e:
@@ -615,6 +823,7 @@ def update_profile():
         
         # Update profile in Appwrite
         try:
+            databases = Databases(g.client)
             # Check if profile exists
             existing_profiles = databases.list_documents(
                 database_id=DATABASE_ID,
@@ -631,6 +840,8 @@ def update_profile():
                 'education': data.get('education', ''),
                 'strengths': json.dumps(data.get('strengths', [])),
                 'career_goals': data.get('career_goals', ''),
+                'notification_enabled': bool(data.get('notification_enabled', False)),
+                'notification_threshold': int(data.get('notification_threshold', 70)),
                 'updated_at': datetime.now().isoformat()
             }
             
@@ -793,6 +1004,116 @@ def send_job_match_notification(user_email, user_name, matches, threshold=70):
     except Exception as e:
         print(f"Error in send_job_match_notification: {e}")
         return False
+
+@app.route('/api/storage/download', methods=['GET'])
+@login_required
+def storage_download():
+    try:
+        bucket_id = request.args.get('bucket_id')
+        file_id = request.args.get('file_id')
+        if not bucket_id or not file_id:
+            return jsonify({'error': 'Missing bucket_id or file_id'}), 400
+
+        endpoint = os.getenv('APPWRITE_API_ENDPOINT', 'https://cloud.appwrite.io/v1')
+        project_id = os.getenv('APPWRITE_PROJECT_ID')
+        auth_header = request.headers.get('Authorization')
+        token = auth_header.split(' ')[1] if auth_header and auth_header.startswith('Bearer ') else None
+        if not project_id or not token:
+            return jsonify({'error': 'Storage download unavailable'}), 500
+
+        url = f"{endpoint}/storage/buckets/{bucket_id}/files/{file_id}/download"
+        headers = {
+            'X-Appwrite-Project': project_id,
+            'X-Appwrite-JWT': token
+        }
+        import requests as _req
+        r = _req.get(url, headers=headers, stream=True)
+        if r.status_code != 200:
+            return jsonify({'error': 'Failed to fetch file'}), r.status_code
+        def generate():
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        return Response(generate(), headers={'Content-Type': 'application/octet-stream'})
+    except Exception as e:
+        print(f"Error in storage_download: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analytics', methods=['POST'])
+@login_required
+def analytics():
+    try:
+        if not check_rate('analytics', MAX_RATE_ANALYTICS_PER_MIN):
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+        data = request.get_json() or {}
+        event = data.get('event')
+        properties = data.get('properties', {})
+        page = data.get('page')
+        if not event:
+            return jsonify({'success': False, 'error': 'Missing event'}), 400
+        try:
+            databases = Databases(g.client)
+            databases.create_document(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_ANALYTICS,
+                document_id=ID.unique(),
+                data={
+                    'userId': g.user_id,
+                    'event': event,
+                    'properties': json.dumps(properties),
+                    'page': page or '',
+                    'created_at': datetime.now().isoformat()
+                }
+            )
+        except Exception as e:
+            print(f"Analytics write error: {e}")
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/matches/last', methods=['GET'])
+@login_required
+def matches_last():
+    try:
+        databases = Databases(g.client)
+        location = request.args.get('location')
+        queries = [
+            Query.equal('userId', g.user_id),
+            Query.order_desc('$createdAt'),
+            Query.limit(1)
+        ]
+        if location:
+            queries.insert(1, Query.equal('location', location))
+        result = databases.list_documents(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_MATCHES,
+            queries=queries
+        )
+        if result.get('total', 0) == 0:
+            return jsonify({'success': True, 'matches': [], 'cached': False})
+        doc = result['documents'][0]
+        matches = json.loads(doc.get('matches', '[]'))
+        last_seen = datetime.now().isoformat()
+        try:
+            databases.update_document(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_MATCHES,
+                document_id=doc['$id'],
+                data={'last_seen': last_seen}
+            )
+        except Exception as e:
+            print(f"Last seen update failed: {e}")
+        return jsonify({
+            'success': True,
+            'matches': matches,
+            'location': doc.get('location', ''),
+            'created_at': doc.get('$createdAt'),
+            'last_seen': last_seen,
+            'cached': True
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def parse_profile(profile_text):
     """Parse AI-generated profile text into structured data"""
@@ -957,3 +1278,19 @@ def health_check():
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(e):
+    return jsonify({'success': False, 'error': 'File too large. Max 10MB.'}), 413
+@app.route('/api/apply-cancel', methods=['POST'])
+@login_required
+def apply_cancel():
+    try:
+        job_id = request.args.get('job_id') or (request.get_json() or {}).get('job_id')
+        if not job_id or job_id not in apply_jobs:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+        info = apply_jobs[job_id]
+        info['status'] = 'cancelled'
+        apply_jobs[job_id] = info
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

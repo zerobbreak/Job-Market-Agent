@@ -229,16 +229,50 @@ class CVTailoringEngine:
         template_type = cv_data.get('template_type', 'professional')
             
         generator = PDFGenerator()
+        header = self._extract_header_info()
         success = generator.generate_pdf(
             markdown_content=cv_data['cv_content'],
             output_path=filename,
-            template_name=template_type
+            template_name=template_type,
+            header=header
         )
         
         if success:
             return filename
         else:
             raise Exception("PDF generation failed")
+
+    def _extract_header_info(self):
+        text = self.master_cv or ''
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        name = ''
+        if lines:
+            first = lines[0]
+            if '@' not in first and len(first.split()) <= 5:
+                name = first
+        import re
+        email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+        email = email_match.group(0) if email_match else ''
+        phone_match = re.search(r"(\+?\d[\d\s\-]{7,}\d)", text)
+        phone = phone_match.group(0) if phone_match else ''
+        loc_match = None
+        for l in lines[:10]:
+            if l.lower().startswith('location:'):
+                loc_match = l.split(':', 1)[1].strip()
+                break
+        location = loc_match or ''
+        title = ''
+        if len(lines) > 1:
+            second = lines[1]
+            if '@' not in second and len(second.split()) <= 6:
+                title = second
+        return {
+            'name': name,
+            'title': title,
+            'email': email,
+            'phone': phone,
+            'location': location
+        }
 
     def _create_docx(self, cv_data, version_id, output_dir):
         """
@@ -343,10 +377,12 @@ class CVTailoringEngine:
             pdf_path = f"{output_dir}/{version_id}.pdf"
             
             generator = PDFGenerator()
+            header = self._extract_header_info()
             success = generator.generate_pdf(
                 markdown_content=content,
                 output_path=pdf_path,
-                template_name='cover_letter'
+                template_name='cover_letter',
+                header=header
             )
             
             if success:
