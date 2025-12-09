@@ -397,12 +397,8 @@ class CVTailoringEngine:
         Create job-specific cover letter
         """
         try:
-        try:
             # Use the consolidated markdown generation method
             content = self._generate_cover_letter_markdown(job_posting, tailored_cv)
-            
-            # Save as PDF
-            company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
             
             # Save as PDF
             company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')

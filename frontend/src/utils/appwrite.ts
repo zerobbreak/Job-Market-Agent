@@ -10,9 +10,10 @@ export const BUCKET_ID_CVS = 'cv-bucket';
 
 const client = new Client();
 
-client
-    .setEndpoint(API_ENDPOINT)
-    .setProject(PROJECT_ID);
+const hasConfig = Boolean(API_ENDPOINT) && Boolean(PROJECT_ID);
+if (hasConfig) {
+  client.setEndpoint(API_ENDPOINT as string).setProject(PROJECT_ID as string);
+}
 
 export const account = new Account(client);
 export const databases = new Databases(client);
