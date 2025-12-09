@@ -179,7 +179,9 @@ def ensure_profile_schema():
         admin_client.set_key(api_key)
         admin_db = Databases(admin_client)
         try:
-            admin_db.create_boolean_column(
+            # Reverted to create_boolean_attribute due to SDK version mismatch (AttributeError)
+            # despite deprecation warning.
+            admin_db.create_boolean_attribute(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_PROFILES,
                 key='notification_enabled',
@@ -189,7 +191,8 @@ def ensure_profile_schema():
         except Exception as e:
             print(f"Profiles boolean attribute exists or failed to create: {e}")
         try:
-            admin_db.create_integer_column(
+            # Reverted to create_integer_attribute due to SDK version mismatch
+            admin_db.create_integer_attribute(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_PROFILES,
                 key='notification_threshold',
