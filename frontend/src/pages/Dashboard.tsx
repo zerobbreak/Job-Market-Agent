@@ -186,6 +186,13 @@ export default function Dashboard() {
         const data = await resp.json()
         if (data.success) {
           setCvHealth({ filename: data.cv_filename, uploadedAt: data.uploaded_at })
+          const pResp = await apiClient('/profile/structured', { method: 'GET' })
+          const pData = await pResp.json()
+          if (pData.success && pData.profile) {
+            setProfile(pData.profile)
+          }
+          setUploadStep('profile')
+          track('dashboard_autoload_profile', { hasCv: true }, 'dashboard')
         }
       } catch (e) {
         // ignore; indicator is optional

@@ -960,6 +960,42 @@ def get_current_profile():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/profile/structured', methods=['GET'])
+@login_required
+def get_structured_profile():
+    try:
+        databases = Databases(g.client)
+        result = databases.list_documents(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_PROFILES,
+            queries=[
+                Query.equal('userId', g.user_id),
+                Query.limit(1)
+            ]
+        )
+        if result.get('total', 0) == 0:
+            return jsonify({'success': False, 'error': 'No profile found'}), 404
+        doc = result['documents'][0]
+        def _safe_json(field, default):
+            try:
+                v = doc.get(field)
+                if isinstance(v, str):
+                    import json
+                    return json.loads(v)
+                return v if v is not None else default
+            except Exception:
+                return default
+        profile = {
+            'skills': _safe_json('skills', []),
+            'experience_level': doc.get('experience_level', ''),
+            'education': doc.get('education', ''),
+            'strengths': _safe_json('strengths', []),
+            'career_goals': doc.get('career_goals', ''),
+        }
+        return jsonify({'success': True, 'profile': profile})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 def send_job_match_notification(user_email, user_name, matches, threshold=70):
     """
     Send email notification for high-quality job matches using Appwrite Messaging
