@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { FileText, Loader2 } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
 
 type Job = {
   id: string
@@ -32,6 +33,7 @@ export default function SearchJobs({
   manualJobs: Job[]
   onApply: (job: Job) => void
 }) {
+  const toast = useToast()
   return (
     <>
       <Card>
@@ -80,7 +82,17 @@ export default function SearchJobs({
               <p className="text-gray-700 line-clamp-2">{job.description}</p>
             </CardContent>
             <CardFooter className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => window.open(job.url, '_blank')}>View Details</Button>
+              <Button variant="outline" className="flex-1" onClick={() => {
+                if (job.url && /^https?:\/\//.test(job.url)) {
+                  window.open(job.url, '_blank')
+                } else {
+                  toast.show({
+                    title: 'Invalid link',
+                    description: 'This job listing has no valid URL.',
+                    variant: 'error'
+                  })
+                }
+              }}>View Details</Button>
               <Button className="flex-1" onClick={() => onApply(job)}>Apply with AI</Button>
             </CardFooter>
           </Card>

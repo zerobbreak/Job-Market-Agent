@@ -49,10 +49,10 @@ export default function Applications() {
   const handleApply = (app: any) => {
     // For now, we just redirect potential re-applications or show a message.
     // Full AI re-application logic would need the Wizard flow or a modal.
-    if (app.url) {
-        window.open(app.url, '_blank')
+    if (typeof app.url === 'string' && /^https?:\/\//.test(app.url)) {
+      window.open(app.url, '_blank')
     } else {
-        toast.show({ title: 'Info', description: 'Re-application flow is being updated.', variant: 'default' })
+      toast.show({ title: 'Info', description: 'Re-application flow is being updated or link is invalid.', variant: 'default' })
     }
   }
 

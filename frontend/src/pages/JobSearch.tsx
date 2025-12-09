@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { apiClient } from '@/utils/api'
+import { useToast } from '@/components/ui/toast'
 
 interface Job {
   id: string
@@ -22,6 +23,10 @@ export default function JobSearch() {
   const [loading, setLoading] = useState(false)
 
   const handleManualSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.show({ title: 'Add keywords', description: 'Enter a job title or keywords to search.', variant: 'default' })
+      return
+    }
     setLoading(true)
     try {
       const response = await apiClient('/search-jobs', {
@@ -32,11 +37,14 @@ export default function JobSearch() {
       setJobs(data.jobs || [])
     } catch (error) {
       console.error('Error searching jobs:', error)
+      setJobs([])
+      toast.show({ title: 'Search failed', description: 'Unable to fetch jobs. Please try again.', variant: 'error' })
     } finally {
       setLoading(false)
     }
   }
 
+  const toast = useToast()
   return (
     <div className="space-y-6">
       <div>
@@ -113,13 +121,45 @@ export default function JobSearch() {
               <p className="text-muted-foreground line-clamp-3 text-sm leading-relaxed">{job.description}</p>
             </CardContent>
             <CardFooter className="pt-4 border-t bg-muted/20">
-              <Button
-                variant="outline"
-                className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all"
-                onClick={() => window.open(job.url, '_blank')}
-              >
-                View Details <ExternalLink className="h-4 w-4 ml-2" />
-              </Button>
+              {(() => {
+                const url = job.url
+                const isValid = typeof url === 'string' && /^https?:\/\//.test(url)
+                
+                if (isValid) {
+                  return (
+                    <Button
+                      variant="outline"
+                      className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all"
+                      asChild
+                    >
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`View details for ${job.title} at ${job.company}`}
+                      >
+                        View Details <ExternalLink className="h-4 w-4 ml-2" />
+                      </a>
+                    </Button>
+                  )
+                }
+
+                return (
+                  <Button
+                    variant="outline"
+                    className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all"
+                    onClick={() => {
+                      toast.show({
+                        title: 'Invalid link',
+                        description: 'This job listing link is invalid or missing.',
+                        variant: 'error'
+                      })
+                    }}
+                  >
+                    View Details <ExternalLink className="h-4 w-4 ml-2" />
+                  </Button>
+                )
+              })()}
             </CardFooter>
           </Card>
         ))}

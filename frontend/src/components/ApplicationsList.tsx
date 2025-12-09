@@ -2,7 +2,8 @@ import React from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileText, Upload, Sparkles } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
+import { FileText, Upload, Sparkles, ExternalLink } from 'lucide-react'
 
 type Application = {
   id: string
@@ -37,6 +38,7 @@ export default function ApplicationsList({
   serverTotalPages?: number
   onPageChange?: (page: number) => void
 }) {
+  const toast = useToast()
   const [page, setPage] = React.useState(serverPage ?? 1)
   React.useEffect(() => { if (serverPage) setPage(serverPage) }, [serverPage])
   const totalPages = serverTotalPages ?? Math.max(1, Math.ceil(applications.length / 10))
@@ -100,12 +102,27 @@ export default function ApplicationsList({
                 </CardContent>
               )}
               <CardFooter className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => application.jobUrl ? window.open(application.jobUrl, '_blank') : undefined}
-                >
-                  View Job
+                <Button variant="outline" className="flex-1" asChild>
+                  <a
+                    href={application.jobUrl || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`View job posting for ${application.jobTitle} at ${application.company}`}
+                    onClick={(e) => {
+                      const url = application.jobUrl
+                      const valid = typeof url === 'string' && /^https?:\/\//.test(url)
+                      if (!valid) {
+                        e.preventDefault()
+                        toast.show({
+                          title: 'Invalid link',
+                          description: 'This job link is invalid or missing.',
+                          variant: 'error'
+                        })
+                      }
+                    }}
+                  >
+                    View Job <ExternalLink className="h-4 w-4 ml-2" />
+                  </a>
                 </Button>
                 <Button
                   className="flex-1"

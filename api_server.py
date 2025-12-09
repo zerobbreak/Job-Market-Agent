@@ -73,7 +73,7 @@ COLLECTION_ID_PROFILES = 'profiles'
 BUCKET_ID_CVS = 'cv-bucket'
 COLLECTION_ID_ANALYTICS = 'analytics'
 COLLECTION_ID_MATCHES = 'matches'
-COLLECTION_ID_MATCHES = 'matches'
+
 
 # Global storage for pipelines and profiles (in production, use Redis or database)
 pipeline_store = {}
@@ -784,40 +784,6 @@ def match_jobs():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/matches/last', methods=['GET'])
-@login_required
-def get_last_matches():
-    """Retrieve the most recent job matches for the user"""
-    try:
-        location = request.args.get('location', '')
-        
-        databases = Databases(g.client)
-        queries = [
-            Query.equal('userId', g.user_id),
-            Query.order_desc('$createdAt'),
-            Query.limit(1)
-        ]
-        
-        if location:
-            queries.append(Query.equal('location', location))
-            
-        result = databases.list_documents(
-            database_id=DATABASE_ID,
-            collection_id=COLLECTION_ID_MATCHES,
-            queries=queries
-        )
-        
-        if result['total'] > 0:
-            doc = result['documents'][0]
-            matches = json.loads(doc.get('matches', '[]'))
-            return jsonify({'success': True, 'matches': matches})
-            
-        return jsonify({'success': True, 'matches': []})
-
-    except Exception as e:
-        print(f"Error fetching last matches: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/profile', methods=['POST'])
 @login_required

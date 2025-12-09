@@ -5,7 +5,8 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Slider } from '@/components/ui/slider'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, ExternalLink } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
 
 type Job = {
   id: string
@@ -58,6 +59,7 @@ export default function MatchedResults({
   findMatches: () => void
   handleApply: (job: Job) => void
 }) {
+  const toast = useToast()
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -158,7 +160,41 @@ export default function MatchedResults({
                 <p className="text-gray-700 line-clamp-2">{match.job.description}</p>
               </CardContent>
               <CardFooter className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => window.open(match.job.url, '_blank')}>View Details</Button>
+{(() => {
+                  const url = match.job.url
+                  const isValid = typeof url === 'string' && /^https?:\/\//.test(url)
+                  
+                  if (isValid) {
+                    return (
+                      <Button variant="outline" className="flex-1" asChild>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`View details for ${match.job.title} at ${match.job.company}`}
+                        >
+                          View Details <ExternalLink className="h-4 w-4 ml-2" />
+                        </a>
+                      </Button>
+                    )
+                  }
+                  
+                  return (
+                    <Button 
+                      variant="outline" 
+                      className="flex-1" 
+                      onClick={() => {
+                        toast.show({
+                          title: 'Invalid link',
+                          description: 'This job listing link is invalid or missing.',
+                          variant: 'error'
+                        })
+                      }}
+                    >
+                      View Details <ExternalLink className="h-4 w-4 ml-2" />
+                    </Button>
+                  )
+                })()}
                 <Button className="flex-1" onClick={() => handleApply(match.job)}>Apply with AI</Button>
               </CardFooter>
             </Card>

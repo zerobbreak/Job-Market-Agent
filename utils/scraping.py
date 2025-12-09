@@ -528,6 +528,8 @@ class AdvancedJobScraper:
         enriched_jobs = []
         
         # Calculate dynamic delay based on number of jobs
+        base_delay = self.config.url_scraping_delay
+        
         # More jobs = slightly faster per job to keep total time reasonable, but never below safe minimum
         if len(jobs) > 10:
              base_delay = max(0.5, base_delay * 0.8)
