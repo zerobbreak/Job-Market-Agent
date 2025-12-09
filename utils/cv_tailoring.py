@@ -58,6 +58,19 @@ class CVTailoringEngine:
             # print(f"JSON extraction failed: {e}")
             return None
 
+    def _sanitize_filename(self, name):
+        """
+        Sanitize component to be safe for filenames
+        """
+        import re
+        # Remove any directory traversal characters
+        name = name.replace('..', '')
+        # Allow alphanumeric, underscore, hyphen, space
+        name = re.sub(r'[^a-zA-Z0-9_\-\s]', '', name)
+        # Collapse whitespace and replace with underscore
+        name = re.sub(r'\s+', '_', name)
+        return name.strip('_')
+
     def generate_tailored_cv(self, job_posting, template_type=None):
         """
         Create customized CV for specific job application
@@ -68,7 +81,7 @@ class CVTailoringEngine:
             if not job_description:
                 print("⚠️ No job description available for CV tailoring")
                 job_description = f"{job_posting.get('title', 'Position')} at {job_posting.get('company', 'Company')}"
-
+            
             job_keywords = extract_job_keywords(job_description)
             
             # Determine template if not provided
@@ -104,7 +117,7 @@ class CVTailoringEngine:
             6. Add relevant projects/coursework if needed
             
             Return the response in strict JSON format with the following structure:
-            {
+            {{
                 "cv_content": "Full markdown of the CV",
                 "ats_analysis": "Brief ATS analysis",
                 "ats_score": 0,
@@ -112,7 +125,7 @@ class CVTailoringEngine:
                 "experience": ["Bullet points for roles/projects"],
                 "projects": ["Bullet points for projects"],
                 "education": ["Bullet points for education"]
-            }
+            }}
             """)
 
             # Parse the response
@@ -160,8 +173,8 @@ class CVTailoringEngine:
             cv_content = self._sanitize_markdown(cv_content)
 
             # Generate version ID
-            company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
-            role_name = job_posting.get('title', 'Position').replace(' ', '_').replace('/', '_')
+            company_name = self._sanitize_filename(job_posting.get('company', 'Unknown'))
+            role_name = self._sanitize_filename(job_posting.get('title', 'Position'))
             version_id = f"{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
             self.cv_versions[version_id] = {
@@ -401,8 +414,8 @@ class CVTailoringEngine:
             content = self._generate_cover_letter_markdown(job_posting, tailored_cv)
             
             # Save as PDF
-            company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
-            role_name = job_posting.get('title', 'Position').replace(' ', '_').replace('/', '_')
+            company_name = self._sanitize_filename(job_posting.get('company', 'Unknown'))
+            role_name = self._sanitize_filename(job_posting.get('title', 'Position'))
             version_id = f"CL_{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
             
             os.makedirs(output_dir, exist_ok=True)

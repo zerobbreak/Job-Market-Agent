@@ -46,7 +46,7 @@ CORS(app, resources={
     }
 })
 
-app.secret_key = os.urandom(24)  # For session management
+app.secret_key = os.getenv('SECRET_KEY') or os.urandom(24)  # For session management
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # Initialize Appwrite Client

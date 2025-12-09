@@ -160,7 +160,7 @@ export default function ApplicationsList({
                       onChange={async (e) => {
                         const newStatus = e.target.value as Application['status']
                         try {
-                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/applications/${application.id}/status`, {
+                          const res = await fetch(`${API_ORIGIN}/applications/${application.id}/status`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ status: newStatus })
