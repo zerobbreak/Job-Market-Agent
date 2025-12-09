@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewContent, setPreviewContent] = useState<{ cv_html: string, cover_letter_html: string, ats?: { score?: number, analysis?: string } } | null>(null)
   const [cvHealth, setCvHealth] = useState<{ filename?: string, uploadedAt?: string } | null>(null)
+  const cvFileInputRef = React.useRef<HTMLInputElement>(null)
 
   const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
   const MatchedResults = React.lazy(() => import('@/components/MatchedResults'))
@@ -192,6 +193,22 @@ export default function Dashboard() {
     })()
   }, [])
 
+  const handleChangeCvClick = () => {
+    track('cv_change_click', { fromIndicator: true }, 'dashboard')
+    cvFileInputRef.current?.click()
+  }
+
+  const formatRecency = (iso?: string) => {
+    if (!iso) return { label: 'Unknown', tone: 'default' as const }
+    const ts = Date.parse(iso)
+    if (isNaN(ts)) return { label: iso, tone: 'default' as const }
+    const days = Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24))
+    if (days <= 0) return { label: 'Updated today', tone: 'fresh' as const }
+    if (days <= 7) return { label: `Updated ${days}d ago`, tone: 'fresh' as const }
+    if (days <= 30) return { label: `Updated ${days}d ago`, tone: 'warn' as const }
+    return { label: `Updated ${days}d ago`, tone: 'stale' as const }
+  }
+
   const confirmApply = async () => {
     if (!pendingJob) return
     setShowTemplateDialog(false)
@@ -321,8 +338,33 @@ export default function Dashboard() {
               <div className="p-2 bg-blue-100 rounded-md"><FileText className="h-5 w-5 text-blue-600" /></div>
               <div>
                 <div className="text-sm text-gray-900 font-medium">Active CV: {cvHealth.filename}</div>
-                <div className="text-xs text-gray-500">Last uploaded: {cvHealth.uploadedAt?.replace('T', ' ').replace('Z','')}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-gray-500">Last uploaded: {cvHealth.uploadedAt?.replace('T', ' ').replace('Z','')}</div>
+                  {(() => { const r = formatRecency(cvHealth.uploadedAt); return (
+                    <Badge className={
+                      r.tone === 'fresh' ? 'bg-green-100 text-green-700' :
+                      r.tone === 'warn' ? 'bg-yellow-100 text-yellow-800' :
+                      r.tone === 'stale' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                    }>
+                      {r.label}
+                    </Badge>
+                  )})()}
+                </div>
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input ref={cvFileInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={async (e) => {
+                await handleCVUpload(e)
+                try {
+                  const resp = await apiClient('/profile/current', { method: 'GET' })
+                  const data = await resp.json()
+                  if (data.success) {
+                    setCvHealth({ filename: data.cv_filename, uploadedAt: data.uploaded_at })
+                    track('cv_change_uploaded', { filename: data.cv_filename }, 'dashboard')
+                  }
+                } catch {}
+              }} />
+              <Button size="sm" variant="outline" onClick={handleChangeCvClick}>Change CV</Button>
             </div>
           </div>
         </div>
