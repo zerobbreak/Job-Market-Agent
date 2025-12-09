@@ -56,6 +56,12 @@ export default function Dashboard() {
   const [applyMaxAttempts, setApplyMaxAttempts] = useState(40)
   const [currentApplyJobId, setCurrentApplyJobId] = useState<string | null>(null)
   const [applyCancelled, setApplyCancelled] = useState(false)
+  const [pendingJob, setPendingJob] = useState<Job | null>(null)
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false)
+  const [applyTemplate, setApplyTemplate] = useState<'MODERN' | 'PROFESSIONAL' | 'ACADEMIC'>('MODERN')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewContent, setPreviewContent] = useState<{ cv_html: string, cover_letter_html: string, ats?: { score?: number, analysis?: string } } | null>(null)
+  const [cvHealth, setCvHealth] = useState<{ filename?: string, uploadedAt?: string } | null>(null)
 
   const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
   const MatchedResults = React.lazy(() => import('@/components/MatchedResults'))
@@ -153,7 +159,42 @@ export default function Dashboard() {
     }
   }
 
-  const handleApply = async (job: Job) => {
+  const handleApply = (job: Job) => {
+    setPendingJob(job)
+    setShowTemplateDialog(true)
+  }
+
+  const previewApply = async () => {
+    if (!pendingJob) return
+    try {
+      const resp = await apiClient('/apply-preview', { method: 'POST', body: JSON.stringify({ job: pendingJob, template: applyTemplate }) })
+      const data = await resp.json()
+      if (data.success) {
+        setPreviewContent({ cv_html: data.cv_html, cover_letter_html: data.cover_letter_html, ats: data.ats })
+        setPreviewOpen(true)
+      }
+    } catch (e) {
+      console.error('Preview failed', e)
+    }
+  }
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const resp = await apiClient('/profile/current', { method: 'GET' })
+        const data = await resp.json()
+        if (data.success) {
+          setCvHealth({ filename: data.cv_filename, uploadedAt: data.uploaded_at })
+        }
+      } catch (e) {
+        // ignore; indicator is optional
+      }
+    })()
+  }, [])
+
+  const confirmApply = async () => {
+    if (!pendingJob) return
+    setShowTemplateDialog(false)
     setApplying(true)
     setError('')
     setApplyCancelled(false)
@@ -163,7 +204,7 @@ export default function Dashboard() {
     try {
       const start = await apiClient('/apply-job', {
         method: 'POST',
-        body: JSON.stringify({ job }),
+        body: JSON.stringify({ job: pendingJob, template: applyTemplate }),
       })
       const startData = await start.json()
       if (!startData.success || !startData.job_id) {
@@ -194,7 +235,7 @@ export default function Dashboard() {
           if (statusData.ats) {
             setGeneratedATS({ score: statusData.ats.score, analysis: statusData.ats.analysis })
           }
-          track('apply_complete', { jobId, title: job.title, company: job.company }, 'app')
+          track('apply_complete', { jobId, title: pendingJob.title, company: pendingJob.company, template: applyTemplate }, 'app')
           break
         }
         if (statusData.status === 'error') {
@@ -271,6 +312,21 @@ export default function Dashboard() {
               </Button>
             </div>
         )}
+
+      {/* CV Health Indicator */}
+      {cvHealth && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between p-3 border rounded-xl bg-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-md"><FileText className="h-5 w-5 text-blue-600" /></div>
+              <div>
+                <div className="text-sm text-gray-900 font-medium">Active CV: {cvHealth.filename}</div>
+                <div className="text-xs text-gray-500">Last uploaded: {cvHealth.uploadedAt?.replace('T', ' ').replace('Z','')}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="min-h-[500px]">
@@ -511,6 +567,69 @@ export default function Dashboard() {
             >
               Close
             </Button>
+          </DialogContent>
+        </Dialog>
+
+        {/* Apply Template Dialog */}
+        <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Choose a Template</DialogTitle>
+              <DialogDescription>Select how your CV will be formatted</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 p-3 border rounded-lg">
+                <input type="radio" name="tpl" checked={applyTemplate === 'MODERN'} onChange={() => setApplyTemplate('MODERN')} />
+                <div>
+                  <div className="font-medium">Modern</div>
+                  <div className="text-sm text-muted-foreground">Two-column layout with highlighted skills</div>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 p-3 border rounded-lg">
+                <input type="radio" name="tpl" checked={applyTemplate === 'PROFESSIONAL'} onChange={() => setApplyTemplate('PROFESSIONAL')} />
+                <div>
+                  <div className="font-medium">Professional</div>
+                  <div className="text-sm text-muted-foreground">Classic single-column, formal styling</div>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 p-3 border rounded-lg">
+                <input type="radio" name="tpl" checked={applyTemplate === 'ACADEMIC'} onChange={() => setApplyTemplate('ACADEMIC')} />
+                <div>
+                  <div className="font-medium">Academic</div>
+                  <div className="text-sm text-muted-foreground">Academic-focused emphasis and typography</div>
+                </div>
+              </label>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Button className="flex-1" onClick={previewApply}>Preview</Button>
+              <Button className="flex-1" onClick={confirmApply}>Continue</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowTemplateDialog(false)}>Cancel</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Preview</DialogTitle>
+              <DialogDescription>Review your documents before generation</DialogDescription>
+            </DialogHeader>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="border rounded p-2 overflow-auto max-h-[60vh]">
+                {previewContent && (
+                  <div dangerouslySetInnerHTML={{ __html: previewContent.cv_html }} />
+                )}
+              </div>
+              <div className="border rounded p-2 overflow-auto max-h-[60vh]">
+                {previewContent && (
+                  <div dangerouslySetInnerHTML={{ __html: previewContent.cover_letter_html }} />
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <Button className="flex-1" onClick={() => { setPreviewOpen(false); confirmApply() }}>Looks Good</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setPreviewOpen(false)}>Close</Button>
+            </div>
           </DialogContent>
         </Dialog>
     </div>

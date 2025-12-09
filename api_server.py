@@ -128,6 +128,58 @@ def check_rate(endpoint: str, limit: int, window_sec: int = 60):
     except Exception:
         return True
 
+def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationPipeline | None:
+    try:
+        databases = Databases(client)
+        storage = Storage(client)
+        existing_profiles = databases.list_documents(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_PROFILES,
+            queries=[Query.equal('userId', session_id)]
+        )
+        if existing_profiles.get('total', 0) == 0:
+            return None
+        doc = existing_profiles['documents'][0]
+        file_id = doc.get('cv_file_id') or doc.get('fileId')
+        cv_text = doc.get('cv_text')
+        if cv_text:
+            pipeline = JobApplicationPipeline()
+            pipeline.build_profile(cv_text)
+            pipeline_store[session_id] = pipeline
+            profile_store[session_id] = {
+                'profile_data': parse_profile(pipeline.profile),
+                'raw_profile': pipeline.profile,
+                'cv_filename': doc.get('cv_filename', 'CV'),
+                'cv_content': cv_text,
+                'file_id': file_id
+            }
+            return pipeline
+        if file_id:
+            try:
+                tmp_name = f"rehydrated_{file_id}.pdf"
+                cv_path = os.path.join(app.config['UPLOAD_FOLDER'], tmp_name)
+                with open(cv_path, 'wb') as f:
+                    data = storage.get_file_download(bucket_id=BUCKET_ID_CVS, file_id=file_id)
+                    f.write(data)
+                pipeline = JobApplicationPipeline(cv_path=cv_path)
+                cv_content = pipeline.load_cv()
+                pipeline.build_profile(cv_content)
+                pipeline_store[session_id] = pipeline
+                profile_store[session_id] = {
+                    'profile_data': parse_profile(pipeline.profile),
+                    'raw_profile': pipeline.profile,
+                    'cv_filename': doc.get('cv_filename', 'CV'),
+                    'cv_content': cv_content,
+                    'file_id': file_id
+                }
+                return pipeline
+            except Exception as e:
+                print(f"Rehydrate from storage failed: {e}")
+        return None
+    except Exception as e:
+        print(f"Rehydrate pipeline error: {e}")
+        return None
+
 MAX_RATE_ANALYTICS_PER_MIN = 60
 MAX_RATE_MATCHES_PER_MIN = 20
 MAX_RATE_APPLY_PER_MIN = 5
@@ -253,8 +305,10 @@ def _process_application_async(job_data, session_id, client_jwt_client, template
                 )
                 pipeline.profile = profile_info.get('profile_data', {})
             else:
-                cv_content = pipeline.load_cv()
-                pipeline.build_profile(cv_content)
+                rehydrated = _rehydrate_pipeline_from_profile(session_id, client_jwt_client)
+                if not rehydrated:
+                    cv_content = pipeline.load_cv()
+                    pipeline.build_profile(cv_content)
         app_result = pipeline.generate_application_package(job_data, template_type)
         interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
         files_payload = {}
@@ -494,6 +548,9 @@ def analyze_cv():
                     'userId': g.user_id,
                     'skills': json.dumps(profile_data.get('skills', [])), # Store as JSON string
                     'experience_level': profile_data.get('experience_level', 'N/A'),
+                    'cv_file_id': file_id,
+                    'cv_filename': filename,
+                    'cv_text': cv_content
                     # Add other fields as needed by your schema
                 }
 
@@ -622,9 +679,10 @@ def match_jobs():
                     # Reconstruct profile_info structure
                     profile_info = {
                         'profile_data': profile_data,
-                        'raw_profile': '', # Might not be saved
-                        'cv_filename': 'Stored Profile',
-                        'cv_content': '' # Might not be saved
+                        'raw_profile': '',
+                        'cv_filename': doc.get('cv_filename', 'Stored Profile'),
+                        'cv_content': doc.get('cv_text', ''),
+                        'file_id': doc.get('cv_file_id')
                     }
                     
                     # Cache back to memory
@@ -639,8 +697,7 @@ def match_jobs():
         # Ensure pipeline exists
         pipeline = pipeline_store.get(session_id)
         if not pipeline:
-            # Re-initialize pipeline if missing (e.g. server restart)
-            pipeline = JobApplicationPipeline()
+            pipeline = _rehydrate_pipeline_from_profile(session_id, g.client) or JobApplicationPipeline()
             pipeline_store[session_id] = pipeline
         
         # Extract skills from profile to build search query
@@ -878,6 +935,30 @@ def update_profile():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+
+@app.route('/api/profile/current', methods=['GET'])
+@login_required
+def get_current_profile():
+    try:
+        databases = Databases(g.client)
+        result = databases.list_documents(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_PROFILES,
+            queries=[
+                Query.equal('userId', g.user_id),
+                Query.order_desc('$updatedAt'),
+                Query.limit(1)
+            ]
+        )
+        if result.get('total', 0) == 0:
+            return jsonify({'success': False, 'error': 'No profile found'}), 404
+        doc = result['documents'][0]
+        filename = doc.get('cv_filename') or 'Unknown'
+        uploaded = doc.get('$updatedAt') or doc.get('$createdAt')
+        file_id = doc.get('cv_file_id')
+        return jsonify({'success': True, 'cv_filename': filename, 'uploaded_at': uploaded, 'file_id': file_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def send_job_match_notification(user_email, user_name, matches, threshold=70):
     """
@@ -1326,4 +1407,51 @@ def update_application_status(doc_id):
         return jsonify({'success': True})
     except Exception as e:
         print(f"Update application status error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/apply-preview', methods=['POST'])
+@login_required
+def apply_preview():
+    try:
+        if not check_rate('apply-job', MAX_RATE_APPLY_PER_MIN):
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+        if not request.is_json:
+            return jsonify({'success': False, 'error': 'Invalid request'}), 400
+        data = request.get_json()
+        job_data = data.get('job')
+        template_type = (data.get('template') or 'MODERN').lower()
+        if not isinstance(job_data, dict):
+            return jsonify({'success': False, 'error': 'Missing job data'}), 400
+
+        if g.user_id not in pipeline_store:
+            pipeline_store[g.user_id] = _rehydrate_pipeline_from_profile(g.user_id, g.client) or JobApplicationPipeline()
+        pipeline = pipeline_store[g.user_id]
+        if not getattr(pipeline, 'cv_engine', None):
+            profile_info = profile_store.get(g.user_id)
+            if profile_info and profile_info.get('cv_content'):
+                from utils.cv_tailoring import CVTailoringEngine
+                pipeline.cv_engine = CVTailoringEngine(profile_info['cv_content'], profile_info.get('profile_data', {}))
+                pipeline.profile = profile_info.get('profile_data', {})
+            else:
+                cv_content = pipeline.load_cv()
+                pipeline.build_profile(cv_content)
+
+        cv_content, ats_analysis = pipeline.cv_engine.generate_tailored_cv(job_data, template_type)
+        version_id = list(pipeline.cv_engine.cv_versions.keys())[-1]
+        cv_data = pipeline.cv_engine.get_cv_version(version_id) or {}
+
+        from utils.pdf_generator import PDFGenerator
+        generator = PDFGenerator()
+        header = pipeline.cv_engine._extract_header_info()
+        sections = pipeline.cv_engine._build_sections(cv_data)
+        cv_html = generator.generate_html(cv_content, template_name=template_type, header=header, sections=sections)
+
+        cl_markdown = pipeline.cv_engine._generate_cover_letter_markdown(job_data, tailored_cv=cv_content)
+        header_with_date = dict(header)
+        header_with_date['date'] = datetime.now().strftime('%B %d, %Y')
+        cl_html = generator.generate_html(cl_markdown, template_name='cover_letter', header=header_with_date)
+
+        return jsonify({'success': True, 'cv_html': cv_html, 'cover_letter_html': cl_html, 'ats': {'analysis': ats_analysis, 'score': cv_data.get('ats_score')}})
+    except Exception as e:
+        print(f"Apply preview error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

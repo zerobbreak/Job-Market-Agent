@@ -6,7 +6,7 @@
     <style>
         @page {
             size: A4;
-            margin: 0;
+            margin: 2cm;
         }
 
         body {
@@ -154,8 +154,9 @@
             <p>{{ email }} • {{ phone }} • {{ location }}</p>
         </div>
 
-        <div class="content-wrapper" style="display: block; width: auto;">
-            {{ content }}
+        <div class="content-wrapper">
+            <div class="sidebar">{{ sidebar }}</div>
+            <div class="main-content">{{ main }}</div>
         </div>
 
         <!-- Footer -->

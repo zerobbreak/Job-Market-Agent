@@ -73,9 +73,13 @@ class CVTailoringEngine:
             
             Return the response in strict JSON format with the following structure:
             {
-                "cv_content": "The full markdown content of the CV",
-                "ats_analysis": "A brief analysis of the ATS score and improvements made",
-                "ats_score": 0
+                "cv_content": "Full markdown of the CV",
+                "ats_analysis": "Brief ATS analysis",
+                "ats_score": 0,
+                "summary": "1-2 paragraph professional summary",
+                "experience": ["Bullet points for roles/projects"],
+                "projects": ["Bullet points for projects"],
+                "education": ["Bullet points for education"]
             }
             """)
 
@@ -101,12 +105,19 @@ class CVTailoringEngine:
                 )
                 ats_analysis = parsed_result.get('ats_analysis', "Analysis not available")
                 ats_score = parsed_result.get('ats_score')
+                sections = {
+                    'summary': parsed_result.get('summary') or '',
+                    'experience': parsed_result.get('experience') or [],
+                    'projects': parsed_result.get('projects') or [],
+                    'education': parsed_result.get('education') or []
+                }
             except Exception as e:
                 print(f"Error parsing AI response: {e}")
                 # Fallback: treat the whole response as CV content if parsing fails
                 cv_content = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
                 ats_analysis = "Parsing failed"
                 ats_score = None
+                sections = {'summary': '', 'experience': [], 'projects': [], 'education': []}
 
             # Sanitize markdown to remove artifacts
             cv_content = self._sanitize_markdown(cv_content)
@@ -126,7 +137,8 @@ class CVTailoringEngine:
                 'job_url': job_posting.get('url', ''),
                 'job_title': job_posting.get('title', ''),
                 'company': job_posting.get('company', ''),
-                'template_type': template_type.lower()
+                'template_type': template_type.lower(),
+                'sections': sections
             }
 
             return self.cv_versions[version_id]['cv_content'], self.cv_versions[version_id]['ats_analysis']
@@ -230,11 +242,13 @@ class CVTailoringEngine:
             
         generator = PDFGenerator()
         header = self._extract_header_info()
+        sections = self._build_sections(cv_data)
         success = generator.generate_pdf(
             markdown_content=cv_data['cv_content'],
             output_path=filename,
             template_name=template_type,
-            header=header
+            header=header,
+            sections=sections
         )
         
         if success:
@@ -378,17 +392,119 @@ class CVTailoringEngine:
             
             generator = PDFGenerator()
             header = self._extract_header_info()
+            try:
+                from datetime import datetime
+                header['date'] = datetime.now().strftime('%B %d, %Y')
+            except Exception:
+                pass
             success = generator.generate_pdf(
                 markdown_content=content,
                 output_path=pdf_path,
                 template_name='cover_letter',
                 header=header
             )
-            
             if success:
                 return pdf_path
-            else:
-                return content # Fallback to text content if PDF fails
+            # Fallback: force a simple PDF even if markdown failed
+            try:
+                simple_text = content.replace('\n', '\n\n')
+                success2 = generator.generate_pdf(
+                    markdown_content=simple_text,
+                    output_path=pdf_path,
+                    template_name='cover_letter',
+                    header=header
+                )
+                if success2:
+                    return pdf_path
+            except Exception:
+                pass
+            return content
+
+    def _build_sections(self, cv_data):
+        skills = []
+        prof = self.profile
+        try:
+            import json
+            if isinstance(prof, str):
+                parsed = json.loads(prof)
+                prof = parsed
+        except Exception:
+            pass
+        if isinstance(prof, dict):
+            s = prof.get('skills')
+            if isinstance(s, list):
+                skills = [str(x) for x in s if str(x).strip()]
+        if not skills:
+            kw = cv_data.get('job_keywords') or []
+            skills = [str(x) for x in kw if str(x).strip()]
+        summary = ''
+        if isinstance(prof, dict):
+            summary = str(prof.get('career_goals') or '').strip()
+        experience_html = ''
+        projects_html = ''
+        education_html = ''
+        sections_struct = cv_data.get('sections') or {}
+        try:
+            import markdown as md
+            def bullets_to_html(items):
+                if isinstance(items, list) and items:
+                    md_text = '\n'.join([f"- {str(i)}" for i in items])
+                    return md.markdown(md_text)
+                return ''
+            experience_html = bullets_to_html(sections_struct.get('experience')) or experience_html
+            projects_html = bullets_to_html(sections_struct.get('projects')) or projects_html
+            education_html = bullets_to_html(sections_struct.get('education')) or education_html
+            if isinstance(sections_struct.get('summary'), str) and sections_struct.get('summary').strip():
+                summary = sections_struct.get('summary').strip()
+        except Exception:
+            pass
+        try:
+            import re
+            import markdown as md
+            content = cv_data.get('cv_content') or ''
+            def section_block(title):
+                pattern = rf"^##\s*{title}[\s\S]*?(?=^##\s|\Z)"
+                m = re.search(pattern, content, re.MULTILINE)
+                return m.group(0) if m else ''
+            exp_md = section_block('PROFESSIONAL EXPERIENCE') or section_block('EXPERIENCE')
+            proj_md = section_block('TECHNICAL PROJECTS') or section_block('PROJECTS')
+            edu_md = section_block('EDUCATION')
+            experience_html = experience_html or (md.markdown(exp_md) if exp_md else '')
+            projects_html = projects_html or (md.markdown(proj_md) if proj_md else '')
+            education_html = education_html or (md.markdown(edu_md) if edu_md else '')
+        except Exception:
+            pass
+        return {
+            'skills': skills,
+            'summary': summary,
+            'experience_html': experience_html,
+            'projects_html': projects_html,
+            'education_html': education_html
+        }
+
+    def _generate_cover_letter_markdown(self, job_posting, tailored_cv=None):
+        try:
+            company_research = self._research_company(job_posting['company'])
+            cv_content = tailored_cv if tailored_cv else self.master_cv
+            prompt = self._build_cover_letter_prompt(job_posting, cv_content, company_research)
+            cover_letter = application_writer.run(prompt)
+            content = self._extract_content(cover_letter)
+            try:
+                import json
+                raw = content
+                if "```json" in raw:
+                    raw = raw.split("```json")[1].split("```")[0].strip()
+                elif "{" in raw and "}" in raw:
+                    start = raw.find("{")
+                    end = raw.rfind("}") + 1
+                    raw = raw[start:end]
+                parsed = json.loads(raw)
+                content = parsed.get('cover_letter', content)
+            except Exception:
+                pass
+            return self._sanitize_markdown(content)
+        except Exception as e:
+            return f"Cover letter error: {e}"
 
         except Exception as e:
             print(f"Error generating cover letter: {e}")
@@ -444,11 +560,20 @@ class CVTailoringEngine:
         import re
         text = re.sub(r"\(placeholder\)", "", text)
         text = re.sub(r"\[placeholder\]", "", text)
-        # Collapse excessive backslashes
+        # Collapse excessive escape sequences
         text = text.replace("\\n", "\n").replace("\\t", "\t")
         # Remove leading/trailing quotes if present
         if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
             text = text[1:-1]
+        # Ensure paragraph breaks for readability
+        try:
+            import re
+            # Insert double newlines after sentence endings when followed by a capital letter
+            text = re.sub(r"([.!?])\s+(?=[A-Z])", r"\1\n\n", text)
+            # Normalize multiple blank lines
+            text = re.sub(r"\n{3,}", "\n\n", text)
+        except Exception:
+            pass
         return text.strip()
 
     def _research_company(self, company_name):

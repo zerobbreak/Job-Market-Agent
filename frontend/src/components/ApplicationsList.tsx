@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { FileText, Upload, Sparkles, ExternalLink } from 'lucide-react'
+import { track } from '@/utils/analytics'
+import { Input } from '@/components/ui/input'
 
 type Application = {
   id: string
@@ -41,13 +43,85 @@ export default function ApplicationsList({
   const toast = useToast()
   const [page, setPage] = React.useState(serverPage ?? 1)
   React.useEffect(() => { if (serverPage) setPage(serverPage) }, [serverPage])
-  const totalPages = serverTotalPages ?? Math.max(1, Math.ceil(applications.length / 10))
+
+  // Local copy to support inline status edits without requiring parent refresh
+  const [localApps, setLocalApps] = React.useState<Application[]>(applications)
+  React.useEffect(() => { setLocalApps(applications) }, [applications])
+
+  const totalPages = serverTotalPages ?? Math.max(1, Math.ceil(localApps.length / 10))
   const start = (page - 1) * 10
-  const visible = serverTotalPages ? applications : applications.slice(start, start + 10)
+  const pageSlice = serverTotalPages ? localApps : localApps.slice(start, start + 10)
+
+  // Filters / sort / search state
+  const [filterStatus, setFilterStatus] = React.useState<string>('')
+  const [searchQuery, setSearchQuery] = React.useState('')
+  const [sortBy, setSortBy] = React.useState<'date_desc' | 'date_asc' | 'company' | 'title'>('date_desc')
+
+  const filtered = pageSlice.filter((a) => {
+    const statusOk = filterStatus ? a.status === filterStatus : true
+    const q = searchQuery.trim().toLowerCase()
+    const textOk = q
+      ? [a.jobTitle, a.company, a.location, a.appliedDate].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
+      : true
+    return statusOk && textOk
+  })
+
+  const visible = [...filtered].sort((a, b) => {
+    if (sortBy === 'date_desc') return (b.appliedDate || '').localeCompare(a.appliedDate || '')
+    if (sortBy === 'date_asc') return (a.appliedDate || '').localeCompare(b.appliedDate || '')
+    if (sortBy === 'company') return (a.company || '').localeCompare(b.company || '')
+    return (a.jobTitle || '').localeCompare(b.jobTitle || '')
+  })
 
   return (
     <>
       <h2 className="text-2xl font-bold text-gray-900">Your Applications</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div>
+          <Input
+            placeholder="Search title, company, location"
+            value={searchQuery}
+            onChange={(e) => {
+              const v = e.target.value
+              setSearchQuery(v)
+              track('applications_search', { query: v }, 'applications')
+            }}
+          />
+        </div>
+        <div>
+          <select
+            value={filterStatus}
+            onChange={(e) => {
+              const v = e.target.value
+              setFilterStatus(v)
+              track('applications_filter_status', { status: v || 'all' }, 'applications')
+            }}
+            className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+          >
+            <option value="">All statuses</option>
+            <option value="applied">Applied</option>
+            <option value="interview">Interview</option>
+            <option value="rejected">Rejected</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+        <div>
+          <select
+            value={sortBy}
+            onChange={(e) => {
+              const v = e.target.value as typeof sortBy
+              setSortBy(v)
+              track('applications_sort', { sortBy: v }, 'applications')
+            }}
+            className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+          >
+            <option value="date_desc">Newest first</option>
+            <option value="date_asc">Oldest first</option>
+            <option value="company">Company</option>
+            <option value="title">Job Title</option>
+          </select>
+        </div>
+      </div>
       {applications.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -67,22 +141,50 @@ export default function ApplicationsList({
                     <CardDescription>{application.company}{application.location ? ` • ${application.location}` : ''}</CardDescription>
                     <p className="text-sm text-muted-foreground mt-1">Applied on {application.appliedDate}</p>
                   </div>
-                  <Badge variant={getStatusBadgeVariant(application.status)}>
-                    {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
-                  </Badge>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={getStatusBadgeVariant(application.status)}>
+                      {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
+                    </Badge>
+                    <select
+                      value={application.status}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as Application['status']
+                        try {
+                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/applications/${application.id}/status`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: newStatus })
+                          })
+                          const data = await res.json()
+                          if (!res.ok || data.success === false) throw new Error(data.error || 'Status update failed')
+                          setLocalApps(prev => prev.map(a => a.id === application.id ? { ...a, status: newStatus } : a))
+                          toast.show({ title: 'Updated', description: 'Application status updated' })
+                          track('application_status_changed', { applicationId: application.id, status: newStatus }, 'applications')
+                        } catch (err) {
+                          toast.show({ title: 'Error', description: 'Could not update status', variant: 'error' })
+                        }
+                      }}
+                      className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm"
+                    >
+                      <option value="applied">Applied</option>
+                      <option value="interview">Interview</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </div>
                 </div>
               </CardHeader>
               {application.files && (
                 <CardContent>
                   <div className="grid sm:grid-cols-3 gap-3">
-                    <a href={`${API_ORIGIN}${application.files.cv}`} download className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                    <a href={`${API_ORIGIN}${application.files.cv}`} download className="flex items-center justify-between p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors" onClick={() => track('file_download_cv', { applicationId: application.id }, 'applications')}>
                       <div className="flex items-center">
                         <FileText className="h-5 w-5 text-blue-600 mr-3" />
                         <span className="font-medium text-blue-900">Tailored CV</span>
                       </div>
                       <Upload className="h-4 w-4 text-blue-500 rotate-180" />
                     </a>
-                    <a href={`${API_ORIGIN}${application.files.cover_letter}`} download className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+                    <a href={`${API_ORIGIN}${application.files.cover_letter}`} download className="flex items-center justify-between p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors" onClick={() => track('file_download_cover_letter', { applicationId: application.id }, 'applications')}>
                       <div className="flex items-center">
                         <FileText className="h-5 w-5 text-purple-600 mr-3" />
                         <span className="font-medium text-purple-900">Cover Letter</span>
@@ -90,7 +192,7 @@ export default function ApplicationsList({
                       <Upload className="h-4 w-4 text-purple-500 rotate-180" />
                     </a>
                     {application.files.interview_prep && (
-                      <a href={`${API_ORIGIN}${application.files.interview_prep}`} download className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                      <a href={`${API_ORIGIN}${application.files.interview_prep}`} download className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors" onClick={() => track('file_download_interview_prep', { applicationId: application.id }, 'applications')}>
                         <div className="flex items-center">
                           <Sparkles className="h-5 w-5 text-green-600 mr-3" />
                           <span className="font-medium text-green-900">Interview Prep</span>
@@ -102,31 +204,37 @@ export default function ApplicationsList({
                 </CardContent>
               )}
               <CardFooter className="flex gap-3">
-                <Button variant="outline" className="flex-1" asChild>
-                  <a
-                    href={application.jobUrl || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`View job posting for ${application.jobTitle} at ${application.company}`}
-                    onClick={(e) => {
-                      const url = application.jobUrl
-                      const valid = typeof url === 'string' && /^https?:\/\//.test(url)
-                      if (!valid) {
-                        e.preventDefault()
-                        toast.show({
-                          title: 'Invalid link',
-                          description: 'This job link is invalid or missing.',
-                          variant: 'error'
-                        })
-                      }
-                    }}
-                  >
-                    View Job <ExternalLink className="h-4 w-4 ml-2" />
-                  </a>
-                </Button>
+                {(() => {
+                  const url = application.jobUrl
+                  const valid = typeof url === 'string' && /^https?:\/\//.test(url)
+                  return (
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      disabled={!valid}
+                      onClick={() => {
+                        if (!valid) {
+                          toast.show({
+                            title: 'Invalid link',
+                            description: 'This job link is invalid or missing.',
+                            variant: 'error'
+                          })
+                          return
+                        }
+                        track('application_view_job', { applicationId: application.id, url }, 'applications')
+                        window.open(url!, '_blank', 'noopener,noreferrer')
+                      }}
+                    >
+                      View Job <ExternalLink className="h-4 w-4 ml-2" />
+                    </Button>
+                  )
+                })()}
                 <Button
                   className="flex-1"
-                  onClick={() => onApply({ id: application.id, title: application.jobTitle, company: application.company, location: application.location || '', description: '', url: application.jobUrl || '' })}
+                  onClick={() => {
+                    track('application_apply_again', { applicationId: application.id }, 'applications')
+                    onApply({ id: application.id, title: application.jobTitle, company: application.company, location: application.location || '', description: '', url: application.jobUrl || '' })
+                  }}
                 >
                   Apply Again
                 </Button>
@@ -140,11 +248,13 @@ export default function ApplicationsList({
                 const next = Math.max(1, page - 1)
                 setPage(next)
                 onPageChange?.(next)
+                track('applications_pagination_prev', { page: next }, 'applications')
               }}>Previous</Button>
               <Button variant="outline" disabled={page >= totalPages} onClick={() => {
                 const next = Math.min(totalPages, page + 1)
                 setPage(next)
                 onPageChange?.(next)
+                track('applications_pagination_next', { page: next }, 'applications')
               }}>Next</Button>
             </div>
           </div>
