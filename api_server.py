@@ -38,7 +38,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configure CORS for production
-allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',')
+allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,https://job-market-agent.vercel.app').split(',')
 CORS(app, resources={
     r"/api/*": {
         "origins": allowed_origins,
@@ -238,7 +238,7 @@ def search_jobs():
         print(f"Error searching jobs: {e}")
         return jsonify({'jobs': [], 'error': str(e)})
 
-def _process_application_async(job_data, session_id, client_jwt_client):
+def _process_application_async(job_data, session_id, client_jwt_client, template_type=None):
     try:
         if session_id not in pipeline_store:
             pipeline_store[session_id] = JobApplicationPipeline()
@@ -255,7 +255,7 @@ def _process_application_async(job_data, session_id, client_jwt_client):
             else:
                 cv_content = pipeline.load_cv()
                 pipeline.build_profile(cv_content)
-        app_result = pipeline.generate_application_package(job_data)
+        app_result = pipeline.generate_application_package(job_data, template_type)
         interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
         files_payload = {}
         try:
@@ -306,11 +306,12 @@ def apply_job():
             data = request.get_json()
             session_id = g.user_id
             job_data = data.get('job')
+            template_type = data.get('template')
             job_id = str(uuid.uuid4())
             apply_jobs[job_id] = {'status': 'processing', 'created_at': time.time()}
             client_jwt_client = g.client
             def _runner():
-                result = _process_application_async(job_data, session_id, client_jwt_client)
+                result = _process_application_async(job_data, session_id, client_jwt_client, template_type)
                 current = apply_jobs.get(job_id, {})
                 if current.get('status') == 'cancelled':
                     return
@@ -768,7 +769,7 @@ def match_jobs():
                 data={
                     'userId': g.user_id,
                     'location': location,
-                    'matches': json.dumps(matches)
+                    'matches': json.dumps(matches) # matches is already a list of dicts
                 }
             )
         except Exception as e:
@@ -1090,10 +1091,13 @@ def matches_last():
             collection_id=COLLECTION_ID_MATCHES,
             queries=queries
         )
-        if result.get('total', 0) == 0:
+        if not result or result.get('total', 0) == 0:
             return jsonify({'success': True, 'matches': [], 'cached': False})
         doc = result['documents'][0]
-        matches = json.loads(doc.get('matches', '[]'))
+        matches_str = doc.get('matches', '[]') or '[]'
+        matches = json.loads(matches_str)
+        if matches is None:
+            matches = []
         last_seen = datetime.now().isoformat()
         try:
             databases.update_document(
@@ -1293,4 +1297,33 @@ def apply_cancel():
         apply_jobs[job_id] = info
         return jsonify({'success': True})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/api/applications/<doc_id>/status', methods=['PUT'])
+@login_required
+def update_application_status(doc_id):
+    try:
+        data = request.get_json() or {}
+        new_status = data.get('status')
+        allowed = {'pending', 'applied', 'interview', 'rejected'}
+        if new_status not in allowed:
+            return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+        databases = Databases(g.client)
+        doc = databases.get_document(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_APPLICATIONS,
+            document_id=doc_id
+        )
+        if doc.get('userId') != g.user_id:
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
+
+        databases.update_document(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_APPLICATIONS,
+            document_id=doc_id,
+            data={'status': new_status}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Update application status error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
