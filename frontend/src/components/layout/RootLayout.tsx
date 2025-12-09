@@ -55,7 +55,7 @@ export default function RootLayout() {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed lg:static inset-y-0 left-0 z-50 w-72 bg-sidebar border-r border-sidebar-border transform transition-transform duration-300 ease-in-out lg:transform-none flex flex-col",
+          "fixed lg:static inset-y-0 left-0 z-50 w-72 bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-in-out lg:transform-none flex flex-col",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -67,7 +67,7 @@ export default function RootLayout() {
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
               Job Market
             </h1>
-            <p className="text-xs text-sidebar-foreground/60">AI Agent</p>
+            <p className="text-xs text-gray-400">AI Agent</p>
           </div>
         </div>
 
@@ -82,32 +82,32 @@ export default function RootLayout() {
                 className={({ isActive }) => cn(
                   "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group",
                   isActive 
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg shadow-yellow-900/20" 
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "bg-slate-800 text-white shadow-lg shadow-black/20" 
+                    : "text-gray-400 hover:bg-slate-800 hover:text-white"
                 )}
               >
-                <Icon className={cn("h-5 w-5", location.pathname === item.href ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-accent-foreground")} />
+                <Icon className={cn("h-5 w-5", location.pathname === item.href ? "text-white" : "text-gray-500 group-hover:text-white")} />
                 {item.name}
               </NavLink>
             )
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border mt-auto">
-          <div className="bg-sidebar-accent/50 rounded-xl p-4 mb-4 backdrop-blur-md border border-sidebar-border">
+        <div className="p-4 border-t border-slate-800 mt-auto">
+          <div className="bg-slate-800/50 rounded-xl p-4 mb-4 backdrop-blur-md border border-slate-700">
             <div className="flex items-center gap-3 mb-3">
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-inner">
                 {user?.name?.[0] || 'U'}
               </div>
               <div className="overflow-hidden">
-                <p className="font-medium text-sm text-sidebar-foreground truncate">{user?.name}</p>
-                <p className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</p>
+                <p className="font-medium text-sm text-white truncate">{user?.name}</p>
+                <p className="text-xs text-gray-400 truncate">{user?.email}</p>
               </div>
             </div>
             <Button 
               variant="ghost" 
               size="sm" 
-              className="w-full justify-start text-sidebar-foreground/70 hover:text-red-400 hover:bg-red-500/10"
+              className="w-full justify-start text-gray-400 hover:text-red-400 hover:bg-red-500/10"
               onClick={logout}
             >
               <LogOut className="h-4 w-4 mr-2" />
