@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
 import Login from './components/Login'
@@ -43,7 +43,8 @@ function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Dashboard />} />
+        <Route index element={<Navigate to="search" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="search" element={<JobSearch />} />
         <Route path="applications" element={<Applications />} />
         <Route path="profile" element={<Profile />} />
