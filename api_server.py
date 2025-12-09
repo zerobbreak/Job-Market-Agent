@@ -37,7 +37,7 @@ import time
 app = Flask(__name__)
 
 # Configure CORS for production
-allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,https://job-market-agent.vercel.app').split(',')
+allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,https://job-market-agent.vercel.app,https://job-market-agent.onrender.com').split(',')
 CORS(app, resources={
     r"/api/*": {
         "origins": allowed_origins,
@@ -149,14 +149,15 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                 pipeline = JobApplicationPipeline(cv_path=cv_path)
                 cv_content = pipeline.load_cv()
                 pipeline.build_profile(cv_content)
-                pipeline_store[session_id] = pipeline
-                profile_store[session_id] = {
-                    'profile_data': parse_profile(pipeline.profile),
-                    'raw_profile': pipeline.profile,
-                    'cv_filename': doc.get('cv_filename', 'CV'),
-                    'cv_content': cv_content,
-                    'file_id': file_id
-                }
+                with store_lock:
+                    pipeline_store[session_id] = pipeline
+                    profile_store[session_id] = {
+                        'profile_data': parse_profile(pipeline.profile),
+                        'raw_profile': pipeline.profile,
+                        'cv_filename': doc.get('cv_filename', 'CV'),
+                        'cv_content': cv_content,
+                        'file_id': file_id
+                    }
                 return pipeline
             except Exception as e:
                 print(f"Rehydrate from storage failed: {e}")
@@ -178,7 +179,7 @@ def ensure_profile_schema():
         admin_client.set_key(api_key)
         admin_db = Databases(admin_client)
         try:
-            admin_db.create_boolean_attribute(
+            admin_db.create_boolean_column(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_PROFILES,
                 key='notification_enabled',
@@ -188,7 +189,7 @@ def ensure_profile_schema():
         except Exception as e:
             print(f"Profiles boolean attribute exists or failed to create: {e}")
         try:
-            admin_db.create_integer_attribute(
+            admin_db.create_integer_column(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_PROFILES,
                 key='notification_threshold',
