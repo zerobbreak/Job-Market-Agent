@@ -76,7 +76,7 @@ export default function Profile() {
             <h2 className="text-2xl font-bold text-gray-900">No Profile Found</h2>
             <p className="text-gray-500 max-w-md mt-2">Upload your CV to generate your AI profile and start finding jobs.</p>
         </div>
-        <Button onClick={() => navigate('/app')} size="lg">
+        <Button onClick={() => navigate('/app/dashboard')} size="lg">
             Go to Dashboard
         </Button>
       </div>

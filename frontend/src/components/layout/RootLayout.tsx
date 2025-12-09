@@ -36,7 +36,7 @@ export default function RootLayout() {
   const location = useLocation()
 
   const navigation = [
-    { name: 'Dashboard', href: '/app', icon: LayoutDashboard },
+    { name: 'Dashboard', href: '/app/dashboard', icon: LayoutDashboard },
     { name: 'Find Jobs', href: '/app/search', icon: Search },
     { name: 'Applications', href: '/app/applications', icon: FileText },
     { name: 'Profile', href: '/app/profile', icon: User },
