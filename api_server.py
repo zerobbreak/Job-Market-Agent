@@ -75,8 +75,11 @@ COLLECTION_ID_MATCHES = 'matches'
 
 
 # Global storage for pipelines and profiles (in production, use Redis or database)
+import threading
+store_lock = threading.Lock()
 pipeline_store = {}
 profile_store = {}
+
 apply_jobs = {}
 APPLY_JOB_TIMEOUT_SECS = 300
 APPLY_JOB_CLEANUP_SECS = 600
@@ -126,14 +129,15 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
         if cv_text:
             pipeline = JobApplicationPipeline()
             pipeline.build_profile(cv_text)
-            pipeline_store[session_id] = pipeline
-            profile_store[session_id] = {
-                'profile_data': parse_profile(pipeline.profile),
-                'raw_profile': pipeline.profile,
-                'cv_filename': doc.get('cv_filename', 'CV'),
-                'cv_content': cv_text,
-                'file_id': file_id
-            }
+            with store_lock:
+                pipeline_store[session_id] = pipeline
+                profile_store[session_id] = {
+                    'profile_data': parse_profile(pipeline.profile),
+                    'raw_profile': pipeline.profile,
+                    'cv_filename': doc.get('cv_filename', 'CV'),
+                    'cv_content': cv_text,
+                    'file_id': file_id
+                }
             return pipeline
         if file_id:
             try:
@@ -161,10 +165,7 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
         print(f"Rehydrate pipeline error: {e}")
         return None
 
-MAX_RATE_ANALYTICS_PER_MIN = 60
-MAX_RATE_MATCHES_PER_MIN = 20
-MAX_RATE_APPLY_PER_MIN = 5
-MAX_RATE_ANALYZE_PER_MIN = 5
+
 
 def ensure_profile_schema():
     try:
@@ -481,6 +482,9 @@ def get_applications():
 def analyze_cv():
     """Analyze uploaded CV and build candidate profile"""
     try:
+        if not check_rate('analyze-cv', MAX_RATE_ANALYZE_PER_MIN):
+             return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+
         cv_file = request.files.get('cv')
         if not cv_file:
             return jsonify({'success': False, 'error': 'Missing file'})
@@ -577,14 +581,15 @@ def analyze_cv():
                 # For now, we'll keep the session_id concept for the immediate session
                 # but rely on DB for persistence.
                 session_id = g.user_id # Use user_id as session_id for simplicity in this flow
-                pipeline_store[session_id] = pipeline
-                profile_store[session_id] = {
-                    'profile_data': profile_data,
-                    'raw_profile': profile_text,
-                    'cv_filename': filename,
-                    'cv_content': cv_content,
-                    'file_id': file_id 
-                }
+                with store_lock:
+                    pipeline_store[session_id] = pipeline
+                    profile_store[session_id] = {
+                        'profile_data': profile_data,
+                        'raw_profile': profile_text,
+                        'cv_filename': filename,
+                        'cv_content': cv_content,
+                        'file_id': file_id 
+                    }
 
             except Exception as db_error:
                 print(f"Appwrite Error: {db_error}")
@@ -695,10 +700,20 @@ def match_jobs():
             return jsonify({'success': False, 'error': 'No profile found. Please upload CV first.'})
         
         # Ensure pipeline exists
-        pipeline = pipeline_store.get(session_id)
+        with store_lock:
+            pipeline = pipeline_store.get(session_id)
+            if not pipeline:
+                # Rehydrate might take time, maybe keep lock or release?
+                # Rehydration does IO. Releasing lock then re-acquiring for write is better but race condition possible.
+                # Since we are using user-specific keys, race condition is only per user.
+                # For simplicity, we'll keep lock or just move hydration out.
+                # But pipeline_store is the shared resource.
+                pass
+        
         if not pipeline:
             pipeline = _rehydrate_pipeline_from_profile(session_id, g.client) or JobApplicationPipeline()
-            pipeline_store[session_id] = pipeline
+            with store_lock:
+                pipeline_store[session_id] = pipeline
         
         # Extract skills from profile to build search query
         profile_data = profile_info['profile_data']
@@ -1397,8 +1412,7 @@ def score_job_match(job, profile_info):
 def health_check():
     return jsonify({'status': 'healthy'})
 
-if __name__ == '__main__':
-    app.run(debug=False, port=8000)
+
 @app.errorhandler(RequestEntityTooLarge)
 def handle_file_too_large(e):
     return jsonify({'success': False, 'error': 'File too large. Max 10MB.'}), 413
@@ -1459,9 +1473,14 @@ def apply_preview():
         if not isinstance(job_data, dict):
             return jsonify({'success': False, 'error': 'Missing job data'}), 400
 
-        if g.user_id not in pipeline_store:
-            pipeline_store[g.user_id] = _rehydrate_pipeline_from_profile(g.user_id, g.client) or JobApplicationPipeline()
-        pipeline = pipeline_store[g.user_id]
+        with store_lock:
+            if g.user_id not in pipeline_store:
+                pipeline_store[g.user_id] = _rehydrate_pipeline_from_profile(g.user_id, g.client)
+            
+            pipeline = pipeline_store[g.user_id]
+            if not pipeline:
+                 pipeline = JobApplicationPipeline()
+                 pipeline_store[g.user_id] = pipeline
         if not getattr(pipeline, 'cv_engine', None):
             profile_info = profile_store.get(g.user_id)
             if profile_info and profile_info.get('cv_content'):

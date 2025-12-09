@@ -5,6 +5,12 @@ from google import genai
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    print("Error: GEMINI_API_KEY or GOOGLE_API_KEY not found in environment variables.")
+    print("Please set it in your .env file or environment.")
+    import sys
+    sys.exit(1)
+
 client = genai.Client(api_key=api_key)
 
 models_to_check = [

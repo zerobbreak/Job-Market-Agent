@@ -164,6 +164,13 @@ jobs*.csv
 job_cache/
 *.log
 
+# Generated Applications
+applications/*.pdf
+applications/*.txt
+applications/*.json
+cvs/*.txt
+
+
 # Test outputs
 test_*.py
 *_test.py
