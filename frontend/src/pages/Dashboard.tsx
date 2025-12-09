@@ -63,6 +63,8 @@ export default function Dashboard() {
   const [previewContent, setPreviewContent] = useState<{ cv_html: string, cover_letter_html: string, ats?: { score?: number, analysis?: string } } | null>(null)
   const [cvHealth, setCvHealth] = useState<{ filename?: string, uploadedAt?: string } | null>(null)
   const cvFileInputRef = React.useRef<HTMLInputElement>(null)
+  const [resumeAvailable, setResumeAvailable] = useState(false)
+  const [lastMatches, setLastMatches] = useState<MatchedJob[]>([])
 
   const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
   const MatchedResults = React.lazy(() => import('@/components/MatchedResults'))
@@ -193,12 +195,29 @@ export default function Dashboard() {
           }
           setUploadStep('profile')
           track('dashboard_autoload_profile', { hasCv: true }, 'dashboard')
+          const lastResp = await apiClient(`/matches/last?location=${encodeURIComponent(location)}`)
+          const lastData = await lastResp.json()
+          if (lastData.success && Array.isArray(lastData.matches) && lastData.matches.length > 0) {
+            setResumeAvailable(true)
+            setLastMatches(lastData.matches)
+            track('resume_available', { count: lastData.matches.length }, 'app')
+          } else {
+            toast.show({ title: 'Profile loaded', description: 'Searching for matches…', variant: 'default' })
+            setTimeout(() => findMatches(), 1200)
+          }
         }
       } catch (e) {
         // ignore; indicator is optional
       }
     })()
   }, [])
+
+  const resumeLastSession = () => {
+    if (!resumeAvailable || lastMatches.length === 0) return
+    setMatchedJobs(lastMatches)
+    setUploadStep('results')
+    track('resume_last_session', { count: lastMatches.length }, 'app')
+  }
 
   const handleChangeCvClick = () => {
     track('cv_change_click', { fromIndicator: true }, 'dashboard')
@@ -374,6 +393,15 @@ export default function Dashboard() {
               <Button size="sm" variant="outline" onClick={handleChangeCvClick}>Change CV</Button>
             </div>
           </div>
+          {resumeAvailable && matchedJobs.length === 0 && (
+            <div className="mt-2 p-3 border rounded-xl bg-white flex items-center justify-between">
+              <div className="text-sm text-gray-700">Previous session found. You can resume your last matches.</div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={resumeLastSession}>Resume Last Session</Button>
+                <Button size="sm" variant="outline" onClick={() => { toast.show({ title: 'Searching new matches', variant: 'default' }); findMatches() }}>Search New</Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
