@@ -18,17 +18,35 @@ const ToastContext = React.createContext<ToastContextValue | undefined>(undefine
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<ToastItem[]>([])
+  const timersRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  React.useEffect(() => {
+    // Cleanup all timers on unmount
+    return () => {
+      Object.values(timersRef.current).forEach(clearTimeout)
+    }
+  }, [])
+
   const show = React.useCallback((t: Omit<ToastItem, "id">) => {
     const id = Math.random().toString(36).slice(2)
     const item = { id, ...t }
     setToasts((prev) => [...prev, item])
-    setTimeout(() => {
+    
+    const timer = setTimeout(() => {
       setToasts((prev) => prev.filter((x) => x.id !== id))
+      delete timersRef.current[id]
     }, 4000)
+    timersRef.current[id] = timer
   }, [])
+
   const remove = React.useCallback((id: string) => {
     setToasts((prev) => prev.filter((x) => x.id !== id))
+    if (timersRef.current[id]) {
+      clearTimeout(timersRef.current[id])
+      delete timersRef.current[id]
+    }
   }, [])
+
   return (
     <ToastContext.Provider value={{ toasts, show, remove }}>
       {children}

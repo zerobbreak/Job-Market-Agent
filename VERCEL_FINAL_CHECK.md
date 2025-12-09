@@ -45,8 +45,8 @@ If adding now, add:
 ```
 VITE_API_URL=http://localhost:8000/api
 VITE_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
-VITE_APPWRITE_PROJECT_ID=692598380015d5816b7e
-VITE_APPWRITE_DATABASE_ID=job-market-db
+VITE_APPWRITE_PROJECT_ID=your_project_id
+VITE_APPWRITE_DATABASE_ID=your_database_id
 ```
 
 (You'll update `VITE_API_URL` later with your backend URL)

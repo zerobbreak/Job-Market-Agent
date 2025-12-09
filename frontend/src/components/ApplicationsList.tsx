@@ -48,16 +48,13 @@ export default function ApplicationsList({
   const [localApps, setLocalApps] = React.useState<Application[]>(applications)
   React.useEffect(() => { setLocalApps(applications) }, [applications])
 
-  const totalPages = serverTotalPages ?? Math.max(1, Math.ceil(localApps.length / 10))
-  const start = (page - 1) * 10
-  const pageSlice = serverTotalPages ? localApps : localApps.slice(start, start + 10)
-
   // Filters / sort / search state
   const [filterStatus, setFilterStatus] = React.useState<string>('')
   const [searchQuery, setSearchQuery] = React.useState('')
   const [sortBy, setSortBy] = React.useState<'date_desc' | 'date_asc' | 'company' | 'title'>('date_desc')
 
-  const filtered = pageSlice.filter((a) => {
+  // 1. Filter first
+  const filtered = localApps.filter((a) => {
     const statusOk = filterStatus ? a.status === filterStatus : true
     const q = searchQuery.trim().toLowerCase()
     const textOk = q
@@ -66,12 +63,22 @@ export default function ApplicationsList({
     return statusOk && textOk
   })
 
-  const visible = [...filtered].sort((a, b) => {
+  // 2. Sort
+  const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'date_desc') return (b.appliedDate || '').localeCompare(a.appliedDate || '')
     if (sortBy === 'date_asc') return (a.appliedDate || '').localeCompare(b.appliedDate || '')
     if (sortBy === 'company') return (a.company || '').localeCompare(b.company || '')
     return (a.jobTitle || '').localeCompare(b.jobTitle || '')
   })
+
+  // 3. Paginate
+  // If server-side pagination is active, we assume 'sorted' is just the current page (and server handles sort/filter properly? 
+  // actually usually server handles it all. If serverTotalPages is set, we shouldn't act like we have all data locally to filter/sort effectively 
+  // unless we just filter the current page. But for this fix, we assume client-side if serverTotalPages is missing.)
+  
+  const totalPages = serverTotalPages ?? Math.max(1, Math.ceil(sorted.length / 10))
+  const start = serverTotalPages ? 0 : (page - 1) * 10
+  const visible = serverTotalPages ? sorted : sorted.slice(start, start + 10)
 
   return (
     <>
@@ -86,6 +93,7 @@ export default function ApplicationsList({
               setSearchQuery(v)
               track('applications_search', { query: v }, 'applications')
             }}
+            aria-label="Search applications"
           />
         </div>
         <div>
@@ -97,6 +105,7 @@ export default function ApplicationsList({
               track('applications_filter_status', { status: v || 'all' }, 'applications')
             }}
             className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+            aria-label="Filter by status"
           >
             <option value="">All statuses</option>
             <option value="applied">Applied</option>
@@ -114,6 +123,7 @@ export default function ApplicationsList({
               track('applications_sort', { sortBy: v }, 'applications')
             }}
             className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"
+            aria-label="Sort applications"
           >
             <option value="date_desc">Newest first</option>
             <option value="date_asc">Oldest first</option>

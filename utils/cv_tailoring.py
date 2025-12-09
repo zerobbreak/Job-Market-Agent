@@ -26,6 +26,38 @@ class CVTailoringEngine:
         self.profile = student_profile
         self.cv_versions = {}
 
+    def _extract_json_from_text(self, text):
+        """
+        Robustly extract JSON from text, handling code blocks and raw JSON
+        """
+        try:
+            import json
+            content = text.content if hasattr(text, 'content') else str(text)
+            
+            # Remove markdown code blocks if present
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content: # Generic code block
+                 parts = content.split("```")
+                 if len(parts) >= 2:
+                    content = parts[1].strip()
+
+            # Attempt to find JSON object structure
+            if "{" in content and "}" in content:
+                start = content.find("{")
+                end = content.rfind("}") + 1
+                candidate = content[start:end]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass # Continue to try raw content if this fails
+            
+            # Try to parse the cleaned content directly
+            return json.loads(content)
+        except Exception as e:
+            # print(f"JSON extraction failed: {e}")
+            return None
+
     def generate_tailored_cv(self, job_posting, template_type=None):
         """
         Create customized CV for specific job application
@@ -84,25 +116,30 @@ class CVTailoringEngine:
             """)
 
             # Parse the response
+            # Parse the response
+            parsed_result = self._extract_json_from_text(tailored_result)
+            
             try:
-                import json
-                content = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0].strip()
-                elif "{" in content and "}" in content:
-                    # Attempt to extract JSON object even without code fences
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    content = content[start:end]
-                
-                parsed_result = json.loads(content)
+                if not parsed_result:
+                     raise ValueError("Failed to extract JSON from response")
+
                 cv_content = (
                     parsed_result.get('cv_content')
                     or parsed_result.get('optimized_cv')
                     or parsed_result.get('cv_markdown')
                     or parsed_result.get('cv')
-                    or content
                 )
+                
+                # Fallback if cv_content is still None but we parsed something
+                if not cv_content:
+                     # Try to use the raw content if JSON didn't contain the key
+                     # This happens if the model returns just the CV text in strict mode sometimes
+                     content_str = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
+                     if "```" not in content_str and len(content_str) > 100:
+                         cv_content = content_str
+                     else:
+                         cv_content = "CV generation failed to produce content."
+
                 ats_analysis = parsed_result.get('ats_analysis', "Analysis not available")
                 ats_score = parsed_result.get('ats_score')
                 sections = {
@@ -360,27 +397,12 @@ class CVTailoringEngine:
         Create job-specific cover letter
         """
         try:
-            company_research = self._research_company(job_posting['company'])
-            cv_content = tailored_cv if tailored_cv else self.master_cv
-            prompt = self._build_cover_letter_prompt(job_posting, cv_content, company_research)
-
-            cover_letter = application_writer.run(prompt)
-            content = self._extract_content(cover_letter)
-            # Attempt to parse JSON and extract 'cover_letter'
-            try:
-                import json
-                raw = content
-                if "```json" in raw:
-                    raw = raw.split("```json")[1].split("```")[0].strip()
-                elif "{" in raw and "}" in raw:
-                    start = raw.find("{")
-                    end = raw.rfind("}") + 1
-                    raw = raw[start:end]
-                parsed = json.loads(raw)
-                content = parsed.get('cover_letter', content)
-            except Exception:
-                pass
-            content = self._sanitize_markdown(content)
+        try:
+            # Use the consolidated markdown generation method
+            content = self._generate_cover_letter_markdown(job_posting, tailored_cv)
+            
+            # Save as PDF
+            company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
             
             # Save as PDF
             company_name = job_posting.get('company', 'Unknown').replace(' ', '_').replace('/', '_')
@@ -491,19 +513,13 @@ class CVTailoringEngine:
             prompt = self._build_cover_letter_prompt(job_posting, cv_content, company_research)
             cover_letter = application_writer.run(prompt)
             content = self._extract_content(cover_letter)
-            try:
-                import json
-                raw = content
-                if "```json" in raw:
-                    raw = raw.split("```json")[1].split("```")[0].strip()
-                elif "{" in raw and "}" in raw:
-                    start = raw.find("{")
-                    end = raw.rfind("}") + 1
-                    raw = raw[start:end]
-                parsed = json.loads(raw)
+            content = self._extract_content(cover_letter)
+            
+            parsed = self._extract_json_from_text(content)
+            if parsed and isinstance(parsed, dict):
                 content = parsed.get('cover_letter', content)
-            except Exception:
-                pass
+                
+            return self._sanitize_markdown(content)
             return self._sanitize_markdown(content)
         except Exception as e:
             print(f"Error generating cover letter: {e}")

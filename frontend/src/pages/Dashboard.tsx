@@ -1,4 +1,5 @@
-import React, { useState, useEffect, Suspense } from 'react'
+import React, { useState, useEffect, Suspense, useRef } from 'react'
+import DOMPurify from 'dompurify'
 import { Upload, Sparkles, CheckCircle, Award, Briefcase, FileText, TrendingUp, Target, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,7 +39,8 @@ export default function Dashboard() {
   const [uploadStep, setUploadStep] = useState<UploadStep>('upload')
   // Profile state managed by OutletContext
   const [matchedJobs, setMatchedJobs] = useState<MatchedJob[]>([])
-  const [_loading, setLoading] = useState(false)
+  // const [_loading, setLoading] = useState(false) // Removed unused state
+
   const [error, setError] = useState<string>('')
   
   // Filtering state for matches
@@ -55,7 +57,8 @@ export default function Dashboard() {
   const [applyAttempts, setApplyAttempts] = useState(0)
   const [applyMaxAttempts, setApplyMaxAttempts] = useState(40)
   const [currentApplyJobId, setCurrentApplyJobId] = useState<string | null>(null)
-  const [applyCancelled, setApplyCancelled] = useState(false)
+  // Use ref for cancellation to avoid stale closure during async loop
+  const applyCancelledRef = useRef(false)
   const [pendingJob, setPendingJob] = useState<Job | null>(null)
   const [showTemplateDialog, setShowTemplateDialog] = useState(false)
   const [applyTemplate, setApplyTemplate] = useState<'MODERN' | 'PROFESSIONAL' | 'ACADEMIC'>('MODERN')
@@ -107,7 +110,7 @@ export default function Dashboard() {
 
     setError('')
     setUploadStep('analyzing')
-    setLoading(true)
+    // setLoading(true)
 
     try {
       const formData = new FormData()
@@ -127,13 +130,13 @@ export default function Dashboard() {
       setError('Error uploading CV. Please try again.')
       setUploadStep('upload')
     } finally {
-      setLoading(false)
+      // setLoading(false)
     }
   }
 
   const findMatches = async () => {
     setUploadStep('matching')
-    setLoading(true)
+    // setLoading(true)
     setError('')
 
     try {
@@ -158,7 +161,7 @@ export default function Dashboard() {
       setError('Error finding job matches. Please try again.')
       setUploadStep('profile')
     } finally {
-      setLoading(false)
+      // setLoading(false)
     }
   }
 
@@ -182,6 +185,8 @@ export default function Dashboard() {
   }
 
   React.useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    
     (async () => {
       try {
         const resp = await apiClient('/profile/current', { method: 'GET' })
@@ -203,13 +208,17 @@ export default function Dashboard() {
             track('resume_available', { count: lastData.matches.length }, 'app')
           } else {
             toast.show({ title: 'Profile loaded', description: 'Searching for matches…', variant: 'default' })
-            setTimeout(() => findMatches(), 1200)
+            timeoutId = setTimeout(() => findMatches(), 1200)
           }
         }
       } catch (e) {
-        // ignore; indicator is optional
+        // ignore
       }
     })()
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
 
   const resumeLastSession = () => {
@@ -240,7 +249,9 @@ export default function Dashboard() {
     setShowTemplateDialog(false)
     setApplying(true)
     setError('')
-    setApplyCancelled(false)
+    setApplying(true)
+    setError('')
+    applyCancelledRef.current = false
     setGeneratedFiles(null)
     setGeneratedATS(null)
 
@@ -264,7 +275,7 @@ export default function Dashboard() {
       const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
       
       while (attempts < maxAttempts) {
-        if (applyCancelled) break
+        if (applyCancelledRef.current) break
 
         const statusResp = await apiClient(`/apply-status?job_id=${jobId}`, { method: 'GET' })
         const statusData = await statusResp.json()
@@ -306,7 +317,7 @@ export default function Dashboard() {
 
   const handleCancelApply = async () => {
     try {
-      setApplyCancelled(true)
+      applyCancelledRef.current = true
       if (currentApplyJobId) {
         await apiClient(`/apply-cancel?job_id=${currentApplyJobId}`, { method: 'POST' })
       }
@@ -694,12 +705,12 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="border rounded p-2 overflow-auto max-h-[60vh]">
                 {previewContent && (
-                  <div dangerouslySetInnerHTML={{ __html: previewContent.cv_html }} />
+                  <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewContent.cv_html) }} />
                 )}
               </div>
               <div className="border rounded p-2 overflow-auto max-h-[60vh]">
                 {previewContent && (
-                  <div dangerouslySetInnerHTML={{ __html: previewContent.cover_letter_html }} />
+                  <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewContent.cover_letter_html) }} />
                 )}
               </div>
             </div>

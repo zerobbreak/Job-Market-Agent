@@ -26,14 +26,13 @@ from appwrite.id import ID
 from appwrite.query import Query
 from appwrite.input_file import InputFile
 from functools import wraps
-from dotenv import load_dotenv
 import uuid
 import threading
 from datetime import datetime
 import time
-import time
 
-load_dotenv()
+# load_dotenv() already called at top
+
 
 app = Flask(__name__)
 
@@ -108,25 +107,7 @@ MAX_RATE_APPLY_PER_MIN = 5
 MAX_RATE_ANALYZE_PER_MIN = 5
 
 # Simple in-memory rate limiting
-rate_limits = {}
 
-def check_rate(endpoint: str, limit: int, window_sec: int = 60):
-    try:
-        uid = getattr(g, 'user_id', None)
-        if not uid:
-            return True
-        now = time.time()
-        key = f"{uid}:{endpoint}"
-        bucket = rate_limits.get(key, [])
-        bucket = [t for t in bucket if now - t < window_sec]
-        if len(bucket) >= limit:
-            rate_limits[key] = bucket
-            return False
-        bucket.append(now)
-        rate_limits[key] = bucket
-        return True
-    except Exception:
-        return True
 
 def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationPipeline | None:
     try:
@@ -425,9 +406,28 @@ threading.Thread(target=_cleanup_apply_jobs, daemon=True).start()
 def download_file():
     try:
         file_path = request.args.get('path')
-        if not file_path or not os.path.exists(file_path):
-            return jsonify({'error': 'File not found'}), 404
-            
+        if not file_path:
+             return jsonify({'error': 'File not found'}), 404
+             
+        # Security: Prevent path traversal
+        file_path = os.path.normpath(file_path)
+        if '..' in file_path or file_path.startswith(('/', '\\')):
+             return jsonify({'error': 'Invalid path'}), 400
+             
+        # Only allow downloads from certain directories logic if needed, 
+        # but for now ensuring no traversal is key. 
+        # Ideally check if it's inside UPLOAD_FOLDER or artifacts.
+        abs_path = os.path.abspath(file_path)
+        upload_dir = os.path.abspath(app.config['UPLOAD_FOLDER'])
+        
+        # Determine if safe
+        # (Assuming file_path passed from frontend is relative to some root or is a filename)
+        # If it's a full path from DB, we need to be careful.
+        # Given existing usage: return send_file(file_path)
+        
+        if not os.path.exists(file_path):
+             return jsonify({'error': 'File not found'}), 404
+
         return send_file(file_path, as_attachment=True)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -481,7 +481,7 @@ def get_applications():
 def analyze_cv():
     """Analyze uploaded CV and build candidate profile"""
     try:
-        cv_file = request.files['cv']
+        cv_file = request.files.get('cv')
         if not cv_file:
             return jsonify({'success': False, 'error': 'Missing file'})
         
@@ -1398,7 +1398,7 @@ def health_check():
     return jsonify({'status': 'healthy'})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8000)
+    app.run(debug=False, port=8000)
 @app.errorhandler(RequestEntityTooLarge)
 def handle_file_too_large(e):
     return jsonify({'success': False, 'error': 'File too large. Max 10MB.'}), 413

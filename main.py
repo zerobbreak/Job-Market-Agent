@@ -193,6 +193,9 @@ class JobApplicationPipeline:
 
         try:
             cv_content, ats_analysis = self.cv_engine.generate_tailored_cv(job, template_type)
+            if not self.cv_engine.cv_versions:
+                 logger.error("No CV versions generated")
+                 return None
             version_id = list(self.cv_engine.cv_versions.keys())[-1]
             cv_data = self.cv_engine.get_cv_version(version_id) or {}
 
@@ -297,7 +300,7 @@ class JobApplicationPipeline:
             if app_result:
                 self.applications.append(app_result)
                 # Optional: Generate Interview Prep
-                self.prepare_interview(job)
+                self.prepare_interview(job, output_dir=app_result['app_dir'])
                 
             if i < len(jobs) - 1:
                 time.sleep(2)

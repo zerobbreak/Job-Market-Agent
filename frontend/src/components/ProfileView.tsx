@@ -53,7 +53,7 @@ export default function ProfileView({
           <div className="space-y-2">
             <Label htmlFor="skills">Skills (comma separated)</Label>
             {isEditing ? (
-              <Textarea id="skills" value={profile.skills.join(', ')} onChange={(e) => setProfile({ ...profile, skills: e.target.value.split(',').map(s => s.trim()) })} rows={3} />
+              <Textarea id="skills" value={profile.skills.join(', ')} onChange={(e) => setProfile({ ...profile, skills: e.target.value.split(',').map(s => s.trim()).filter(s => s) })} rows={3} />
             ) : (
               <div className="flex flex-wrap gap-2">
                 {profile.skills.map((skill, idx) => (

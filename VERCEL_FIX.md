@@ -47,8 +47,8 @@ If you're importing the project for the first time, you'll see a configuration p
    ```
    VITE_API_URL=https://your-backend-url.railway.app/api
    VITE_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
-   VITE_APPWRITE_PROJECT_ID=692598380015d5816b7e
-   VITE_APPWRITE_DATABASE_ID=job-market-db
+   VITE_APPWRITE_PROJECT_ID=your_project_id
+   VITE_APPWRITE_DATABASE_ID=your_database_id
    ```
    ⚠️ Replace `your-backend-url` with your actual backend URL
 
