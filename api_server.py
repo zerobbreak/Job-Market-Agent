@@ -1504,8 +1504,10 @@ def apply_preview():
                 pipeline.cv_engine = CVTailoringEngine(profile_info['cv_content'], profile_info.get('profile_data', {}))
                 pipeline.profile = profile_info.get('profile_data', {})
             else:
-                cv_content = pipeline.load_cv()
-                pipeline.build_profile(cv_content)
+                # If we have no CV content in store and no rehydration possible, we cannot proceed.
+                # Do NOT fallback to load_cv() which defaults to 'cvs/CV.pdf' (server local path)
+                # unless explicitly configured, which is unlikely in this context.
+                return jsonify({'success': False, 'error': 'No CV found. Please build your profile or upload a CV first.'}), 400
 
         cv_content, ats_analysis = pipeline.cv_engine.generate_tailored_cv(job_data, template_type)
         version_id = list(pipeline.cv_engine.cv_versions.keys())[-1]
