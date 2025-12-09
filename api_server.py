@@ -44,10 +44,15 @@ def index():
     })
 
 # Configure CORS for production
+# Support specific origins and Vercel preview deployments (regex)
 allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,https://job-market-agent.vercel.app,https://job-market-agent.onrender.com').split(',')
+
+# Add regex pattern for any vercel.app domain
+origin_patterns = allowed_origins + [r"^https://.*\.vercel\.app$"]
+
 CORS(app, resources={
     r"/api/*": {
-        "origins": allowed_origins,
+        "origins": origin_patterns,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
