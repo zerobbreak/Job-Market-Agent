@@ -418,7 +418,9 @@ class CVTailoringEngine:
                     return pdf_path
             except Exception:
                 pass
-            return content
+        except Exception as e:
+            print(f"Error generating cover letter: {e}")
+            return self._generate_cover_letter_fallback(job_posting, tailored_cv)
 
     def _build_sections(self, cv_data):
         skills = []
@@ -503,9 +505,6 @@ class CVTailoringEngine:
             except Exception:
                 pass
             return self._sanitize_markdown(content)
-        except Exception as e:
-            return f"Cover letter error: {e}"
-
         except Exception as e:
             print(f"Error generating cover letter: {e}")
             return self._generate_cover_letter_fallback(job_posting, tailored_cv)
