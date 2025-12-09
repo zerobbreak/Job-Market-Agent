@@ -36,6 +36,13 @@ import time
 
 app = Flask(__name__)
 
+@app.route('/')
+def index():
+    return jsonify({
+        "status": "running", 
+        "message": "Job Market Agent API is active. If you are looking for the frontend, please ensure you are using the Docker Runtime or a separate frontend host."
+    })
+
 # Configure CORS for production
 allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,https://job-market-agent.vercel.app,https://job-market-agent.onrender.com').split(',')
 CORS(app, resources={
