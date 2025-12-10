@@ -52,9 +52,10 @@ origin_patterns = allowed_origins + [r"^https://.*\.vercel\.app$"]
 
 CORS(app, resources={
     r"/api/*": {
-        "origins": origin_patterns,
+        "origins": ["http://localhost:5173", "https://job-market-agent.vercel.app", "https://job-market-agent.onrender.com"],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
+        "allow_headers": ["Content-Type", "Authorization", "X-Appwrite-Project", "X-Appwrite-JWT"],
+        "supports_credentials": True
     }
 })
 
@@ -134,10 +135,14 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
             queries=[Query.equal('userId', session_id)]
         )
         if existing_profiles.get('total', 0) == 0:
+            print(f"DEBUG: No profile found for user {session_id}")
             return None
         doc = existing_profiles['documents'][0]
         file_id = doc.get('cv_file_id') or doc.get('fileId')
         cv_text = doc.get('cv_text')
+        
+        print(f"DEBUG: Rehydrate - Found profile. file_id={file_id}, cv_text_len={len(cv_text) if cv_text else 0}")
+
         if cv_text:
             pipeline = JobApplicationPipeline()
             pipeline.build_profile(cv_text)
@@ -150,6 +155,7 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                     'cv_content': cv_text,
                     'file_id': file_id
                 }
+            print("DEBUG: Rehydrated from cv_text")
             return pipeline
         
         # Fallback: If no text, try to download file
@@ -163,13 +169,25 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                 cv_path = os.path.join(app.config['UPLOAD_FOLDER'], tmp_name)
                 
                 # Download if not exists or force refresh logic could go here
-                print(f"Rehydrating CV from storage: {file_id}")
+                print(f"DEBUG: Downloading CV from storage: {file_id}")
                 data = storage.get_file_download(bucket_id=BUCKET_ID_CVS, file_id=file_id)
                 with open(cv_path, 'wb') as f:
                     f.write(data)
+                
+                if not os.path.exists(cv_path):
+                     print("DEBUG: Download failed, file not at path")
+                     return None
+
+                print(f"DEBUG: Download successful to {cv_path}, size={os.path.getsize(cv_path)}")
                     
                 pipeline = JobApplicationPipeline(cv_path=cv_path)
                 cv_content = pipeline.load_cv()
+                
+                # Validation
+                if not cv_content or "Extraction failed" in cv_content:
+                     print(f"DEBUG: PDF extraction failed: {cv_content}")
+                     return None
+
                 pipeline.build_profile(cv_content)
                 
                 with store_lock:
@@ -181,10 +199,15 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                         'cv_content': cv_content,
                         'file_id': file_id
                     }
+                print("DEBUG: Rehydrated from file download")
                 return pipeline
             except Exception as e:
-                print(f"Error rehydrating from file: {e}")
+                print(f"DEBUG: Error rehydrating from file: {e}")
+                import traceback
+                traceback.print_exc()
                 return None
+        
+        print("DEBUG: Rehydration failed - No text and no file_id")
         return None
 
     except Exception as e:
@@ -601,6 +624,7 @@ def analyze_cv():
                         document_id=profile_id,
                         data=profile_doc_data
                     )
+                    print(f"DEBUG: Updated existing profile {profile_id} for user {g.user_id}")
                 else:
                     # Create new profile
                     databases.create_document(
@@ -609,8 +633,19 @@ def analyze_cv():
                         document_id=ID.unique(),
                         data=profile_doc_data
                     )
+                    print(f"DEBUG: Created new profile for user {g.user_id}")
                 
-                # Store pipeline in memory for immediate subsequent requests (like matching)
+                # Update memory store immediately
+                with store_lock:
+                    profile_store[g.user_id] = {
+                        'profile_data': profile_data,
+                        'raw_profile': profile_text,
+                        'cv_filename': filename,
+                        'cv_content': cv_content,
+                        'file_id': file_id
+                    }
+                print("DEBUG: Profile store updated in memory")
+
                 # In a stateless architecture, we'd rebuild it from the stored data
                 # For now, we'll keep the session_id concept for the immediate session
                 # but rely on DB for persistence.
@@ -737,15 +772,15 @@ def match_jobs():
         with store_lock:
             pipeline = pipeline_store.get(session_id)
             if not pipeline:
-                # Rehydrate might take time, maybe keep lock or release?
-                # Rehydration does IO. Releasing lock then re-acquiring for write is better but race condition possible.
-                # Since we are using user-specific keys, race condition is only per user.
-                # For simplicity, we'll keep lock or just move hydration out.
-                # But pipeline_store is the shared resource.
                 pass
         
         if not pipeline:
-            pipeline = _rehydrate_pipeline_from_profile(session_id, g.client) or JobApplicationPipeline()
+            pipeline = _rehydrate_pipeline_from_profile(session_id, g.client)
+            
+            # If rehydration failed, DO NOT create a fresh pipeline that relies on local files
+            if not pipeline:
+                 return jsonify({'success': False, 'error': 'No CV found. Please upload a CV first.'}), 400
+
             with store_lock:
                 pipeline_store[session_id] = pipeline
         
@@ -890,7 +925,7 @@ def match_jobs():
         print(f"Error matching jobs: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/profile', methods=['POST'])
 @login_required
