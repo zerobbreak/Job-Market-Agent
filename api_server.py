@@ -29,7 +29,11 @@ from functools import wraps
 import uuid
 import threading
 from datetime import datetime
+import threading
+from datetime import datetime
 import time
+import tempfile
+import traceback
 
 # load_dotenv() already called at top
 
@@ -69,11 +73,19 @@ client.set_project(os.getenv('APPWRITE_PROJECT_ID'))
 # client.set_key(os.getenv('APPWRITE_API_KEY')) # Only needed for admin tasks
 
 # Configure upload folder
-UPLOAD_FOLDER = 'uploads'
+# Configure upload folder - Use temp dir for Render compatibility
+UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'job_market_agent_uploads')
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
 if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+    try:
+        os.makedirs(UPLOAD_FOLDER)
+    except Exception as e:
+        print(f"Error creating upload folder {UPLOAD_FOLDER}: {e}")
+        # Fallback to local
+        UPLOAD_FOLDER = 'uploads'
+        if not os.path.exists(UPLOAD_FOLDER):
+             os.makedirs(UPLOAD_FOLDER)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -1584,3 +1596,79 @@ def apply_preview():
     except Exception as e:
         print(f"Apply preview error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/debug/cv', methods=['GET'])
+@login_required
+def debug_cv():
+    """Debug endpoint to check CV rehydration state"""
+    try:
+        debug_log = []
+        def log(msg):
+            print(f"DEBUG_EP: {msg}")
+            debug_log.append(f"{datetime.now().isoformat()} - {msg}")
+
+        user_id = g.user_id
+        log(f"Starting debug for user {user_id}")
+        
+        # 1. Check Profile in DB
+        databases = Databases(g.client)
+        try:
+            profiles = databases.list_documents(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_PROFILES,
+                queries=[Query.equal('userId', user_id)]
+            )
+            log(f"DB: Found {profiles['total']} profiles")
+            if profiles['total'] > 0:
+                doc = profiles['documents'][0]
+                log(f"DB: Profile ID: {doc['$id']}")
+                log(f"DB: File ID: {doc.get('cv_file_id') or doc.get('fileId')}")
+                log(f"DB: CV Filename: {doc.get('cv_filename')}")
+                cv_text = doc.get('cv_text')
+                log(f"DB: CV Text Length: {len(cv_text) if cv_text else 0}")
+                if not cv_text:
+                    log("DB: WARNING - cv_text is empty")
+            else:
+                log("DB: ERROR - No profile found")
+                return jsonify({'success': False, 'log': debug_log, 'error': 'No profile found in DB'})
+        except Exception as e:
+            log(f"DB: Exception checking profile: {str(e)}")
+            log(traceback.format_exc())
+            return jsonify({'success': False, 'log': debug_log, 'error': f"DB Check Failed: {str(e)}"})
+
+        # 2. Check Storage logic (Dry run)
+        log(f"Storage: UPLOAD_FOLDER is {app.config['UPLOAD_FOLDER']}")
+        if not os.path.exists(app.config['UPLOAD_FOLDER']):
+            log(f"Storage: UPLOAD_FOLDER does not exist! Attempting create...")
+            try:
+                os.makedirs(app.config['UPLOAD_FOLDER'])
+                log("Storage: Created UPLOAD_FOLDER")
+            except Exception as e:
+                log(f"Storage: Failed to create UPLOAD_FOLDER: {e}")
+        else:
+            log("Storage: UPLOAD_FOLDER exists and is writable (assumed)")
+
+        # 3. Attempt Rehydration
+        log("Rehydration: Attempting _rehydrate_pipeline_from_profile...")
+        try:
+            # We can't easily capture the internal prints of the function, so we rely on the return
+            pipeline = _rehydrate_pipeline_from_profile(user_id, g.client)
+            if pipeline:
+                log(f"Rehydration: SUCCESS. Pipeline created.")
+                log(f"Rehydration: CV Path: {getattr(pipeline, 'cv_path', 'N/A')}")
+                cv_content = pipeline.load_cv() if hasattr(pipeline, 'load_cv') else "No load_cv"
+                log(f"Rehydration: Loaded CV content length: {len(cv_content) if cv_content and isinstance(cv_content, str) else 'Invalid'}")
+            else:
+                log("Rehydration: FAILED. Function returned None.")
+        except Exception as e:
+            log(f"Rehydration: Exception during call: {str(e)}")
+            log(traceback.format_exc())
+
+        return jsonify({
+            'success': True, 
+            'log': debug_log,
+            'upload_folder': app.config['UPLOAD_FOLDER']
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
