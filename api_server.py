@@ -151,16 +151,27 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                     'file_id': file_id
                 }
             return pipeline
+        
+        # Fallback: If no text, try to download file
         if file_id:
             try:
+                # Ensure upload folder exists
+                if not os.path.exists(app.config['UPLOAD_FOLDER']):
+                    os.makedirs(app.config['UPLOAD_FOLDER'])
+                    
                 tmp_name = f"rehydrated_{file_id}.pdf"
                 cv_path = os.path.join(app.config['UPLOAD_FOLDER'], tmp_name)
+                
+                # Download if not exists or force refresh logic could go here
+                print(f"Rehydrating CV from storage: {file_id}")
+                data = storage.get_file_download(bucket_id=BUCKET_ID_CVS, file_id=file_id)
                 with open(cv_path, 'wb') as f:
-                    data = storage.get_file_download(bucket_id=BUCKET_ID_CVS, file_id=file_id)
                     f.write(data)
+                    
                 pipeline = JobApplicationPipeline(cv_path=cv_path)
                 cv_content = pipeline.load_cv()
                 pipeline.build_profile(cv_content)
+                
                 with store_lock:
                     pipeline_store[session_id] = pipeline
                     profile_store[session_id] = {
@@ -172,8 +183,10 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                     }
                 return pipeline
             except Exception as e:
-                print(f"Rehydrate from storage failed: {e}")
+                print(f"Error rehydrating from file: {e}")
+                return None
         return None
+
     except Exception as e:
         print(f"Rehydrate pipeline error: {e}")
         return None
