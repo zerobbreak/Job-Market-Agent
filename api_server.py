@@ -318,8 +318,13 @@ def _process_application_async(job_data, session_id, client_jwt_client, template
             else:
                 rehydrated = _rehydrate_pipeline_from_profile(session_id, client_jwt_client)
                 if not rehydrated:
-                    cv_content = pipeline.load_cv()
-                    pipeline.build_profile(cv_content)
+                    # Check if CV is available locally before attempting to load
+                    if pipeline.cv_path and os.path.exists(pipeline.cv_path):
+                         cv_content = pipeline.load_cv()
+                         pipeline.build_profile(cv_content)
+                    else:
+                         print(f"Error: No CV found for user {session_id} and rehydration failed.")
+                         return {'error': 'CV not found. Please upload a CV first.'}
         app_result = pipeline.generate_application_package(job_data, template_type)
         interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
         files_payload = {}
@@ -1278,6 +1283,9 @@ def matches_last():
             'cached': True
         })
     except Exception as e:
+        print(f"Error in matches_last: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def parse_profile(profile_text):
