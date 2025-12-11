@@ -178,9 +178,13 @@ export default function Dashboard() {
       if (data.success) {
         setPreviewContent({ cv_html: data.cv_html, cover_letter_html: data.cover_letter_html, ats: data.ats })
         setPreviewOpen(true)
+      } else {
+        const msg = data.error || 'Failed to generate preview. Ensure your CV is uploaded.'
+        toast.show({ title: 'Preview failed', description: msg, variant: 'error' })
       }
     } catch (e) {
       console.error('Preview failed', e)
+      toast.show({ title: 'Preview failed', description: 'An error occurred generating the preview.', variant: 'error' })
     }
   }
 

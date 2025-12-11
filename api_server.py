@@ -383,6 +383,8 @@ def _process_application_async(job_data, session_id, client_jwt_client, template
                          print(f"Error: No CV found for user {session_id} and rehydration failed.")
                          return {'error': 'CV not found. Please upload a CV first.'}
         app_result = pipeline.generate_application_package(job_data, template_type)
+        if not app_result or not isinstance(app_result, dict):
+            return {'error': 'Application generation failed. Please try a different template or re-upload your CV.'}
         interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
         files_payload = {}
         try:
@@ -641,12 +643,14 @@ def analyze_cv():
                 
                 profile_doc_data = {
                     'userId': g.user_id,
-                    'skills': json.dumps(profile_data.get('skills', [])), # Store as JSON string
+                    'skills': json.dumps(profile_data.get('skills', [])),
                     'experience_level': profile_data.get('experience_level', 'N/A'),
+                    'education': profile_data.get('education', ''),
+                    'strengths': json.dumps(profile_data.get('strengths', [])),
+                    'career_goals': profile_data.get('career_goals', ''),
                     'cv_file_id': file_id,
                     'cv_filename': filename,
                     'cv_text': cv_content
-                    # Add other fields as needed by your schema
                 }
 
                 if existing_profiles['total'] > 0:
@@ -1357,8 +1361,7 @@ def matches_last():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def parse_profile(profile_text):
-    """Parse AI-generated profile text into structured data"""
+def parse_profile(profile_output):
     profile_data = {
         'skills': [],
         'experience_level': '',
@@ -1366,68 +1369,77 @@ def parse_profile(profile_text):
         'strengths': [],
         'career_goals': ''
     }
-    
+
     try:
-        # Try to find JSON content
+        if isinstance(profile_output, dict):
+            skills_val = profile_output.get('skills', [])
+            strengths_val = profile_output.get('strengths', [])
+            experience_val = profile_output.get('experience_level', '')
+            education_val = profile_output.get('education', '')
+            career_val = profile_output.get('career_goals', '')
+
+            if isinstance(skills_val, str):
+                skills_val = [s.strip() for s in skills_val.split(',') if s.strip()]
+            if isinstance(strengths_val, str):
+                strengths_val = [s.strip() for s in strengths_val.split(',') if s.strip()]
+
+            profile_data['skills'] = skills_val or []
+            profile_data['strengths'] = strengths_val or []
+            profile_data['experience_level'] = experience_val or ''
+            profile_data['education'] = education_val or ''
+            profile_data['career_goals'] = career_val or ''
+            return profile_data
+
+        if isinstance(profile_output, list):
+            if len(profile_output) == 1 and isinstance(profile_output[0], dict):
+                return parse_profile(profile_output[0])
+            profile_text = json.dumps(profile_output)
+        elif isinstance(profile_output, bytes):
+            profile_text = profile_output.decode('utf-8', errors='ignore')
+        else:
+            profile_text = str(profile_output)
+
         json_str = profile_text
-        
-        # Handle markdown code blocks
         if '```json' in profile_text:
             json_str = profile_text.split('```json')[1].split('```')[0]
         elif '```' in profile_text:
             json_str = profile_text.split('```')[1].split('```')[0]
-            
-        # Clean up string
+
         json_str = json_str.strip()
-        
-        # Parse JSON
-        data = json.loads(json_str)
-        
-        # Update profile data with parsed values
-        profile_data.update(data)
-        
-        # Ensure lists are actually lists
-        if isinstance(profile_data['skills'], str):
-            profile_data['skills'] = [s.strip() for s in profile_data['skills'].split(',')]
-            
-        if isinstance(profile_data['strengths'], str):
-            profile_data['strengths'] = [s.strip() for s in profile_data['strengths'].split(',')]
-            
-    except Exception as e:
-        print(f"Error parsing profile JSON: {e}")
-        # Fallback to regex if JSON parsing fails
         try:
-            # Extract skills
-            skills_match = re.search(r'(?:Skills|Technical Skills|Expertise)[:\s]*([^\n]+(?:\n[^\n]+)*?)(?=\n\n|\n[A-Z]|$)', profile_text, re.IGNORECASE)
-            if skills_match:
-                skills_text = skills_match.group(1)
-                skills = re.findall(r'(?:[-•*]\s*)?([A-Za-z][A-Za-z0-9+#\.\s]+?)(?=[,;\n]|$)', skills_text)
-                profile_data['skills'] = [s.strip() for s in skills if len(s.strip()) > 2][:10]
-            
-            # Extract experience level
-            exp_match = re.search(r'(?:Experience Level|Experience|Years)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
-            if exp_match:
-                profile_data['experience_level'] = exp_match.group(1).strip()
-            
-            # Extract education
-            edu_match = re.search(r'(?:Education|Degree|Qualification)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
-            if edu_match:
-                profile_data['education'] = edu_match.group(1).strip()
-            
-            # Extract strengths
-            strengths_match = re.search(r'(?:Strengths|Key Strengths)[:\s]*([^\n]+(?:\n[^\n]+)*?)(?=\n\n|\n[A-Z]|$)', profile_text, re.IGNORECASE)
-            if strengths_match:
-                strengths_text = strengths_match.group(1)
-                strengths = re.findall(r'(?:[-•*]\s*)?([^\n,;]+)', strengths_text)
-                profile_data['strengths'] = [s.strip() for s in strengths if len(s.strip()) > 5][:5]
-            
-            # Extract career goals
-            goals_match = re.search(r'(?:Career Goals|Goals|Aspirations)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
-            if goals_match:
-                profile_data['career_goals'] = goals_match.group(1).strip()
-        except Exception as e2:
-            print(f"Error in fallback parsing: {e2}")
-    
+            data = json.loads(json_str)
+            if isinstance(data, dict):
+                return parse_profile(data)
+        except Exception:
+            pass
+
+        skills_match = re.search(r'(?:Skills|Technical Skills|Expertise)[:\s]*([^\n]+(?:\n[^\n]+)*?)(?=\n\n|\n[A-Z]|$)', profile_text, re.IGNORECASE)
+        if skills_match:
+            skills_text = skills_match.group(1)
+            skills = re.findall(r'(?:[-•*]\s*)?([A-Za-z][A-Za-z0-9+#\.\s]+?)(?=[,;\n]|$)', skills_text)
+            profile_data['skills'] = [s.strip() for s in skills if len(s.strip()) > 2][:10]
+
+        exp_match = re.search(r'(?:Experience Level|Experience|Years)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
+        if exp_match:
+            profile_data['experience_level'] = exp_match.group(1).strip()
+
+        edu_match = re.search(r'(?:Education|Degree|Qualification)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
+        if edu_match:
+            profile_data['education'] = edu_match.group(1).strip()
+
+        strengths_match = re.search(r'(?:Strengths|Key Strengths)[:\s]*([^\n]+(?:\n[^\n]+)*?)(?=\n\n|\n[A-Z]|$)', profile_text, re.IGNORECASE)
+        if strengths_match:
+            strengths_text = strengths_match.group(1)
+            strengths = re.findall(r'(?:[-•*]\s*)?([^\n,;]+)', strengths_text)
+            profile_data['strengths'] = [s.strip() for s in strengths if len(s.strip()) > 5][:5]
+
+        goals_match = re.search(r'(?:Career Goals|Goals|Aspirations)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
+        if goals_match:
+            profile_data['career_goals'] = goals_match.group(1).strip()
+
+    except Exception as e:
+        print(f"Error parsing profile: {e}")
+
     return profile_data
 
 def score_job_match(job, profile_info):
