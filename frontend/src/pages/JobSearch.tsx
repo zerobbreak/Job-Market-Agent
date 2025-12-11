@@ -34,7 +34,29 @@ export default function JobSearch() {
         body: JSON.stringify({ query: searchQuery, location }),
       })
       const data = await response.json()
-      setJobs(data.jobs || [])
+      const results = data.jobs || []
+      setJobs(results)
+      if (Array.isArray(results) && results.length === 0) {
+        try {
+          const matchResp = await apiClient('/match-jobs', {
+            method: 'POST',
+            body: JSON.stringify({ location, max_results: 10 })
+          })
+          const matchData = await matchResp.json()
+          if (matchData.success && Array.isArray(matchData.matches) && matchData.matches.length > 0) {
+            const mapped = matchData.matches.map((m: any) => ({
+              id: String(m.job?.id || m.job?.url || m.job?.title || Math.random()),
+              title: m.job?.title || 'Unknown Position',
+              company: m.job?.company || 'Unknown Company',
+              location: m.job?.location || location,
+              description: m.job?.description || '',
+              url: m.job?.url || ''
+            }))
+            setJobs(mapped)
+            toast.show({ title: 'Showing AI matches', description: 'No direct listings found; showing top matches instead.', variant: 'default' })
+          }
+        } catch {}
+      }
     } catch (error) {
       console.error('Error searching jobs:', error)
       setJobs([])

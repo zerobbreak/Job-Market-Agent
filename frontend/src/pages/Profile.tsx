@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import { 
   User, 
@@ -27,6 +27,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(false)
   const toast = useToast()
   const navigate = useNavigate()
+  const cvFileInputRef = useRef<HTMLInputElement>(null)
 
   // Local editing state - initialized from profile or empty
   const [editForm, setEditForm] = useState(profile || {
@@ -66,6 +67,40 @@ export default function Profile() {
     }
   }
 
+  const handleCVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      toast.show({ title: 'Upload failed', description: 'File is too large. Max 10MB.', variant: 'error' })
+      return
+    }
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    if (file.type && !allowed.includes(file.type)) {
+      toast.show({ title: 'Upload failed', description: 'Invalid file type. Use PDF, DOC, or DOCX.', variant: 'error' })
+      return
+    }
+    try {
+      setLoading(true)
+      const formData = new FormData()
+      formData.append('cv', file)
+      const response = await apiClient('/analyze-cv', { method: 'POST', body: formData })
+      const data = await response.json()
+      if (data.success && data.profile) {
+        setProfile(data.profile)
+        setIsEditing(false)
+        toast.show({ title: 'CV analyzed', description: 'Your profile has been generated.', variant: 'success' })
+        track('profile_cv_uploaded', { filename: data.cv_filename }, 'profile')
+      } else {
+        toast.show({ title: 'Analyze failed', description: data.error || 'Failed to analyze CV', variant: 'error' })
+      }
+    } catch (e) {
+      toast.show({ title: 'Upload error', description: 'Error uploading CV. Please try again.', variant: 'error' })
+    } finally {
+      setLoading(false)
+      if (cvFileInputRef.current) cvFileInputRef.current.value = ''
+    }
+  }
+
   if (!profile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
@@ -76,9 +111,21 @@ export default function Profile() {
             <h2 className="text-2xl font-bold text-gray-900">No Profile Found</h2>
             <p className="text-gray-500 max-w-md mt-2">Upload your CV to generate your AI profile and start finding jobs.</p>
         </div>
-        <Button onClick={() => navigate('/app/dashboard')} size="lg">
+        <div className="flex gap-3">
+          <input
+            ref={cvFileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx"
+            onChange={handleCVUpload}
+          />
+          <Button onClick={() => cvFileInputRef.current?.click()} size="lg" variant="default">
+            Upload CV
+          </Button>
+          <Button onClick={() => navigate('/app/dashboard')} size="lg" variant="outline">
             Go to Dashboard
-        </Button>
+          </Button>
+        </div>
       </div>
     )
   }
@@ -90,20 +137,37 @@ export default function Profile() {
             <h1 className="text-3xl font-bold tracking-tight text-foreground">My Profile</h1>
             <p className="text-muted-foreground">Manage your skills and preferences</p>
         </div>
-        <Button
-            onClick={() => {
-                if (isEditing) handleSaveProfile()
-                else {
-                    setEditForm(profile) // Reset form to current profile
-                    setIsEditing(true)
-                }
-            }}
-            variant={isEditing ? "default" : "outline"}
-            disabled={loading}
-        >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            {isEditing ? 'Save Changes' : 'Edit Profile'}
-        </Button>
+        <div className="flex items-center gap-3">
+          <input
+            ref={cvFileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx"
+            onChange={handleCVUpload}
+          />
+          <Button
+              onClick={() => cvFileInputRef.current?.click()}
+              variant="outline"
+              disabled={loading}
+          >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Upload CV
+          </Button>
+          <Button
+              onClick={() => {
+                  if (isEditing) handleSaveProfile()
+                  else {
+                      setEditForm(profile)
+                      setIsEditing(true)
+                  }
+              }}
+              variant={isEditing ? "default" : "secondary"}
+              disabled={loading}
+          >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {isEditing ? 'Save Changes' : 'Edit Profile'}
+          </Button>
+        </div>
       </div>
 
       <Card className="glass-card shadow-sm">

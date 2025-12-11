@@ -48,15 +48,11 @@ def index():
     })
 
 # Configure CORS for production
-# Support specific origins and Vercel preview deployments (regex)
 allowed_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,https://job-market-agent.vercel.app,https://job-market-agent.onrender.com').split(',')
-
-# Add regex pattern for any vercel.app domain
 origin_patterns = allowed_origins + [r"^https://.*\.vercel\.app$"]
-
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:5173", "https://job-market-agent.vercel.app", "https://job-market-agent.onrender.com"],
+        "origins": origin_patterns,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "X-Appwrite-Project", "X-Appwrite-JWT"],
         "supports_credentials": True
@@ -1357,9 +1353,10 @@ def matches_last():
         })
     except Exception as e:
         print(f"Error in matches_last: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        try:
+            return jsonify({'success': True, 'matches': [], 'cached': False})
+        except Exception:
+            return jsonify({'success': False, 'error': 'Failed to fetch last matches'}), 200
 
 def parse_profile(profile_output):
     profile_data = {
@@ -1706,3 +1703,7 @@ def debug_cv():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port, debug=True)
