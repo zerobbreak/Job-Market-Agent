@@ -263,6 +263,28 @@ def ensure_profile_schema():
             )
         except Exception as e:
             print(f"Profiles integer attribute exists or failed to create: {e}")
+
+        # Ensure CV fields exist (critical for file linking) -- Added for debugging "Unknown" filename
+        cv_attrs = [
+            {'key': 'cv_filename', 'size': 255, 'required': False},
+            {'key': 'cv_file_id', 'size': 255, 'required': False},
+            {'key': 'cv_text', 'size': 1000000, 'required': False} # Large text
+        ]
+        
+        for attr in cv_attrs:
+            try:
+                admin_db.create_string_attribute(
+                    database_id=DATABASE_ID,
+                    collection_id=COLLECTION_ID_PROFILES,
+                    key=attr['key'],
+                    size=attr['size'],
+                    required=attr['required']
+                )
+                print(f"Created attribute {attr['key']}")
+            except Exception as e:
+                # Appwrite throws if exists
+                pass
+                
     except Exception as e:
         print(f"ensure_profile_schema error: {e}")
 
