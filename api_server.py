@@ -168,7 +168,7 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
         # Let's just fix the "Collection not found" and "Attribute exists" issues first 
         # which are ACTUAL ERRORS. The deprecation is just a warning.
         
-        existing_profiles = databases.list_rows(
+        existing_profiles = databases.list_documents(
             database_id=DATABASE_ID,
             collection_id=COLLECTION_ID_PROFILES,
             queries=[Query.equal('userId', session_id)]
@@ -449,7 +449,7 @@ def _process_application_async(job_data, session_id, client_jwt_client, template
                     # Check if CV is available locally before attempting to load
                     if pipeline.cv_path and os.path.exists(pipeline.cv_path):
                          cv_content = pipeline.load_cv()
-                         pipeline.build_profile(cv_content)
+                         # pipeline.build_profile(cv_content) # Don't rebuild here, just load
                     else:
                          print(f"Error: No CV found for user {session_id} and rehydration failed.")
                          return {'error': 'CV not found. Please upload a CV first.'}
@@ -610,7 +610,7 @@ def get_applications():
         offset = max(0, (page - 1) * limit)
         
         # Query applications for the current user
-        result = databases.list_rows(
+        result = databases.list_documents(
             database_id=DATABASE_ID,
             collection_id=COLLECTION_ID_APPLICATIONS,
             queries=[
@@ -706,7 +706,7 @@ def analyze_cv():
 
                 # 2. Save Profile to Database
                 # Check if profile already exists for this user
-                existing_profiles = databases.list_rows(
+                existing_profiles = databases.list_documents(
                     database_id=DATABASE_ID,
                     collection_id=COLLECTION_ID_PROFILES,
                     queries=[Query.equal('userId', g.user_id)]
@@ -727,7 +727,7 @@ def analyze_cv():
                 if existing_profiles['total'] > 0:
                     # Update existing profile
                     profile_id = existing_profiles['documents'][0]['$id']
-                    databases.update_row(
+                    databases.update_document(
                         database_id=DATABASE_ID,
                         collection_id=COLLECTION_ID_PROFILES,
                         document_id=profile_id,
@@ -736,7 +736,7 @@ def analyze_cv():
                     print(f"DEBUG: Updated existing profile {profile_id} for user {g.user_id}")
                 else:
                     # Create new profile
-                    databases.create_row(
+                    databases.create_document(
                         database_id=DATABASE_ID,
                         collection_id=COLLECTION_ID_PROFILES,
                         document_id=ID.unique(),
@@ -812,7 +812,7 @@ def match_jobs():
         # 0. Try cache in database if available and recent
         try:
             databases = Databases(g.client)
-            cached = databases.list_rows(
+            cached = databases.list_documents(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_MATCHES,
                 queries=[
@@ -849,7 +849,7 @@ def match_jobs():
         if not profile_info:
             try:
                 databases = Databases(g.client)
-                existing_profiles = databases.list_rows(
+                existing_profiles = databases.list_documents(
                     database_id=DATABASE_ID,
                     collection_id=COLLECTION_ID_PROFILES,
                     queries=[Query.equal('userId', g.user_id)]
@@ -1007,7 +1007,7 @@ def match_jobs():
             notify_threshold = 70
             try:
                 databases = Databases(g.client)
-                prefs = databases.list_rows(
+                prefs = databases.list_documents(
                     database_id=DATABASE_ID,
                     collection_id=COLLECTION_ID_PROFILES,
                     queries=[Query.equal('userId', g.user_id)]
@@ -1091,7 +1091,7 @@ def update_profile():
         try:
             databases = Databases(g.client)
             # Check if profile exists
-            existing_profiles = databases.list_rows(
+            existing_profiles = databases.list_documents(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_PROFILES,
                 queries=[
@@ -1114,7 +1114,7 @@ def update_profile():
             if existing_profiles['total'] > 0:
                 # Update existing profile
                 doc_id = existing_profiles['documents'][0]['$id']
-                databases.update_row(
+                databases.update_document(
                     database_id=DATABASE_ID,
                     collection_id=COLLECTION_ID_PROFILES,
                     document_id=doc_id,
@@ -1122,7 +1122,7 @@ def update_profile():
                 )
             else:
                 # Create new profile
-                databases.create_row(
+                databases.create_document(
                     database_id=DATABASE_ID,
                     collection_id=COLLECTION_ID_PROFILES,
                     document_id=ID.unique(),
@@ -1149,7 +1149,7 @@ def update_profile():
 def get_current_profile():
     try:
         databases = Databases(g.client)
-        result = databases.list_rows(
+        result = databases.list_documents(
             database_id=DATABASE_ID,
             collection_id=COLLECTION_ID_PROFILES,
             queries=[
@@ -1177,7 +1177,7 @@ def get_current_profile():
 def get_structured_profile():
     try:
         databases = Databases(g.client)
-        result = databases.list_rows(
+        result = databases.list_documents(
             database_id=DATABASE_ID,
             collection_id=COLLECTION_ID_PROFILES,
             queries=[
@@ -1388,7 +1388,7 @@ def analytics():
             return jsonify({'success': False, 'error': 'Missing event'}), 400
         try:
             databases = Databases(g.client)
-            databases.create_row(
+            databases.create_document(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_ANALYTICS,
                 document_id=ID.unique(),
@@ -1419,7 +1419,7 @@ def matches_last():
         ]
         if location:
             queries.insert(1, Query.equal('location', location))
-        result = databases.list_rows(
+        result = databases.list_documents(
             database_id=DATABASE_ID,
             collection_id=COLLECTION_ID_MATCHES,
             queries=queries
@@ -1438,7 +1438,7 @@ def matches_last():
             matches = []
         last_seen = datetime.now().isoformat()
         try:
-            databases.update_row(
+            databases.update_document(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_MATCHES,
                 document_id=doc['$id'],
