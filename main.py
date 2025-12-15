@@ -67,36 +67,99 @@ class JobApplicationPipeline:
         self.profile = None
         self.applications = []
         
+    def _normalize_cv_text(self, text: str) -> str:
+        try:
+            import re
+            # Fix hyphenated line breaks: devel-\nopment -> development
+            text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+            # Collapse excessive whitespace
+            text = re.sub(r"[ \t]+", " ", text)
+            text = re.sub(r"\n{3,}", "\n\n", text)
+            # Remove common placeholder artifacts
+            text = text.replace("\x0c", "\n").strip()
+        except Exception:
+            pass
+        return text
+
+    def _extract_pdf_text(self, path: str) -> str:
+        try:
+            reader = pypdf.PdfReader(path)
+            text_parts = []
+            for page in reader.pages:
+                t = page.extract_text() or ""
+                text_parts.append(t)
+            text = "\n".join(text_parts)
+            if len(text.strip()) >= 200:
+                return text
+        except Exception as e:
+            logger.warning(f"pypdf extraction failed: {e}")
+        try:
+            from pdfminer.high_level import extract_text as _pdfminer_extract_text  # type: ignore
+            text = _pdfminer_extract_text(path) or ""
+            if len(text.strip()) >= 200:
+                return text
+        except Exception as e:
+            logger.warning(f"pdfminer extraction unavailable/failed: {e}")
+        return ""
+
+    def _extract_docx_text(self, path: str) -> str:
+        try:
+            import docx  # type: ignore
+            doc = docx.Document(path)
+            return "\n".join([p.text for p in doc.paragraphs])
+        except Exception as e:
+            logger.warning(f"python-docx extraction failed: {e}")
+            try:
+                import zipfile, re
+                with zipfile.ZipFile(path) as z:
+                    xml = z.read("word/document.xml").decode("utf-8", errors="ignore")
+                    xml = re.sub(r"<(.|\n)*?>", "\n", xml)
+                    return "\n".join([l.strip() for l in xml.splitlines() if l.strip()])
+            except Exception as e2:
+                logger.warning(f"zip/docx fallback failed: {e2}")
+        return ""
+
+    def _extract_doc_text(self, path: str) -> str:
+        try:
+            import textract  # type: ignore
+            return textract.process(path).decode("utf-8", errors="ignore")
+        except Exception as e:
+            logger.warning(f"textract .doc extraction unavailable/failed: {e}")
+        return ""
+
     def load_cv(self):
-        """Load CV content from file"""
+        """Load CV content from file with robust extraction"""
         logger.info(f"Loading CV from: {self.cv_path}")
         print(f"\n📄 Loading CV from: {self.cv_path}")
-        
         if not os.path.exists(self.cv_path):
             logger.error(f"CV not found at {self.cv_path}")
             raise FileNotFoundError(f"CV not found at {self.cv_path}")
-        
-        # For PDF, just store the path; for text files, read content
-        if self.cv_path.endswith('.pdf'):
-            try:
-                print("📄 Extracting text from PDF...")
-                reader = pypdf.PdfReader(self.cv_path)
-                text = ""
-                for page in reader.pages:
-                    text += page.extract_text() + "\n"
-                print(f"✓ PDF loaded ({len(text)} characters)")
-                return text
-            except Exception as e:
-                logger.error(f"Error reading PDF: {e}")
-                print(f"✗ Error reading PDF: {e}")
-                # Fallback to just returning the path if extraction fails, 
-                # though this might break downstream agents expecting text.
-                return f"CV file path: {self.cv_path} (Extraction failed)"
+
+        ext = Path(self.cv_path).suffix.lower()
+        content = ""
+        if ext == ".pdf":
+            print("📄 Extracting text from PDF...")
+            content = self._extract_pdf_text(self.cv_path)
+        elif ext == ".docx":
+            print("📄 Extracting text from DOCX...")
+            content = self._extract_docx_text(self.cv_path)
+        elif ext == ".doc":
+            print("📄 Extracting text from DOC...")
+            content = self._extract_doc_text(self.cv_path)
         else:
-            with open(self.cv_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            print(f"✓ CV loaded ({len(content)} characters)")
-            return content
+            try:
+                with open(self.cv_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception as e:
+                logger.error(f"Unsupported CV format or read error: {e}")
+                raise
+
+        if not content or len(content.strip()) < 50:
+            print("⚠️ CV text extraction weak; using minimal content placeholder")
+            content = f"Extracted from {self.cv_path}: insufficient text for analysis."
+        content = self._normalize_cv_text(content)
+        print(f"✓ CV loaded ({len(content)} characters)")
+        return content
     
     @retry_ai_call
     def build_profile(self, cv_content):

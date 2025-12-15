@@ -129,8 +129,8 @@ class CVTailoringEngine:
             """)
 
             # Parse the response
-            # Parse the response
             parsed_result = self._extract_json_from_text(tailored_result)
+            header = self._extract_header_info()
             
             try:
                 if not parsed_result:
@@ -151,7 +151,7 @@ class CVTailoringEngine:
                      if "```" not in content_str and len(content_str) > 100:
                          cv_content = content_str
                      else:
-                         cv_content = "CV generation failed to produce content."
+                         cv_content = ""
 
                 ats_analysis = parsed_result.get('ats_analysis', "Analysis not available")
                 ats_score = parsed_result.get('ats_score')
@@ -177,6 +177,95 @@ class CVTailoringEngine:
             role_name = self._sanitize_filename(job_posting.get('title', 'Position'))
             version_id = f"{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
+            # Ensure non-empty content by building a structured fallback if needed
+            if not cv_content or len(cv_content.strip()) < 50:
+                template_md = CVTemplates.get_template(template_type or 'PROFESSIONAL')
+                # Build a minimal structured CV using available data
+                prof = self.profile if isinstance(self.profile, dict) else {}
+                skills_list = []
+                if isinstance(prof, dict):
+                    s = prof.get('skills')
+                    if isinstance(s, list):
+                        skills_list = [str(x) for x in s if str(x).strip()]
+                summary_text = ''
+                if isinstance(prof, dict):
+                    summary_text = str(prof.get('career_goals') or '').strip()
+                exp_bullets = sections.get('experience') or []
+                proj_bullets = sections.get('projects') or []
+                edu_bullets = sections.get('education') or []
+                # Add job keywords into skills if missing
+                merged_skills = list({*(skills_list or []), *([str(k) for k in job_keywords] or [])})
+                summary_label = 'PROFESSIONAL SUMMARY' if (template_type or 'PROFESSIONAL').upper() == 'PROFESSIONAL' else 'SUMMARY'
+                experience_label = 'PROFESSIONAL EXPERIENCE' if (template_type or 'PROFESSIONAL').upper() in ('MODERN', 'PROFESSIONAL') else 'EXPERIENCE'
+                lower_set = [x.lower() for x in merged_skills]
+                langs = []
+                frameworks = []
+                tools = []
+                soft = []
+                certs = []
+                for sk in merged_skills:
+                    l = sk.lower()
+                    if any(k in l for k in ['python','java','javascript','typescript','c#','c++','go','ruby','php','rust','sql','r','matlab','swift','kotlin']):
+                        langs.append(sk)
+                    elif any(k in l for k in ['react','angular','vue','next','node','django','flask','spring','fastapi','express','.net','dotnet','laravel','rails','tensorflow','pytorch','keras','pandas','numpy','scikit']):
+                        frameworks.append(sk)
+                    elif any(k in l for k in ['git','docker','kubernetes','aws','azure','gcp','postgresql','mysql','mongodb','redis','jira','confluence','linux','bash','terraform']):
+                        tools.append(sk)
+                    elif any(k in l for k in ['communication','leadership','teamwork','problem','time','adaptability','attention']):
+                        soft.append(sk)
+                    elif any(k in l for k in ['cert','pmp','scrum','cissp','security+','network+']):
+                        certs.append(sk)
+                    else:
+                        tools.append(sk)
+                def join_cat(arr):
+                    uniq = []
+                    seen = set()
+                    for a in arr:
+                        k = a.lower()
+                        if k not in seen:
+                            seen.add(k)
+                            uniq.append(a)
+                    return ', '.join(uniq[:15]) if uniq else ''
+                skills_block = ''
+                if langs: skills_block += f"- **Languages:** {join_cat(langs)}\n"
+                if frameworks: skills_block += f"- **Frameworks:** {join_cat(frameworks)}\n"
+                if tools: skills_block += f"- **Tools:** {join_cat(tools)}\n"
+                if certs: skills_block += f"- **Certifications:** {join_cat(certs)}\n"
+                if soft: skills_block += f"- **Soft Skills:** {join_cat(soft)}\n"
+                if not skills_block:
+                    skills_block = '\n'.join([f'- {s}' for s in merged_skills[:15]]) or '-'
+                projects_bullets = '\n'.join([f'- {p}' for p in proj_bullets[:6]]) or '- See experience section'
+                experience_bullets = '\n'.join([f'- {e}' for e in exp_bullets[:8]]) or '- Experience details available upon request'
+                education_bullets = '\n'.join([f'- {e}' for e in edu_bullets[:4]]) or ''
+                if not summary_text:
+                    top = [x for x in (langs+frameworks+tools) if x][:3]
+                    role = job_posting.get('title','a role')
+                    company = job_posting.get('company','a company')
+                    summary_text = f"Experienced in {', '.join(top) if top else 'key technologies'}, seeking {role} at {company}."
+                cv_content = f"""# {header.get('name') or 'Candidate'}
+{header.get('title') or ''}
+
+## {summary_label}
+{summary_text or 'Results-driven professional seeking '+(job_posting.get('title','a role'))+' at '+(job_posting.get('company','a company'))+'.'}
+
+## SKILLS
+{skills_block}
+
+## TECHNICAL PROJECTS
+{projects_bullets}
+
+## {experience_label}
+{experience_bullets}
+
+## EDUCATION
+{education_bullets}
+"""
+                ats_analysis = ats_analysis or "Fallback structured CV created when AI generation failed."
+                ats_score = ats_score
+            if ats_score is None:
+                ats_score = self._estimate_ats_score(job_keywords, sections, cv_content)
+                ats_analysis = ats_analysis or "Estimated ATS score based on content analysis."
+
             self.cv_versions[version_id] = {
                 'cv_content': cv_content,
                 'ats_analysis': ats_analysis,
@@ -192,10 +281,32 @@ class CVTailoringEngine:
             }
 
             return self.cv_versions[version_id]['cv_content'], self.cv_versions[version_id]['ats_analysis']
-
         except Exception as e:
             print(f"Error generating tailored CV: {e}")
-            return None, f"Error: {e}"
+            try:
+                # Last-resort fallback: minimal CV using master_cv content
+                company_name = self._sanitize_filename(job_posting.get('company', 'Unknown'))
+                role_name = self._sanitize_filename(job_posting.get('title', 'Position'))
+                version_id = f"{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+                content = self._sanitize_markdown(self.master_cv or '')
+                if not content or len(content.strip()) < 50:
+                    content = f"# Candidate\n\nApplied for {job_posting.get('title','Position')} at {job_posting.get('company','Company')}.\n\n## Summary\nGenerated fallback CV."
+                self.cv_versions[version_id] = {
+                    'cv_content': content,
+                    'ats_analysis': 'AI generation failed; using fallback.',
+                    'ats_score': None,
+                    'job_match_score': job_posting.get('match_score', 0),
+                    'job_keywords': extract_job_keywords(job_posting.get('description','') or ''),
+                    'created_at': datetime.now(),
+                    'job_url': job_posting.get('url', ''),
+                    'job_title': job_posting.get('title', ''),
+                    'company': job_posting.get('company', ''),
+                    'template_type': (template_type or 'professional').lower(),
+                    'sections': {'summary': '', 'experience': [], 'projects': [], 'education': []}
+                }
+                return self.cv_versions[version_id]['cv_content'], self.cv_versions[version_id]['ats_analysis']
+            except Exception:
+                return None, f"Error: {e}"
 
     def get_cv_version(self, version_id):
         """
@@ -311,32 +422,63 @@ class CVTailoringEngine:
         lines = [l.strip() for l in text.splitlines() if l.strip()]
         name = ''
         if lines:
-            first = lines[0]
-            if '@' not in first and len(first.split()) <= 5:
-                name = first
+            candidates = []
+            for l in lines[:5]:
+                ll = l.lower()
+                if '@' in l or 'linkedin' in ll or 'github' in ll or 'curriculum vitae' in ll:
+                    continue
+                if len(l.split()) <= 5:
+                    candidates.append(l)
+            if candidates:
+                name = candidates[0]
         import re
         email_match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
         email = email_match.group(0) if email_match else ''
         phone_match = re.search(r"(\+?\d[\d\s\-]{7,}\d)", text)
         phone = phone_match.group(0) if phone_match else ''
         loc_match = None
-        for l in lines[:10]:
-            if l.lower().startswith('location:'):
+        for l in lines[:15]:
+            ll = l.lower()
+            if ll.startswith('location:') or ll.startswith('address:'):
                 loc_match = l.split(':', 1)[1].strip()
+                break
+            if re.search(r"\b(Cape Town|Johannesburg|Pretoria|Durban|Sandton|South Africa|Gauteng|Western Cape)\b", l, re.IGNORECASE):
+                loc_match = l.strip()
                 break
         location = loc_match or ''
         title = ''
         if len(lines) > 1:
-            second = lines[1]
-            if '@' not in second and len(second.split()) <= 6:
-                title = second
-        return {
+            for l in lines[1:6]:
+                if '@' in l:
+                    continue
+                if len(l.split()) <= 6:
+                    title = l
+                    break
+        header = {
             'name': name,
             'title': title,
             'email': email,
             'phone': phone,
             'location': location
         }
+        try:
+            prof = self.profile
+            import json
+            if isinstance(prof, str):
+                prof = json.loads(prof)
+            if isinstance(prof, dict):
+                links = prof.get('links') or {}
+                linkedin = links.get('linkedin') or ''
+                github = links.get('github') or ''
+                portfolio = links.get('portfolio') or ''
+                website = prof.get('website') or ''
+                if linkedin: header['linkedin'] = linkedin
+                if github: header['github'] = github
+                if portfolio: header['portfolio'] = portfolio
+                if website: header['website'] = website
+        except Exception:
+            pass
+        return header
 
     def _create_docx(self, cv_data, version_id, output_dir):
         """
@@ -599,6 +741,35 @@ class CVTailoringEngine:
         except Exception:
             pass
         return text.strip()
+
+    def _estimate_ats_score(self, job_keywords, sections, cv_content):
+        try:
+            import re
+            kws = [str(k).lower() for k in (job_keywords or []) if str(k).strip()]
+            skills = []
+            if isinstance(sections, dict):
+                s = sections.get('experience') or []
+                p = sections.get('projects') or []
+                e = sections.get('education') or []
+            text = f"{cv_content}\n" + "\n".join([str(x) for x in (sections.get('experience') or [])])
+            text_lower = text.lower()
+            kw_hits = sum(1 for k in kws if k and k in text_lower)
+            kw_points = min(30, kw_hits * 3)
+            nums = re.findall(r"\b\d+(\.\d+)?%?\b", text)
+            quant_points = min(25, len(nums) * 3)
+            headings = sum(1 for h in ['summary','experience','education','skills','projects'] if f"## {h}" in text_lower)
+            format_points = min(10, headings * 3)
+            skills_points = 0
+            uniq_skills = set()
+            for line in text_lower.splitlines():
+                if line.strip().startswith('- '):
+                    for w in re.findall(r"[a-zA-Z][a-zA-Z0-9+\-#\.]{2,}", line):
+                        uniq_skills.add(w)
+            skills_points = min(20, len(uniq_skills) // 5 * 5)
+            total = kw_points + quant_points + format_points + skills_points
+            return max(55, min(95, total))
+        except Exception:
+            return 70
 
     def _research_company(self, company_name):
         """

@@ -23,7 +23,7 @@ if 'GEMINI_API_KEY' in os.environ:
 # Create Job Intelligence Agent
 job_intelligence = Agent(
     name="Job Intelligence Engine",
-    model=Gemini(id="gemini-2.5-flash"),
+    model=Gemini(id="gemini-1.5-flash"),
     tools=[FileTools()],
     instructions="""You are the Job Intelligence Engine, combining job discovery, matching, and market analytics.
 

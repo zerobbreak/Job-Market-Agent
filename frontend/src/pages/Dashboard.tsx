@@ -1,5 +1,4 @@
 import React, { useState, useEffect, Suspense, useRef } from 'react'
-import DOMPurify from 'dompurify'
 import { Upload, Sparkles, CheckCircle, Award, Briefcase, FileText, TrendingUp, Target, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -68,6 +67,7 @@ export default function Dashboard() {
   const cvFileInputRef = React.useRef<HTMLInputElement>(null)
   const [resumeAvailable, setResumeAvailable] = useState(false)
   const [lastMatches, setLastMatches] = useState<MatchedJob[]>([])
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')
   const MatchedResults = React.lazy(() => import('@/components/MatchedResults'))
@@ -121,6 +121,14 @@ export default function Dashboard() {
       if (data.success) {
         setProfile(data.profile)
         setUploadStep('profile')
+        try {
+          const resp = await apiClient('/profile/current', { method: 'GET' })
+          const d = await resp.json()
+          if (d.success) {
+            const local = formatLocal(d.uploaded_at)
+            toast.show({ title: 'CV uploaded', description: `${d.cv_filename} • ${local}`, variant: 'default' })
+          }
+        } catch {}
         setTimeout(() => findMatches(), 1500)
       } else {
         setError(data.error || 'Failed to analyze CV')
@@ -173,6 +181,7 @@ export default function Dashboard() {
   const previewApply = async () => {
     if (!pendingJob) return
     try {
+      setPreviewLoading(true)
       const resp = await apiClient('/apply-preview', { method: 'POST', body: JSON.stringify({ job: pendingJob, template: applyTemplate }) })
       const data = await resp.json()
       if (data.success) {
@@ -185,6 +194,8 @@ export default function Dashboard() {
     } catch (e) {
       console.error('Preview failed', e)
       toast.show({ title: 'Preview failed', description: 'An error occurred generating the preview.', variant: 'error' })
+    } finally {
+      setPreviewLoading(false)
     }
   }
 
@@ -246,6 +257,12 @@ export default function Dashboard() {
     if (days <= 7) return { label: `Updated ${days}d ago`, tone: 'fresh' as const }
     if (days <= 30) return { label: `Updated ${days}d ago`, tone: 'warn' as const }
     return { label: `Updated ${days}d ago`, tone: 'stale' as const }
+  }
+  const formatLocal = (iso?: string) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return iso
+    return d.toLocaleString()
   }
 
   const confirmApply = async () => {
@@ -401,6 +418,8 @@ export default function Dashboard() {
                   const data = await resp.json()
                   if (data.success) {
                     setCvHealth({ filename: data.cv_filename, uploadedAt: data.uploaded_at })
+                    const local = formatLocal(data.uploaded_at)
+                    toast.show({ title: 'CV updated', description: `${data.cv_filename} • ${local}`, variant: 'default' })
                     track('cv_change_uploaded', { filename: data.cv_filename }, 'dashboard')
                   }
                 } catch {}
@@ -484,6 +503,14 @@ export default function Dashboard() {
                         <CardDescription>We found the following details from your CV</CardDescription>
                      </div>
                 </div>
+                {cvHealth && (
+                  <div className="text-right">
+                    <div className="text-xs text-gray-600">Loaded: {cvHealth.filename}</div>
+                    <div className="text-xs text-gray-500">
+                      {(() => { const r = formatRecency(cvHealth.uploadedAt); return r.label })()} ({formatLocal(cvHealth.uploadedAt)})
+                    </div>
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-8 p-8">
@@ -693,7 +720,10 @@ export default function Dashboard() {
               </label>
             </div>
             <div className="flex gap-2 mt-4">
-              <Button className="flex-1" onClick={previewApply}>Preview</Button>
+              <Button className="flex-1" onClick={previewApply} disabled={previewLoading}>
+                {previewLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Preview
+              </Button>
               <Button className="flex-1" onClick={confirmApply}>Continue</Button>
               <Button variant="outline" className="flex-1" onClick={() => setShowTemplateDialog(false)}>Cancel</Button>
             </div>
@@ -707,14 +737,24 @@ export default function Dashboard() {
               <DialogDescription>Review your documents before generation</DialogDescription>
             </DialogHeader>
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="border rounded p-2 overflow-auto max-h-[60vh]">
+              <div className="border rounded p-2 overflow-hidden max-h-[60vh]">
                 {previewContent && (
-                  <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewContent.cv_html) }} />
+                  <iframe
+                    title="CV Preview"
+                    className="w-full h-[58vh] rounded"
+                    sandbox="allow-same-origin"
+                    srcDoc={previewContent.cv_html}
+                  />
                 )}
               </div>
-              <div className="border rounded p-2 overflow-auto max-h-[60vh]">
+              <div className="border rounded p-2 overflow-hidden max-h-[60vh]">
                 {previewContent && (
-                  <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewContent.cover_letter_html) }} />
+                  <iframe
+                    title="Cover Letter Preview"
+                    className="w-full h-[58vh] rounded"
+                    sandbox="allow-same-origin"
+                    srcDoc={previewContent.cover_letter_html}
+                  />
                 )}
               </div>
             </div>
