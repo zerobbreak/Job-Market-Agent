@@ -17,7 +17,7 @@ logging.getLogger('agno').setLevel(logging.WARNING)
 # Career Intelligence & Profile Builder
 profile_builder = Agent(
     name="Career Intelligence Analyst",
-    model=Gemini(id="gemini-1.5-flash"),
+    model=Gemini(id="gemini-2.5-flash"),
     instructions="""Build comprehensive 360° student profile with career DNA mapping:
 
 PROFILE DIMENSIONS (Extract all information available):

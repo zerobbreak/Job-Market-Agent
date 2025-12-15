@@ -226,12 +226,11 @@ class JobApplicationPipeline:
             
             if jobs:
                 print(f"✓ Found {len(jobs)} jobs")
-                # Save jobs to memory
-                for job in jobs:
-                    try:
-                        memory.save_job(job)
-                    except:
-                        pass
+                # Save jobs to memory in batch
+                try:
+                    memory.save_jobs(jobs)
+                except Exception as e:
+                    print(f"Error saving jobs to memory: {e}")
                 return jobs
             else:
                 print("✗ No jobs found")

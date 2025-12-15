@@ -724,7 +724,7 @@ class AdvancedJobScraper:
             Use professional language and ensure it's detailed enough for creating cover letters.
             """
 
-            models_to_try = [self.config.ai_model, 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
+            models_to_try = [self.config.ai_model, 'gemini-2.5-flash', 'gemini-1.5-flash-8b']
             # Deduplicate preserving order
             models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
 
