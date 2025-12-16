@@ -148,9 +148,6 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
         databases = Databases(client)
         storage = Storage(client)
         
-        # Determine strict list_documents vs list_rows based on environment or trial?
-        # For now we use database.list_documents and catch deprecation warnings implicitly by ignoring them
-        
         try:
             existing_profiles = databases.list_documents(
                 database_id=DATABASE_ID,
@@ -242,14 +239,15 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
         print(f"Rehydrate pipeline error: {e}")
         return None
 
-
-
 def ensure_database_schema():
     """
     Ensure all required Appwrite collections and attributes exist.
     Run this on startup.
     """
     try:
+        from appwrite.permission import Permission
+        from appwrite.role import Role
+
         api_key = os.getenv('APPWRITE_API_KEY')
         if not api_key:
             print("WARNING: APPWRITE_API_KEY not found. Schema checks skipped.")
@@ -261,25 +259,70 @@ def ensure_database_schema():
         admin_client.set_key(api_key)
         admin_db = Databases(admin_client)
 
-        def _ensure_collection(col_id, col_name):
+        def _ensure_collection(col_id, col_name, permissions=None):
             try:
-                admin_db.get_collection(DATABASE_ID, col_id)
+                # 1. Check if exists
+                try:
+                    admin_db.get_collection(DATABASE_ID, col_id)
+                except Exception as e:
+                    code = getattr(e, 'code', 0)
+                    if code == 404 or "404" in str(e) or "not found" in str(e).lower():
+                        print(f"Creating collection {col_name} ({col_id})...")
+                        # Create with Default Permissions (empty)
+                        admin_db.create_collection(
+                            DATABASE_ID, 
+                            col_id, 
+                            col_name,
+                            permissions=permissions or [],
+                            document_security=True
+                        )
+                        time.sleep(1) # Propagate
+                    else:
+                        raise e
+                
+                # 2. Update Permissions (Self-Validation)
+                # Ensure document security is ON and Users have rights
+                # We update it every time to ensure compliance
+                if not permissions:
+                     # Default: Users can create, read/update/delete THEIR OWN documents
+                     permissions = [
+                         Permission.create(Role.users()),
+                         Permission.read(Role.users()),
+                         Permission.update(Role.users()),
+                         Permission.delete(Role.users())
+                     ]
+                
+                try:
+                    admin_db.update_collection(
+                        DATABASE_ID,
+                        col_id,
+                        col_name,
+                        permissions=permissions,
+                        document_security=True,
+                        enabled=True
+                    )
+                except Exception as pe:
+                    print(f"Warning updating permissions for {col_name}: {pe}")
+
             except Exception as e:
-                # Check for 404 via code or string
-                code = getattr(e, 'code', 0)
-                if code == 404 or "404" in str(e) or "not found" in str(e).lower():
-                    print(f"Creating collection {col_name} ({col_id})...")
-                    try:
-                        admin_db.create_collection(DATABASE_ID, col_id, col_name)
-                        # Give it a moment to be available
-                        time.sleep(1) 
-                    except Exception as ce:
-                        print(f"Error creating collection {col_name}: {ce}")
-                else:
-                    print(f"Error checking collection {col_name}: {e}")
+                print(f"Error checking collection {col_name}: {e}")
 
         def _ensure_attr(col_id, key, type_, size=255, required=False, default=None, min_val=None, max_val=None):
             try:
+                # 1. Check if attribute exists
+                try:
+                    # List attributes to check existence effectively
+                    # This avoids the "Limit reached" error if we just blindly create
+                    # Note: list_attributes might be paginated but usually we don't have > 25 attrs
+                    attrs_list = admin_db.list_attributes(DATABASE_ID, col_id)
+                    existing_keys = [a.get('key') for a in attrs_list.get('attributes', [])]
+                    if key in existing_keys:
+                        return # Exists, skip
+                except Exception as le:
+                    # If list fails, we might fall back to try-create
+                    print(f"Warning listing attributes for {col_id}: {le}")
+
+                # 2. Create if not exists
                 if type_ == 'string':
                     try:
                         admin_db.create_string_attribute(DATABASE_ID, col_id, key, size, required, default)
@@ -298,17 +341,23 @@ def ensure_database_schema():
             except Exception as e:
                 msg = str(e).lower()
                 if "already exists" in msg or getattr(e, 'code', 0) == 409:
-                    pass # Attribute exists, normal
+                    pass 
                 elif "limit" in msg:
-                    # Log but allow proceeding because maybe it's fine
-                    print(f"Warning: Attribute limit reached for {key} in {col_id} (or other limit issue).")
+                    print(f"Warning: Attribute limit reached for {key} in {col_id}.")
                 else:
                     print(f"Error creating attribute {key} in {col_id}: {e}")
 
-        # 1. Ensure Collections
+        # 1. Ensure Collections with Correct Permissions
+        # Profiles: Users create own, read own
         _ensure_collection(COLLECTION_ID_PROFILES, 'Profiles')
+        
+        # Matches: Users create/read own
         _ensure_collection(COLLECTION_ID_MATCHES, 'Matches')
+        
+        # Analytics: Users create own
         _ensure_collection(COLLECTION_ID_ANALYTICS, 'Analytics')
+        
+        # Applications: Users create/read own
         _ensure_collection(COLLECTION_ID_APPLICATIONS, 'Applications')
 
         # 2. Profiles Attributes
