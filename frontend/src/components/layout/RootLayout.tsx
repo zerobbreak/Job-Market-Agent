@@ -170,7 +170,7 @@ export default function RootLayout() {
                   <Icon
                     className={cn(
                       "h-5 w-5",
-                      isActive
+                      location.pathname === item.href
                         ? "text-sidebar-primary"
                         : "text-muted-foreground group-hover:text-sidebar-primary"
                     )}
