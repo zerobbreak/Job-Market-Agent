@@ -38,31 +38,51 @@ class MemoryStore:
 
     def save_job(self, job_data: Dict[str, Any]):
         """
-        Save a job to history.
+        Save a single job to history.
+        """
+        self.save_jobs([job_data])
+
+    def save_jobs(self, jobs_data: List[Dict[str, Any]]):
+        """
+        Save multiple jobs to history in a batch.
         """
         try:
-            job_id = str(job_data.get('id') or job_data.get('job_id') or hash(job_data.get('title', '') + job_data.get('company', '')))
-            
-            # Create a text representation for embedding
-            document = f"{job_data.get('title', '')} at {job_data.get('company', '')}. " \
-                       f"{job_data.get('description', '')} " \
-                       f"Location: {job_data.get('location', '')}"
-            
-            self.jobs_collection.upsert(
-                ids=[job_id],
-                documents=[document],
-                metadatas=[{
-                    "title": job_data.get('title', ''),
-                    "company": job_data.get('company', ''),
-                    "location": job_data.get('location', ''),
+            ids = []
+            documents = []
+            metadatas = []
+
+            for job_data in jobs_data:
+                # Generate stable ID
+                job_id = str(job_data.get('id') or job_data.get('job_id') or hash(job_data.get('title', '') + job_data.get('company', '')))
+                
+                # Create a text representation for embedding
+                document = f"{job_data.get('title', '')} at {job_data.get('company', '')}. " \
+                           f"{job_data.get('description', '')} " \
+                           f"Location: {job_data.get('location', '')}"
+                
+                # Ensure date_added is present
+                meta = {
+                    "title": str(job_data.get('title', '')),
+                    "company": str(job_data.get('company', '')),
+                    "location": str(job_data.get('location', '')),
                     "date_added": datetime.now().isoformat(),
-                    "source": job_data.get('job_url', 'unknown')
-                }]
-            )
-            logger.info(f"Saved job: {job_data.get('title')} at {job_data.get('company')}")
+                    "source": str(job_data.get('job_url', 'unknown'))
+                }
+                
+                ids.append(job_id)
+                documents.append(document)
+                metadatas.append(meta)
+            
+            if ids:
+                self.jobs_collection.upsert(
+                    ids=ids,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+                logger.info(f"Saved batch of {len(ids)} jobs")
             
         except Exception as e:
-            logger.error(f"Error saving job: {e}")
+            logger.error(f"Error saving jobs batch: {e}")
 
     def find_similar_jobs(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """

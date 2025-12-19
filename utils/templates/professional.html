@@ -44,6 +44,14 @@
     </style>
 </head>
 <body>
+    <header>
+        <h1>{{ name }}</h1>
+        <p style="text-align:center; margin: 0 0 10px 0;">{{ title }}</p>
+        <div style="text-align:center; font-size: 10pt; line-height: 1.4;">
+            <span>{{ email }}</span> • <span>{{ phone }}</span> • <span>{{ location }}</span>
+            <div style="margin-top:6px;">{{ contact_extra }}</div>
+        </div>
+    </header>
     {{ content }}
 </body>
 </html>

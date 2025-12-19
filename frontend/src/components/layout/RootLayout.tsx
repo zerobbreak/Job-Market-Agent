@@ -44,7 +44,7 @@ export default function RootLayout() {
   return (
     <div className="dark min-h-screen bg-background text-foreground flex">
       {/* Desktop Sidebar - Visible on Medium Screens and Up */}
-      <aside className="hidden md:flex w-72 flex-col bg-zinc-900 border-r border-zinc-800 shrink-0 text-white">
+      <aside className="hidden md:flex w-72 flex-col bg-sidebar border-r border-sidebar-border shrink-0 text-sidebar-foreground">
         <div className="p-6 flex items-center gap-3">
           <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-2 rounded-xl shadow-lg shadow-blue-900/20">
             <Sparkles className="h-6 w-6 text-white" />
@@ -53,7 +53,7 @@ export default function RootLayout() {
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
               Job Market
             </h1>
-            <p className="text-xs text-zinc-400">AI Agent</p>
+            <p className="text-xs text-muted-foreground">AI Agent</p>
           </div>
         </div>
 
@@ -68,8 +68,8 @@ export default function RootLayout() {
                   cn(
                     "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group",
                     isActive
-                      ? "bg-zinc-800 text-white shadow-lg shadow-black/20"
-                      : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-lg shadow-black/20"
+                      : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                   )
                 }
               >
@@ -77,8 +77,8 @@ export default function RootLayout() {
                   className={cn(
                     "h-5 w-5",
                     location.pathname === item.href
-                      ? "text-white"
-                      : "text-zinc-500 group-hover:text-white"
+                      ? "text-sidebar-primary"
+                      : "text-muted-foreground group-hover:text-sidebar-primary"
                   )}
                 />
                 {item.name}
@@ -87,23 +87,25 @@ export default function RootLayout() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-zinc-800 mt-auto">
-          <div className="bg-zinc-800/50 rounded-xl p-4 mb-4 backdrop-blur-md border border-zinc-700">
+        <div className="p-4 border-t border-sidebar-border mt-auto">
+          <div className="bg-sidebar-accent/50 rounded-xl p-4 mb-4 backdrop-blur-md border border-sidebar-border/50">
             <div className="flex items-center gap-3 mb-3">
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-inner">
                 {user?.name?.[0] || "U"}
               </div>
               <div className="overflow-hidden">
-                <p className="font-medium text-sm text-white truncate">
+                <p className="font-medium text-sm text-sidebar-foreground truncate">
                   {user?.name}
                 </p>
-                <p className="text-xs text-zinc-400 truncate">{user?.email}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user?.email}
+                </p>
               </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-zinc-400 hover:text-red-400 hover:bg-red-500/10"
+              className="w-full justify-start text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
               onClick={logout}
             >
               <LogOut className="h-4 w-4 mr-2" />
@@ -132,7 +134,7 @@ export default function RootLayout() {
         {/* Sidebar Panel */}
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 w-72 bg-zinc-900 border-r border-zinc-800 transform transition-transform duration-300 ease-in-out flex flex-col text-white",
+            "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar border-r border-sidebar-border transform transition-transform duration-300 ease-in-out flex flex-col text-sidebar-foreground",
             isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
@@ -160,17 +162,17 @@ export default function RootLayout() {
                     cn(
                       "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group",
                       isActive
-                        ? "bg-zinc-800 text-white shadow-lg shadow-black/20"
-                        : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-lg shadow-black/20"
+                        : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     )
                   }
                 >
                   <Icon
                     className={cn(
                       "h-5 w-5",
-                      location.pathname === item.href
-                        ? "text-white"
-                        : "text-zinc-500 group-hover:text-white"
+                      isActive
+                        ? "text-sidebar-primary"
+                        : "text-muted-foreground group-hover:text-sidebar-primary"
                     )}
                   />
                   {item.name}
@@ -179,17 +181,17 @@ export default function RootLayout() {
             })}
           </nav>
 
-          <div className="p-4 border-t border-zinc-800 mt-auto">
-            <div className="bg-zinc-800/50 rounded-xl p-4 mb-4 backdrop-blur-md border border-zinc-700">
+          <div className="p-4 border-t border-sidebar-border mt-auto">
+            <div className="bg-sidebar-accent/50 rounded-xl p-4 mb-4 backdrop-blur-md border border-sidebar-border/50">
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-inner">
                   {user?.name?.[0] || "U"}
                 </div>
                 <div className="overflow-hidden">
-                  <p className="font-medium text-sm text-white truncate">
+                  <p className="font-medium text-sm text-sidebar-foreground truncate">
                     {user?.name}
                   </p>
-                  <p className="text-xs text-zinc-400 truncate">
+                  <p className="text-xs text-muted-foreground truncate">
                     {user?.email}
                   </p>
                 </div>
@@ -197,7 +199,7 @@ export default function RootLayout() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start text-zinc-400 hover:text-red-400 hover:bg-red-500/10"
+                className="w-full justify-start text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                 onClick={logout}
               >
                 <LogOut className="h-4 w-4 mr-2" />

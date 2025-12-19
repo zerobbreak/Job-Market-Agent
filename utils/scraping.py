@@ -724,14 +724,40 @@ class AdvancedJobScraper:
             Use professional language and ensure it's detailed enough for creating cover letters.
             """
 
-            response = client.models.generate_content(
-                model=self.config.ai_model,
-                contents=prompt,
-                config=genai.GenerateContentConfig(
-                    temperature=self.config.ai_temperature,
-                    max_output_tokens=self.config.ai_max_tokens,
-                )
-            )
+            models_to_try = [self.config.ai_model, 'gemini-2.5-flash', 'gemini-1.5-flash-8b']
+            # Deduplicate preserving order
+            models_to_try = list(dict.fromkeys([m for m in models_to_try if m]))
+
+            last_error = None
+            
+            for model_id in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=model_id,
+                        contents=prompt,
+                        config=genai.GenerateContentConfig(
+                            temperature=self.config.ai_temperature,
+                            max_output_tokens=self.config.ai_max_tokens,
+                        )
+                    )
+                    
+                    if response and response.text:
+                        return response.text.strip()
+                except Exception as e:
+                    # Check for rate limit errors
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        self.logger.warning(f"Model {model_id} rate limited. Trying next model...")
+                        last_error = e
+                        continue
+                    else:
+                         self.logger.warning(f"Model {model_id} error: {e}")
+                         # Try next model for other errors too, just in case
+                         last_error = e
+                         continue
+            
+            # If we get here, all models failed
+            if last_error:
+                self.logger.error(f"All AI models failed. Last error: {last_error}")
 
             if response and response.text:
                 return response.text.strip()

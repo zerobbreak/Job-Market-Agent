@@ -64,21 +64,44 @@ class PDFGenerator:
                 summary = sections.get('summary')
                 if isinstance(summary, str) and summary.strip():
                     summary_html = markdown.markdown(summary)
-                    main_html = f"<h2>Summary</h2>{summary_html}" + main_html
+                    if 'summary</h2>' not in main_html.lower():
+                        main_html = f"<h2>Summary</h2>{summary_html}\n" + main_html
                 exp = sections.get('experience_html')
                 if isinstance(exp, str) and exp:
-                    main_html = f"<h2>Experience</h2>{exp}" + main_html
+                    if 'experience</h2>' not in main_html.lower():
+                        main_html = f"<h2>Experience</h2>{exp}\n" + main_html
                 projects = sections.get('projects_html')
                 if isinstance(projects, str) and projects:
-                    main_html = f"<h2>Projects</h2>{projects}" + main_html
+                    if 'projects</h2>' not in main_html.lower():
+                        main_html = f"<h2>Projects</h2>{projects}\n" + main_html
                 edu = sections.get('education_html')
                 if isinstance(edu, str) and edu:
-                    main_html = f"<h2>Education</h2>{edu}" + main_html
+                    if 'education</h2>' not in main_html.lower():
+                        main_html = f"<h2>Education</h2>{edu}\n" + main_html
             full_html = template_html
             full_html = full_html.replace('{{ sidebar }}', sidebar_html)
             full_html = full_html.replace('{{ main }}', main_html)
             full_html = full_html.replace('{{ content }}', main_html)
             header = header or {}
+            contact_extra = ''
+            try:
+                base_keys = {'name','title','email','phone','location','date'}
+                items = []
+                for k, v in header.items():
+                    if k in base_keys:
+                        continue
+                    val = str(v).strip()
+                    if not val:
+                        continue
+                    label = k.replace('_',' ').title()
+                    if val.startswith('http'):
+                        items.append(f"<div><strong>{markdown.util.AtomicString(label)}</strong> <a href='{markdown.util.AtomicString(val)}'>{markdown.util.AtomicString(val)}</a></div>")
+                    else:
+                        items.append(f"<div><strong>{markdown.util.AtomicString(label)}</strong> {markdown.util.AtomicString(val)}</div>")
+                contact_extra = ''.join(items)
+            except Exception:
+                contact_extra = ''
+            full_html = full_html.replace('{{ contact_extra }}', contact_extra)
             for key in ['name', 'title', 'email', 'phone', 'location', 'date']:
                 full_html = full_html.replace(f'{{{{ {key} }}}}', str(header.get(key, '')))
             
@@ -143,6 +166,25 @@ class PDFGenerator:
             full_html = full_html.replace('{{ main }}', main_html)
             full_html = full_html.replace('{{ content }}', main_html)
             header = header or {}
+            contact_extra = ''
+            try:
+                base_keys = {'name','title','email','phone','location','date'}
+                items = []
+                for k, v in header.items():
+                    if k in base_keys:
+                        continue
+                    val = str(v).strip()
+                    if not val:
+                        continue
+                    label = k.replace('_',' ').title()
+                    if val.startswith('http'):
+                        items.append(f"<div><strong>{markdown.util.AtomicString(label)}</strong> <a href='{markdown.util.AtomicString(val)}'>{markdown.util.AtomicString(val)}</a></div>")
+                    else:
+                        items.append(f"<div><strong>{markdown.util.AtomicString(label)}</strong> {markdown.util.AtomicString(val)}</div>")
+                contact_extra = ''.join(items)
+            except Exception:
+                contact_extra = ''
+            full_html = full_html.replace('{{ contact_extra }}', contact_extra)
             for key in ['name', 'title', 'email', 'phone', 'location', 'date']:
                 full_html = full_html.replace(f'{{{{ {key} }}}}', str(header.get(key, '')))
             return full_html
