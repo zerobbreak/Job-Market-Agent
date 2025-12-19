@@ -8,11 +8,14 @@ This script provides a convenient way to run all tests for the AI agents.
 import subprocess
 import sys
 import os
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 def run_tests():
     """Run all tests using pytest"""
-    print("🚀 Running Job Market AI Agent Tests")
-    print("=" * 50)
+    logging.info("Running Job Market AI Agent Tests")
+    logging.info("=" * 50)
 
     # Change to the project root directory
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -31,17 +34,17 @@ def run_tests():
         result = subprocess.run(cmd, capture_output=False)
         return result.returncode == 0
     except FileNotFoundError:
-        print("❌ pytest not found. Please install pytest:")
-        print("   pip install pytest")
+        logging.error("pytest not found. Please install pytest:")
+        logging.error("   pip install pytest")
         return False
     except Exception as e:
-        print(f"❌ Error running tests: {e}")
+        logging.error(f"Error running tests: {e}")
         return False
 
 def run_specific_test(test_file):
     """Run a specific test file"""
-    print(f"🎯 Running specific test: {test_file}")
-    print("=" * 50)
+    logging.info(f"Running specific test: {test_file}")
+    logging.info("=" * 50)
 
     project_root = os.path.dirname(os.path.abspath(__file__))
     os.chdir(project_root)
@@ -58,35 +61,35 @@ def run_specific_test(test_file):
         result = subprocess.run(cmd, capture_output=False)
         return result.returncode == 0
     except Exception as e:
-        print(f"❌ Error running test: {e}")
+        logging.error(f"Error running test: {e}")
         return False
 
 def list_available_tests():
     """List all available test files"""
-    print("📋 Available Test Files:")
-    print("=" * 30)
+    logging.info("Available Test Files:")
+    logging.info("=" * 30)
 
     tests_dir = "tests"
     if os.path.exists(tests_dir):
         test_files = [f for f in os.listdir(tests_dir) if f.startswith("test_") and f.endswith(".py")]
         for test_file in sorted(test_files):
             agent_name = test_file.replace("test_", "").replace("_agent.py", "").replace(".py", "")
-            print(f"  • {test_file} ({agent_name})")
+            logging.info(f"  • {test_file} ({agent_name})")
     else:
-        print("  No tests directory found")
+        logging.info("  No tests directory found")
 
 def show_usage():
     """Show usage information"""
-    print("Usage:")
-    print("  python run_tests.py                    # Run all tests")
-    print("  python run_tests.py <test_file>        # Run specific test file")
-    print("  python run_tests.py --list             # List available test files")
-    print("  python run_tests.py --help             # Show this help")
-    print()
-    print("Examples:")
-    print("  python run_tests.py test_profile_agent.py")
-    print("  python run_tests.py test_job_matcher_agent.py")
-    print()
+    logging.info("Usage:")
+    logging.info("  python run_tests.py                    # Run all tests")
+    logging.info("  python run_tests.py <test_file>        # Run specific test file")
+    logging.info("  python run_tests.py --list             # List available test files")
+    logging.info("  python run_tests.py --help             # Show this help")
+    logging.info()
+    logging.info("Examples:")
+    logging.info("  python run_tests.py test_profile_agent.py")
+    logging.info("  python run_tests.py test_job_matcher_agent.py")
+    logging.info()
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -106,7 +109,7 @@ if __name__ == "__main__":
     else:
         success = run_tests()
         if success:
-            print("\n✅ All tests passed!")
+            logging.info("\nAll tests passed!")
         else:
-            print("\n❌ Some tests failed!")
+            logging.info("\nSome tests failed!")
         sys.exit(0 if success else 1)

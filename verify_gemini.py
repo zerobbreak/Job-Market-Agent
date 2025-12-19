@@ -14,7 +14,7 @@ models_to_test = [
     "gemini-1.5-flash-latest",
     "gemini-1.5-flash-001",
     "gemini-1.5-flash-002",
-    "gemini-2.0-flash-exp",
+    "gemini-2.0-flash",
     "gemini-pro"
 ]
 

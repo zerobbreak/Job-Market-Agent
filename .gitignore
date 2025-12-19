@@ -181,7 +181,7 @@ coverage.xml
 *.cover
 
 # Development files
-.env.example
+
 requirements-dev.txt
 docker-compose.override.yml
 
