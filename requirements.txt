@@ -10,7 +10,7 @@ numpy
 beautifulsoup4
 requests
 scikit-learn
-chromadb
+
 reportlab==4.0.9
 xhtml2pdf==0.2.14
 markdown

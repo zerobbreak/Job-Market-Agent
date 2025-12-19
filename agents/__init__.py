@@ -7,7 +7,7 @@ from .profile_agent import profile_builder
 from .job_intelligence_agent import job_intelligence
 from .application_writer_agent import application_writer
 from .interview_prep_agent import interview_prep_agent
-from .orchestrator_agent import orchestrator_agent
+
 
 # ============================================================================
 # HELPER FUNCTIONS FOR AGENT INTEGRATION
@@ -28,7 +28,7 @@ def get_agent_by_name(agent_name: str):
         'job_intelligence': job_intelligence,
         'application_writer': application_writer,
         'interview_prep_agent': interview_prep_agent,
-        'orchestrator': orchestrator_agent
+
     }
 
     return agents.get(agent_name)
@@ -45,7 +45,7 @@ def get_all_agents():
         'job_intelligence': job_intelligence,
         'application_writer': application_writer,
         'interview_prep_agent': interview_prep_agent,
-        'orchestrator': orchestrator_agent
+
     }
 
 def get_core_agents():
@@ -66,7 +66,7 @@ __all__ = [
     'interview_prep_agent',
     
     # Orchestrator
-    'orchestrator_agent',
+
 
     # Helper functions
     'get_agent_by_name',

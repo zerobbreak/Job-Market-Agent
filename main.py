@@ -31,7 +31,7 @@ from agents import (
 )
 
 # Import utilities
-from utils import memory, AdvancedJobScraper, CVTailoringEngine, ApplicationTracker
+from utils import AdvancedJobScraper, CVTailoringEngine, ApplicationTracker
 from utils.scraping import extract_skills_from_description
 from utils.ai_retries import retry_ai_call
 
@@ -226,11 +226,6 @@ class JobApplicationPipeline:
             
             if jobs:
                 print(f"✓ Found {len(jobs)} jobs")
-                # Save jobs to memory in batch
-                try:
-                    memory.save_jobs(jobs)
-                except Exception as e:
-                    print(f"Error saving jobs to memory: {e}")
                 return jobs
             else:
                 print("✗ No jobs found")
@@ -426,23 +421,4 @@ class JobApplicationPipeline:
         print("✅ PIPELINE COMPLETED")
         print("=" * 80)
 
-def main():
-    parser = argparse.ArgumentParser(description='Automated Job Application Pipeline')
-    parser.add_argument('--query', default=DEFAULT_QUERY, help='Job search query')
-    parser.add_argument('--location', default=DEFAULT_LOCATION, help='Job location')
-    parser.add_argument('--max', type=int, default=3, help='Max applications to generate')
-    parser.add_argument('--cv', default=DEFAULT_CV_PATH, help='Path to CV file')
-    parser.add_argument('--template', choices=['modern', 'professional', 'academic'], help='Force specific CV template')
-    
-    args = parser.parse_args()
-    
-    pipeline = JobApplicationPipeline(cv_path=args.cv)
-    pipeline.run(
-        query=args.query,
-        location=args.location,
-        max_applications=args.max,
-        template=args.template
-    )
 
-if __name__ == "__main__":
-    main()

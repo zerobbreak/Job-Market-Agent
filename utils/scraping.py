@@ -1356,14 +1356,9 @@ def discover_new_jobs(student_profile, location="Johannesburg", verbose=False, m
     if verbose:
         print(f" Scraped {len(all_jobs)} total jobs")
 
-    # Store in ChromaDB
-    if all_jobs:
-        from .database import store_jobs_in_db
-        store_jobs_in_db(all_jobs)
-        if verbose:
-            print(" Jobs stored in database")
-    elif verbose:
-        print(" No jobs scraped, skipping database storage")
+    # Store in ChromaDB 
+    # (Removed to support Appwrite migration)
+    pass
 
     # Match against student profile using ML-based matching
     from .ml_matching import match_student_to_jobs_ml

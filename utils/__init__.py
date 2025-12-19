@@ -3,7 +3,7 @@ Utility functions for the Job Market AI Agent
 Simplified to only include actively used utilities.
 """
 
-from .memory_store import memory, MemoryStore
+
 from .scraping import (
     AdvancedJobScraper,
     extract_skills_from_description,
@@ -18,9 +18,7 @@ from .cv_tailoring import CVTailoringEngine
 from .tracker import ApplicationTracker
 
 __all__ = [
-    # Memory Store
-    'memory',
-    'MemoryStore',
+
     
     # Job Scraping
     'AdvancedJobScraper',
