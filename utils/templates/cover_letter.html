@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 2.5cm;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            font-size: 11pt;
+        }
+        .header {
+            margin-bottom: 40px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 20px;
+        }
+        .sender-info {
+            text-align: right;
+            color: #555;
+            font-size: 10pt;
+        }
+        .sender-name {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 14pt;
+            margin-bottom: 5px;
+        }
+        .date {
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .recipient-info {
+            margin-bottom: 30px;
+        }
+        .content {
+            text-align: justify;
+        }
+        p {
+            margin-bottom: 15px;
+        }
+        .signature {
+            margin-top: 40px;
+        }
+        a {
+            color: #2c3e50;
+            text-decoration: none;
+            border-bottom: 1px dotted #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="sender-info">
+            <div class="sender-name">{{ name }}</div>
+            <div>{{ email }} • {{ phone }} • {{ location }}</div>
+            <div class="date">{{ date }}</div>
+        </div>
+    </div>
+    <div class="content">
+        {{ content }}
+    </div>
+</body>
+</html>

@@ -1,0 +1,242 @@
+# =============================================================================
+# Job Market AI Analyzer - GitIgnore Configuration
+# =============================================================================
+# This file specifies which files and directories should be ignored by Git.
+# These include sensitive data, generated files, and development artifacts.
+
+# =============================================================================
+# Python
+# =============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# =============================================================================
+# Virtual Environments
+# =============================================================================
+
+# Virtual environment directories
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# pipenv
+Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# =============================================================================
+# Environments
+# =============================================================================
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =============================================================================
+# IDEs and Editors
+# =============================================================================
+
+# PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# =============================================================================
+# OS Generated Files
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# Application Specific
+# =============================================================================
+
+# Personal CV files
+CV.pdf
+*.pdf
+
+# Generated content
+generated_*.json
+generated_*.csv
+generated_*.txt
+
+# Job data and cache
+jobs*.json
+jobs*.csv
+job_cache/
+*.log
+
+# Generated Applications
+applications/*.pdf
+applications/*.txt
+applications/*.json
+cvs/*.txt
+
+
+# Test outputs
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Development files
+
+requirements-dev.txt
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.tmp/
+temp/
+
+# =============================================================================
+# Logs and Databases
+# =============================================================================
+
+# Logs
+*.log
+logs/
+scraper.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ChromaDB
+chroma_db/
+.chroma/
+
+# =============================================================================
+# Security
+# =============================================================================
+
+# API keys and secrets (NEVER commit these!)
+secrets.json
+config.json
+credentials.json
+*.key
+*.pem
+*.crt
+*.cer
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+# Docker volumes
+docker-volumes/
+
+# =============================================================================
+# CI/CD
+# =============================================================================
+
+# GitHub Actions artifacts
+.github/artifacts/
+
+# Build artifacts
+dist/
+build/
