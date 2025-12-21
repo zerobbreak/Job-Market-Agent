@@ -906,6 +906,8 @@ def analyze_cv():
             
             # Check for existing CV with same hash or filename
             databases = Databases(g.client)
+            storage_client = Storage(g.client)
+            
             existing_profiles = databases.list_documents(
                 database_id=DATABASE_ID,
                 collection_id=COLLECTION_ID_PROFILES,
@@ -916,23 +918,49 @@ def analyze_cv():
                 existing_profile = existing_profiles['documents'][0]
                 existing_filename = existing_profile.get('cv_filename', '')
                 existing_hash = existing_profile.get('cv_hash', '')
+                existing_file_id = existing_profile.get('cv_file_id', '')
                 
-                # Check if same file (by hash) or same filename
-                if file_hash == existing_hash:
-                    return jsonify({
-                        'success': False,
-                        'error': 'duplicate_exact',
-                        'message': 'This exact CV file has already been uploaded.',
-                        'existing_filename': existing_filename
-                    }), 409
+                # Verify the file actually exists in storage
+                file_exists_in_storage = False
+                if existing_file_id:
+                    try:
+                        storage_client.get_file(BUCKET_ID_CVS, existing_file_id)
+                        file_exists_in_storage = True
+                    except Exception as e:
+                        logger.warning(f"File {existing_file_id} not found in storage: {e}")
+                        # File is missing from storage, clean up the orphaned database record
+                        try:
+                            databases.delete_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profile['$id'])
+                            logger.info(f"Deleted orphaned profile record: {existing_profile['$id']}")
+                        except Exception as del_err:
+                            logger.error(f"Could not delete orphaned profile: {del_err}")
                 
-                if filename == existing_filename and not overwrite:
-                    return jsonify({
-                        'success': False,
-                        'error': 'duplicate_filename',
-                        'message': f'A CV with filename "{filename}" already exists. Do you want to replace it?',
-                        'existing_filename': existing_filename
-                    }), 409
+                # Only return duplicate error if file actually exists in storage
+                if file_exists_in_storage:
+                    # Check if same file (by hash) or same filename
+                    if file_hash == existing_hash:
+                        return jsonify({
+                            'success': False,
+                            'error': 'duplicate_exact',
+                            'message': 'This exact CV file has already been uploaded.',
+                            'existing_filename': existing_filename
+                        }), 409
+                    
+                    if filename == existing_filename and not overwrite:
+                        return jsonify({
+                            'success': False,
+                            'error': 'duplicate_filename',
+                            'message': f'A CV with filename "{filename}" already exists. Do you want to replace it?',
+                            'existing_filename': existing_filename
+                        }), 409
+                    
+                    # If overwriting, delete the old file from storage first
+                    if overwrite and existing_file_id:
+                        try:
+                            storage_client.delete_file(BUCKET_ID_CVS, existing_file_id)
+                            logger.info(f"Deleted old CV file: {existing_file_id}")
+                        except Exception as e:
+                            logger.warning(f"Could not delete old CV file: {e}")
             
             # Save the file
             cv_file.save(cv_path)
@@ -1053,6 +1081,42 @@ def get_current_profile():
             'file_id': doc.get('cv_file_id')
         })
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile/list', methods=['GET'])
+@login_required
+def list_profiles():
+    """List all CV profiles for the authenticated user"""
+    try:
+        databases = Databases(g.client)
+        result = databases.list_documents(
+            DATABASE_ID, 
+            COLLECTION_ID_PROFILES, 
+            queries=[
+                Query.equal('userId', g.user_id),
+                Query.order_desc('$updatedAt')
+            ]
+        )
+        
+        profiles = []
+        for doc in result.get('documents', []):
+            profiles.append({
+                '$id': doc['$id'],
+                'cv_filename': doc.get('cv_filename', 'CV.pdf'),
+                'cv_file_id': doc.get('cv_file_id'),
+                '$createdAt': doc.get('$createdAt'),
+                '$updatedAt': doc.get('$updatedAt'),
+                'experience_level': doc.get('experience_level'),
+                'education': doc.get('education'),
+            })
+        
+        return jsonify({
+            'success': True,
+            'profiles': profiles,
+            'total': len(profiles)
+        })
+    except Exception as e:
+        logger.error(f"Error listing profiles: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/match-jobs', methods=['POST'])
@@ -1218,6 +1282,7 @@ def _process_application_async(job_data, session_id, client_jwt_client, template
                 if not rehydrated:
                     if pipeline.cv_path and os.path.exists(pipeline.cv_path):
                          cv_content = pipeline.load_cv()
+                         pipeline.build_profile(cv_content)  # Build profile to initialize cv_engine
                     else:
                          return {'error': 'CV not found. Please upload a CV first.'}
         app_result = pipeline.generate_application_package(job_data, template_type)
