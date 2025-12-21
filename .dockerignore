@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+pipeline.log
+scraper.log
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+applications.db
+
+# Cache directories
+job_cache/
+.cache/
+
+# Test files
+tests/
+*.test.py
+.pytest_cache/
+
+# Documentation
+README.md
+LICENSE
+*.md
+
+# Application output
+applications/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Railway/deployment configs (already in image)
+railway.json
+render.yaml
+nginx.conf
