@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Graduate Developer",
+    "company": "Pineapple",
+    "location": "Unknown Location",
+    "url": "https://www.linkedin.com/jobs/view/4350216854"
+  },
+  "cv": {
+    "version_id": "Pineapple_Graduate_Developer_20251221_1746",
+    "ats_analysis": "Parsing failed",
+    "ats_score": 59,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['R'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": [],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": [],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": null,
+  "paths": {
+    "cv": "applications\\Pineapple_Graduate_Developer_20251221_1746\\cv.pdf",
+    "cover_letter": "applications\\Pineapple_Graduate_Developer_20251221_1746\\cover_letter.txt"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Senior Full Stack Developer",
+    "company": "JCM Consultants",
+    "location": "Unknown Location",
+    "url": "https://za.indeed.com/viewjob?jk=6244b56f57cffd8a"
+  },
+  "cv": {
+    "version_id": "JCM_Consultants_Senior_Full_Stack_Developer_20251221_0125",
+    "ats_analysis": "Parsing failed",
+    "ats_score": 56,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['R'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": [],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['develop', 'build', 'lead'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": null,
+  "paths": {
+    "cv": "applications\\JCM_Consultants_Senior_Full_Stack_Developer_20251221_0125\\cv.pdf",
+    "cover_letter": "applications\\JCM_Consultants_Senior_Full_Stack_Developer_20251221_0125\\cover_letter.txt"
+  }
+}

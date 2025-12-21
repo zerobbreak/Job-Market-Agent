@@ -1,7 +1,11 @@
 """
-Job Market Agent - Automated Application Pipeline & API Server
-Automatically finds jobs, generates optimized CVs and cover letters, and tracks applications.
+Job Market Agent - Main Application
+Automated job search and application pipeline with AI-powered CV tailoring
 """
+
+# Suppress deprecation warnings FIRST, before any imports
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import os
 import sys
@@ -21,6 +25,13 @@ from pathlib import Path
 # Fix Windows Unicode Output
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
+
+import warnings
+# Suppress Appwrite SDK deprecation warnings that suggest methods not present in this version
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*list_documents.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*create_string_attribute.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*update_document.*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*create_document.*")
 
 # Third-party imports
 from dotenv import load_dotenv
@@ -196,54 +207,89 @@ class JobApplicationPipeline:
     
     @retry_ai_call
     def build_profile(self, cv_content):
-        """Build student profile using Profile Builder agent"""
-        logger.info("Building candidate profile...")
+        """Build student profile using Rule-Based Parser"""
+        logger.info("Building candidate profile (Rule-Based)...")
         print("\n🔍 Building candidate profile...")
         
         try:
-            response = profile_builder.run(f"""
-            Analyze this CV and create a comprehensive candidate profile.
-            Return the response in strict JSON format with the following structure:
-            {{
-                "skills": ["skill1", "skill2", ...],
-                "experience_level": "Senior/Mid/Junior",
-                "education": "Highest degree/qualification",
-                "strengths": ["strength1", "strength2", ...],
-                "career_goals": "Summary of career goals"
-            }}
+            from utils.cv_parser import CVParser
             
-            CV Content:
-            {cv_content}
-            """)
+            # Use file path if available and PDF, otherwise use content
+            parser = None
+            if self.cv_path and self.cv_path.lower().endswith('.pdf'):
+                parser = CVParser(file_path=self.cv_path)
+            else:
+                parser = CVParser(raw_text=cv_content)
+                
+            cv_data = parser.parse()
             
-            # Parse the response to get a dictionary if possible
-            self.profile = response.content
+            # Map CVData to flat profile structure
+            skills = []
+            if cv_data.technical_skills:
+                for cat, s_list in cv_data.technical_skills.items():
+                    skills.extend(s_list)
+            
+            # Education
+            education_str = "Not specified"
+            if cv_data.education:
+                top_edu = cv_data.education[0]
+                education_str = top_edu.degree
+                if top_edu.institution:
+                    education_str += f" at {top_edu.institution}"
+                
+            # Experience Level Heuristic from work experience
+            exp_level = "Entry Level"
+            if cv_data.work_experience:
+                years_of_exp = len(cv_data.work_experience) * 1.5 # Rough estimate
+                if any('senior' in exp.title.lower() for exp in cv_data.work_experience):
+                    exp_level = "Senior"
+                elif years_of_exp > 5:
+                    exp_level = "Senior"
+                elif years_of_exp > 2:
+                    exp_level = "Mid Level"
+            
+            self.profile = {
+                "name": cv_data.contact_info.name or "Unknown",
+                "email": cv_data.contact_info.email or "",
+                "phone": cv_data.contact_info.phone or "",
+                "location": cv_data.contact_info.address or "",
+                "skills": list(set(skills)), # Unique skills
+                "experience_level": exp_level,
+                "education": education_str,
+                "strengths": skills[:5], # Use top skills as strengths
+                "career_goals": cv_data.professional_profile or "To leverage my skills in a challenging role."
+            }
             
             # Initialize CV Engine with the loaded profile
             self.cv_engine = CVTailoringEngine(cv_content, self.profile)
             
-            print("✓ Profile built successfully")
+            print("✓ Profile built successfully (Rule-Based)")
             return self.profile
             
         except Exception as e:
             logger.error(f"Error building profile: {e}")
             print(f"✗ Error building profile: {e}")
-            # Fallback: build a minimal profile from CV content without AI
+            print(traceback.format_exc())
+            
+            # Fallback to minimal extraction
             skills = extract_skills_from_description(cv_content)
-            fallback_profile = {
+            self.profile = {
+                "name": "Unknown Candidate",
+                "email": "",
+                "phone": "",
+                "location": "",
                 "skills": skills,
-                "experience_level": "N/A",
-                "education": "",
-                "strengths": [],
-                "career_goals": ""
+                "experience_level": "Entry Level",
+                "education": "Not specified",
+                "strengths": skills[:5],
+                "career_goals": "To leverage my skills."
             }
-            self.profile = fallback_profile
             self.cv_engine = CVTailoringEngine(cv_content, self.profile)
-            print("✓ Fallback profile built from CV content")
             return self.profile
     
     def search_jobs(self, query, location, max_results):
         """Search for jobs using the scraper"""
+        print(f"DEBUG: Entering search_jobs with query='{query}', location='{location}'")
         logger.info(f"Searching for jobs: '{query}' in {location}")
         print(f"\n🔎 Searching for jobs: '{query}' in {location}")
         
@@ -578,36 +624,25 @@ def login_required(f):
     return decorated_function
 
 def parse_profile(profile_output):
+    """Clean and normalize profile data"""
+    # If already a clean dict from our rule-based parser, just normalize missing keys
+    if isinstance(profile_output, dict):
+        return {
+            'name': profile_output.get('name', ''),
+            'email': profile_output.get('email', ''),
+            'phone': profile_output.get('phone', ''),
+            'location': profile_output.get('location', ''),
+            'skills': profile_output.get('skills', []),
+            'experience_level': profile_output.get('experience_level', 'Entry Level'),
+            'education': profile_output.get('education', ''),
+            'strengths': profile_output.get('strengths', []),
+            'career_goals': profile_output.get('career_goals', ''),
+            'links': profile_output.get('links', {'linkedin': '', 'github': '', 'portfolio': ''})
+        }
+
     profile_data = {'skills': [], 'experience_level': '', 'education': '', 'strengths': [], 'career_goals': '', 'name': '', 'email': '', 'phone': '', 'location': '', 'links': {'linkedin': '', 'github': '', 'portfolio': ''}}
 
     try:
-        if isinstance(profile_output, dict):
-            # ... dictionary parsing logic from api_server.py ...
-            # Simplifying for brevity but keeping core logic
-            skills_val = profile_output.get('skills', [])
-            strengths_val = profile_output.get('strengths', [])
-            links_val = profile_output.get('links', {})
-            
-            if isinstance(skills_val, str):
-                skills_val = [s.strip() for s in skills_val.split(',') if s.strip()]
-            if isinstance(strengths_val, str):
-                strengths_val = [s.strip() for s in strengths_val.split(',') if s.strip()]
-            if isinstance(links_val, dict):
-                profile_data['links'] = {'linkedin': links_val.get('linkedin', ''), 'github': links_val.get('github', ''), 'portfolio': links_val.get('portfolio', '')}
-
-            profile_data.update({
-                'skills': skills_val or [],
-                'strengths': strengths_val or [],
-                'experience_level': profile_output.get('experience_level', '') or '',
-                'education': profile_output.get('education', '') or '',
-                'career_goals': profile_output.get('career_goals', '') or '',
-                'name': profile_output.get('name', '') or '',
-                'email': profile_output.get('email', '') or '',
-                'phone': profile_output.get('phone', '') or '',
-                'location': profile_output.get('location', '') or '',
-            })
-            return profile_data
-
         # Text parsing logic fallback
         profile_text = str(profile_output)
         if hasattr(profile_output, 'decode'):
@@ -628,9 +663,6 @@ def parse_profile(profile_output):
             pass
 
         # Regex fallback (as in api_server.py)
-        # ... (Abbreviated regex implementation similar to source) ...
-        # For full fidelity, I should include the regexes if I want to be 100% sure. 
-        # I will include the key ones.
         
         exp_match = re.search(r'(?:Experience Level|Experience|Years)[:\s]*([^\n]+)', profile_text, re.IGNORECASE)
         if exp_match: profile_data['experience_level'] = exp_match.group(1).strip()
@@ -638,7 +670,6 @@ def parse_profile(profile_output):
         edu_match = re.search(r'(?:Education|Qualifications|Degrees)[:\s]*([\s\S]*?)(?=\n{2,}|\n[A-Z]|$)', profile_text, re.IGNORECASE)
         if edu_match: profile_data['education'] = edu_match.group(1).strip()
         
-        # ... other regexes ...
     except Exception as e:
         print(f"Error parsing profile: {e}")
         
@@ -779,7 +810,30 @@ def ensure_database_schema():
         admin_db = Databases(admin_client)
 
         # Simplified schema check for brevity - in production keep full check
-        # ... logic to create collections ...
+        # Ensure profiles collection has education attribute
+        def _create_attr(db, db_id, coll_id, attr_id, size, required=False):
+            try:
+                # Using deprecated method since create_string_column doesn't exist in current SDK
+                # Deprecation warnings are suppressed at module level (line 7)
+                db.create_string_attribute(db_id, coll_id, attr_id, size, required)
+                # Only log if it's a new attribute (not already exists)
+                # print(f"✓ Added attribute '{attr_id}' to profiles")
+            except Exception as e:
+                # Appwrite throws 409 if attribute exists - this is expected, so we silently ignore it
+                if '409' not in str(e) and 'already exists' not in str(e).lower():
+                    # Only log unexpected errors
+                    print(f"✗ Failed to create attribute '{attr_id}': {e}")
+
+        try:
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'education', 2000)
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'experience_level', 255)
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'career_goals', 2000)
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'strengths', 2500) # Reduced from 10k
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'cv_hash', 64) # SHA-256 hash
+
+        except Exception as e:
+            print(f"Schema update error: {e}")
+        
         print("✓ Database schema ensured (Basic Check)")
         
     except Exception as e:
@@ -834,12 +888,53 @@ def analyze_cv():
              return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
 
         cv_file = request.files.get('cv')
+        overwrite = request.form.get('overwrite', 'false').lower() == 'true'
+        
         if not cv_file or cv_file.filename == '':
             return jsonify({'success': False, 'error': 'No file selected'})
         
         if cv_file and allowed_file(cv_file.filename):
             filename = secure_filename(cv_file.filename)
             cv_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Calculate file hash for duplicate detection
+            import hashlib
+            cv_file.seek(0)  # Reset file pointer
+            file_content = cv_file.read()
+            file_hash = hashlib.sha256(file_content).hexdigest()
+            cv_file.seek(0)  # Reset again for saving
+            
+            # Check for existing CV with same hash or filename
+            databases = Databases(g.client)
+            existing_profiles = databases.list_documents(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_PROFILES,
+                queries=[Query.equal('userId', g.user_id)]
+            )
+            
+            if existing_profiles['total'] > 0:
+                existing_profile = existing_profiles['documents'][0]
+                existing_filename = existing_profile.get('cv_filename', '')
+                existing_hash = existing_profile.get('cv_hash', '')
+                
+                # Check if same file (by hash) or same filename
+                if file_hash == existing_hash:
+                    return jsonify({
+                        'success': False,
+                        'error': 'duplicate_exact',
+                        'message': 'This exact CV file has already been uploaded.',
+                        'existing_filename': existing_filename
+                    }), 409
+                
+                if filename == existing_filename and not overwrite:
+                    return jsonify({
+                        'success': False,
+                        'error': 'duplicate_filename',
+                        'message': f'A CV with filename "{filename}" already exists. Do you want to replace it?',
+                        'existing_filename': existing_filename
+                    }), 409
+            
+            # Save the file
             cv_file.save(cv_path)
             
             pipeline = JobApplicationPipeline(cv_path=cv_path)
@@ -848,17 +943,22 @@ def analyze_cv():
                 return jsonify({'success': False, 'error': 'Failed to load CV'})
             
             profile_text = pipeline.build_profile(cv_content)
+            print("DEBUG: Returned from build_profile")
             profile_data = parse_profile(profile_text)
+            print("DEBUG: Returned from parse_profile")
             
             # Appwrite Save
             try:
                 databases = Databases(g.client)
                 storage = Storage(g.client)
                 
+                logger.info(f"Saving CV file for user {g.user_id}...")
                 result = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(cv_path))
                 file_id = result['$id']
+                logger.info(f"CV file saved with ID: {file_id}")
 
                 # Update/Create Profile
+                logger.info(f"Updating profile for user {g.user_id}...")
                 existing_profiles = databases.list_documents(
                     database_id=DATABASE_ID,
                     collection_id=COLLECTION_ID_PROFILES,
@@ -874,26 +974,56 @@ def analyze_cv():
                     'career_goals': profile_data.get('career_goals', ''),
                     'cv_file_id': file_id,
                     'cv_filename': filename,
-                    'cv_text': cv_content
+                    'cv_hash': file_hash  # Store hash for duplicate detection
+                    # Removed cv_text to save space and avoid row limits
                 }
 
-                if existing_profiles['total'] > 0:
-                    databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profiles['documents'][0]['$id'], data=profile_doc_data)
-                else:
-                    databases.create_document(DATABASE_ID, COLLECTION_ID_PROFILES, ID.unique(), data=profile_doc_data)
+                # Retry logic for Appwrite operations (handles 502 errors)
+                max_retries = 3
+                retry_delay = 1
+                last_error = None
                 
+                for attempt in range(max_retries):
+                    try:
+                        if existing_profiles['total'] > 0:
+                            databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profiles['documents'][0]['$id'], data=profile_doc_data)
+                            logger.info("Existing profile updated.")
+                        else:
+                            databases.create_document(DATABASE_ID, COLLECTION_ID_PROFILES, ID.unique(), data=profile_doc_data)
+                            logger.info("New profile created.")
+                        break  # Success, exit retry loop
+                    except Exception as retry_error:
+                        last_error = retry_error
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Appwrite operation failed (attempt {attempt + 1}/{max_retries}), retrying in {retry_delay}s...")
+                            import time
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            raise  # Re-raise on final attempt
+                
+                # Clear any existing state for this user to prevent stale data
                 with store_lock:
+                    # Remove old pipeline if exists
+                    if g.user_id in pipeline_store:
+                        del pipeline_store[g.user_id]
+                    
+                    # Store fresh profile data
                     profile_store[g.user_id] = {
                         'profile_data': profile_data,
                         'raw_profile': profile_text,
                         'cv_filename': filename,
                         'cv_content': cv_content,
-                        'file_id': file_id 
+                        'file_id': file_id,
+                        'cv_hash': file_hash
                     }
                     pipeline_store[g.user_id] = pipeline
 
             except Exception as db_error:
+                logger.error(f"Appwrite DB/Storage Error: {db_error}")
                 print(f"Appwrite Error: {db_error}")
+                print(traceback.format_exc())
+                return jsonify({'success': False, 'error': f"Database save failed: {str(db_error)}"}), 500
 
             return jsonify({
                 'success': True,
@@ -928,27 +1058,35 @@ def get_current_profile():
 @app.route('/api/match-jobs', methods=['POST'])
 @login_required
 def match_jobs():
+    print("DEBUG: Entered match_jobs endpoint")
     try:
         if not check_rate('match-jobs', MAX_RATE_MATCHES_PER_MIN):
             return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
             
         data = request.get_json()
+        print(f"DEBUG: match_jobs data received: {data}")
         location = data.get('location', DEFAULT_LOCATION)
         max_results = int(data.get('max_results', 20))
         session_id = g.user_id
+        print(f"DEBUG: Session ID: {session_id}")
         
         # 1. Rehydration
+        print("DEBUG: Acquiring store_lock...")
         with store_lock:
+            print("DEBUG: store_lock acquired")
             pipeline = pipeline_store.get(session_id)
             if not pipeline or not pipeline.profile:
+                print("DEBUG: Pipeline missing/incomplete, checking profile_store")
                 profile_info = profile_store.get(session_id)
                 if not profile_info:
+                    print("DEBUG: profile_store miss, attempting DB rehydration")
                     # Generic rehydration
-                     pipeline = _rehydrate_pipeline_from_profile(session_id, g.client)
-                     if pipeline:
+                    pipeline = _rehydrate_pipeline_from_profile(session_id, g.client)
+                    if pipeline:
                          pipeline_store[session_id] = pipeline
                          if session_id in profile_store: profile_info = profile_store[session_id]
                 else:
+                    print("DEBUG: Found in profile_store, restoring memory")
                     # Memory restore
                     if profile_info.get('cv_content'):
                         pipeline = JobApplicationPipeline()
@@ -956,14 +1094,79 @@ def match_jobs():
                         pipeline.profile = profile_info['raw_profile']
                         pipeline.cv_engine = CVTailoringEngine(profile_info['cv_content'], pipeline.profile)
                         pipeline_store[session_id] = pipeline
+        
+        print("DEBUG: Rehydration logic complete")
 
         if not pipeline or not pipeline.profile:
+             print("DEBUG: No profile found after attempts")
              return jsonify({'success': False, 'error': 'No profile found. Please upload CV first.'})
 
         # 2. Search
+        print("DEBUG: parsing profile...")
         profile_data = parse_profile(pipeline.profile)
-        skills = profile_data.get('skills', [])
-        query = ' '.join(skills[:3]) if skills else 'Software Developer'
+        
+        # Improved Query Generation - Use job titles/roles, not technical skills
+        query = ""
+        
+        # First, try to extract a job title from career goals or professional profile
+        career_goals = profile_data.get('career_goals', '')
+        
+        # Look for common job title patterns in career goals
+        job_title_keywords = ['developer', 'engineer', 'analyst', 'manager', 'designer', 
+                             'architect', 'consultant', 'specialist', 'administrator', 
+                             'coordinator', 'lead', 'intern', 'graduate']
+        
+        if career_goals:
+            career_lower = career_goals.lower()
+            # Extract first sentence or phrase that contains a job title keyword
+            for keyword in job_title_keywords:
+                if keyword in career_lower:
+                    # Extract a reasonable phrase around the keyword
+                    words = career_goals.split()
+                    for i, word in enumerate(words):
+                        if keyword in word.lower():
+                            # Take 2-3 words around the keyword
+                            start = max(0, i-1)
+                            end = min(len(words), i+3)
+                            query = ' '.join(words[start:end])
+                            break
+                    if query:
+                        break
+        
+        # If still no query, try using experience level + primary skill domain
+        if not query or len(query) < 5:
+            skills = profile_data.get('skills', [])
+            exp_level = profile_data.get('experience_level', '')
+            
+            # Identify skill domain (e.g., "Web Developer" from React/JavaScript)
+            skill_domains = {
+                'web': ['react', 'angular', 'vue', 'html', 'css', 'javascript', 'typescript'],
+                'backend': ['python', 'java', 'node', 'express', 'django', 'flask'],
+                'mobile': ['react native', 'flutter', 'swift', 'kotlin', 'android', 'ios'],
+                'data': ['sql', 'mongodb', 'postgresql', 'data', 'analytics'],
+                'cloud': ['aws', 'azure', 'gcp', 'cloud', 'devops']
+            }
+            
+            domain = None
+            for dom, keywords in skill_domains.items():
+                if any(any(kw in skill.lower() for kw in keywords) for skill in skills):
+                    domain = dom
+                    break
+            
+            # Construct query from domain + level
+            if domain:
+                level_prefix = ''
+                if 'senior' in exp_level.lower():
+                    level_prefix = 'Senior '
+                elif 'junior' in exp_level.lower() or 'entry' in exp_level.lower():
+                    level_prefix = 'Junior '
+                
+                query = f"{level_prefix}{domain.capitalize()} Developer"
+            else:
+                # Ultimate fallback
+                query = 'Software Developer'
+        
+        logger.info(f"Generated job search query: {query}")
         
         jobs = pipeline.search_jobs(query, location, max_results)
         
@@ -990,6 +1193,372 @@ def match_jobs():
     except Exception as e:
         print(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==========================================
+# Missing Routes Restoration
+# ==========================================
+
+def _process_application_async(job_data, session_id, client_jwt_client, template_type=None):
+    try:
+        if session_id not in pipeline_store:
+            pipeline_store[session_id] = JobApplicationPipeline()
+        pipeline = pipeline_store[session_id]
+        if not getattr(pipeline, 'cv_engine', None):
+            profile_info = profile_store.get(session_id)
+            if profile_info and profile_info.get('cv_content'):
+                from utils.cv_tailoring import CVTailoringEngine
+                pipeline.cv_engine = CVTailoringEngine(
+                    profile_info['cv_content'],
+                    profile_info.get('profile_data', {})
+                )
+                pipeline.profile = profile_info.get('profile_data', {})
+            else:
+                rehydrated = _rehydrate_pipeline_from_profile(session_id, client_jwt_client)
+                if not rehydrated:
+                    if pipeline.cv_path and os.path.exists(pipeline.cv_path):
+                         cv_content = pipeline.load_cv()
+                    else:
+                         return {'error': 'CV not found. Please upload a CV first.'}
+        app_result = pipeline.generate_application_package(job_data, template_type)
+        if not app_result or not isinstance(app_result, dict):
+            return {'error': 'Application generation failed. Please try a different template or re-upload your CV.'}
+        interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
+        files_payload = {}
+        try:
+            databases = Databases(client_jwt_client)
+            storage = Storage(client_jwt_client)
+            cv_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['cv_path']))
+            cl_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['cover_letter_path']))
+            meta_upload = None
+            if app_result.get('metadata_path'):
+                meta_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['metadata_path']))
+            prep_upload = None
+            if interview_prep_path:
+                prep_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(interview_prep_path))
+            files_payload = {
+                'cv': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cv_upload['$id']}",
+                'cover_letter': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cl_upload['$id']}",
+                'interview_prep': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={prep_upload['$id']}" if prep_upload else None,
+                'metadata': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={meta_upload['$id']}" if meta_upload else None
+            }
+            databases.create_document(
+                database_id=DATABASE_ID,
+                collection_id=COLLECTION_ID_APPLICATIONS,
+                document_id=ID.unique(),
+                data={
+                    'userId': session_id,
+                    'jobTitle': job_data.get('title', 'Unknown'),
+                    'company': job_data.get('company', 'Unknown'),
+                    'jobUrl': job_data.get('url', ''),
+                    'location': job_data.get('location', ''),
+                    'status': 'applied',
+                    'files': files_payload
+                }
+            )
+        except Exception as e:
+            print(f"Error saving application to DB: {e}")
+        return {'files': files_payload, 'ats_score': app_result.get('ats_score'), 'ats_analysis': app_result.get('ats_analysis')}
+    except Exception as e:
+        print(f"Async apply error: {e}")
+        return {'error': str(e)}
+
+@app.route('/api/apply-job', methods=['POST'])
+@login_required
+def apply_job():
+    try:
+        if not check_rate('apply-job', MAX_RATE_APPLY_PER_MIN):
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+        if request.is_json:
+            data = request.get_json()
+            session_id = g.user_id
+            job_data = data.get('job')
+            template_type = data.get('template')
+            job_id = str(uuid.uuid4())
+            apply_jobs[job_id] = {'status': 'processing', 'created_at': time.time()}
+            client_jwt_client = g.client
+            def _runner():
+                result = _process_application_async(job_data, session_id, client_jwt_client, template_type)
+                current = apply_jobs.get(job_id, {})
+                if current.get('status') == 'cancelled':
+                    return
+                if 'error' in result:
+                    apply_jobs[job_id] = {'status': 'error', 'error': result['error'], 'created_at': current.get('created_at', time.time())}
+                else:
+                    apply_jobs[job_id] = {
+                        'status': 'done',
+                        'files': result['files'],
+                        'ats': {'score': result.get('ats_score'), 'analysis': result.get('ats_analysis')},
+                        'created_at': current.get('created_at', time.time())
+                    }
+            threading.Thread(target=_runner, daemon=True).start()
+            return jsonify({'success': True, 'job_id': job_id})
+        return jsonify({'success': False, 'error': 'Invalid request'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/apply-status', methods=['GET'])
+@login_required
+def apply_status():
+    try:
+        job_id = request.args.get('job_id')
+        if not job_id or job_id not in apply_jobs:
+            return jsonify({'status': 'not_found'})
+        info = apply_jobs[job_id]
+        if info.get('status') == 'processing':
+            created = info.get('created_at', time.time())
+            if time.time() - created > APPLY_JOB_TIMEOUT_SECS:
+                info = {'status': 'error', 'error': 'Job timed out. Please try again.'}
+                apply_jobs[job_id] = info
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)})
+
+@app.route('/api/apply-cancel', methods=['POST'])
+@login_required
+def apply_cancel():
+    try:
+        job_id = request.args.get('job_id') or (request.get_json() or {}).get('job_id')
+        if not job_id or job_id not in apply_jobs:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+        info = apply_jobs[job_id]
+        info['status'] = 'cancelled'
+        apply_jobs[job_id] = info
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/applications', methods=['GET'])
+@login_required
+def get_applications():
+    try:
+        databases = Databases(g.client)
+        try:
+            page = int(request.args.get('page', '1'))
+            limit = int(request.args.get('limit', '10'))
+        except Exception:
+            page, limit = 1, 10
+        offset = max(0, (page - 1) * limit)
+        result = databases.list_documents(
+            database_id=DATABASE_ID,
+            collection_id=COLLECTION_ID_APPLICATIONS,
+            queries=[
+                Query.equal('userId', g.user_id),
+                Query.order_desc('$createdAt'),
+                Query.limit(limit),
+                Query.offset(offset)
+            ]
+        )
+        applications = []
+        for doc in result['documents']:
+            applications.append({
+                'id': doc['$id'],
+                'jobTitle': doc.get('jobTitle', 'Unknown Position'),
+                'company': doc.get('company', 'Unknown Company'),
+                'jobUrl': doc.get('jobUrl', ''),
+                'location': doc.get('location', ''),
+                'status': doc.get('status', 'applied'),
+                'appliedDate': doc.get('$createdAt', '').split('T')[0],
+                'files': doc.get('files')
+            })
+        return jsonify({'applications': applications, 'page': page, 'limit': limit, 'total': result.get('total', len(applications))})
+    except Exception as e:
+        return jsonify({'applications': [], 'error': str(e)})
+
+@app.route('/api/applications/<doc_id>/status', methods=['PUT'])
+@login_required
+def update_application_status(doc_id):
+    try:
+        data = request.get_json() or {}
+        new_status = data.get('status')
+        allowed = {'pending', 'applied', 'interview', 'rejected'}
+        if new_status not in allowed:
+            return jsonify({'success': False, 'error': 'Invalid status'}), 400
+        databases = Databases(g.client)
+        doc = databases.get_document(DATABASE_ID, COLLECTION_ID_APPLICATIONS, doc_id)
+        if doc.get('userId') != g.user_id:
+            return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        databases.update_document(DATABASE_ID, COLLECTION_ID_APPLICATIONS, doc_id, data={'status': new_status})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/storage/download', methods=['GET'])
+@login_required
+def storage_download():
+    try:
+        bucket_id = request.args.get('bucket_id')
+        file_id = request.args.get('file_id')
+        if not bucket_id or not file_id: return jsonify({'error': 'Missing params'}), 400
+        endpoint = os.getenv('APPWRITE_API_ENDPOINT', 'https://cloud.appwrite.io/v1')
+        project_id = os.getenv('APPWRITE_PROJECT_ID')
+        auth_header = request.headers.get('Authorization')
+        token = auth_header.split(' ')[1] if auth_header and auth_header.startswith('Bearer ') else None
+        if not project_id or not token: return jsonify({'error': 'Storage download unavailable'}), 500
+        url = f"{endpoint}/storage/buckets/{bucket_id}/files/{file_id}/download"
+        headers = {'X-Appwrite-Project': project_id, 'X-Appwrite-JWT': token}
+        import requests as _req
+        r = _req.get(url, headers=headers, stream=True)
+        def generate():
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk: yield chunk
+        return Response(generate(), headers={'Content-Type': 'application/octet-stream'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analytics', methods=['POST'])
+@login_required
+def analytics():
+    try:
+        if not check_rate('analytics', MAX_RATE_ANALYTICS_PER_MIN):
+            return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+        data = request.get_json() or {}
+        event = data.get('event')
+        properties = data.get('properties', {})
+        page = data.get('page')
+        if not event: return jsonify({'success': False, 'error': 'Missing event'}), 400
+        databases = Databases(g.client)
+        databases.create_document(DATABASE_ID, COLLECTION_ID_ANALYTICS, ID.unique(), data={'userId': g.user_id, 'event': event, 'properties': json.dumps(properties), 'page': page or '', 'created_at': datetime.now().isoformat()})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/matches/last', methods=['GET'])
+@login_required
+def matches_last():
+    try:
+        databases = Databases(g.client)
+        location = request.args.get('location')
+        queries = [Query.equal('userId', g.user_id), Query.limit(10)]
+        if location: queries.insert(1, Query.equal('location', location))
+        result = databases.list_documents(DATABASE_ID, COLLECTION_ID_MATCHES, queries=queries)
+        if not result or result.get('total', 0) == 0:
+            return jsonify({'success': True, 'matches': [], 'cached': False})
+        doc = result['documents'][0]
+        matches = json.loads(doc.get('matches', '[]') or '[]')
+        last_seen = datetime.now().isoformat()
+        databases.update_document(DATABASE_ID, COLLECTION_ID_MATCHES, doc['$id'], data={'last_seen': last_seen})
+        return jsonify({'success': True, 'matches': matches, 'location': doc.get('location', ''), 'created_at': doc.get('$createdAt'), 'last_seen': last_seen, 'cached': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': 'Failed to fetch last matches'}), 200
+
+@app.route('/api/profile', methods=['POST'])
+@login_required
+def get_profile():
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        if not session_id or session_id not in profile_store:
+            return jsonify({'success': False, 'error': 'No profile found'})
+        profile_info = profile_store[session_id]
+        return jsonify({'success': True, 'profile': profile_info['profile_data'], 'raw_profile': profile_info['raw_profile'], 'cv_filename': profile_info['cv_filename']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/profile', methods=['PUT'])
+@login_required
+def update_profile():
+    try:
+        data = request.get_json()
+        user_id = g.user_id
+        if not data: return jsonify({'success': False, 'error': 'No data'}), 400
+        databases = Databases(g.client)
+        existing_profiles = databases.list_documents(DATABASE_ID, COLLECTION_ID_PROFILES, queries=[Query.equal('userId', user_id)])
+        profile_doc = {
+            'userId': user_id,
+            'skills': json.dumps(data.get('skills', [])),
+            'experience_level': data.get('experience_level', ''),
+            'education': data.get('education', ''),
+            'strengths': json.dumps(data.get('strengths', [])),
+            'career_goals': data.get('career_goals', ''),
+            'notification_enabled': bool(data.get('notification_enabled', False)),
+            'notification_threshold': int(data.get('notification_threshold', 70)),
+            'updated_at': datetime.now().isoformat()
+        }
+        if existing_profiles['total'] > 0:
+            databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profiles['documents'][0]['$id'], data=profile_doc)
+        else:
+            databases.create_document(DATABASE_ID, COLLECTION_ID_PROFILES, ID.unique(), data=profile_doc)
+        return jsonify({'success': True, 'message': 'Profile updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/profile/structured', methods=['GET'])
+@login_required
+def get_structured_profile():
+    try:
+        databases = Databases(g.client)
+        result = databases.list_documents(DATABASE_ID, COLLECTION_ID_PROFILES, queries=[Query.equal('userId', g.user_id), Query.limit(10)])
+        if result.get('total', 0) == 0: return jsonify({'success': False, 'error': 'No profile found'}), 404
+        doc = result['documents'][0]
+        def _safe_json(field, default):
+            try:
+                v = doc.get(field)
+                if isinstance(v, str):
+                    if not v.strip(): return default
+                    return json.loads(v)
+                return v if v is not None else default
+            except Exception: return default
+        profile = {
+            'skills': _safe_json('skills', []),
+            'experience_level': doc.get('experience_level', '') or '',
+            'education': doc.get('education', '') or '',
+            'strengths': _safe_json('strengths', []),
+            'career_goals': doc.get('career_goals', '') or '',
+            'notification_enabled': bool(doc.get('notification_enabled', False)),
+            'notification_threshold': int(doc.get('notification_threshold', 70) or 70)
+        }
+        return jsonify({'success': True, 'profile': profile})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/apply-preview', methods=['POST'])
+@login_required
+def apply_preview():
+    try:
+        if not check_rate('apply-job', MAX_RATE_APPLY_PER_MIN): return jsonify({'success': False, 'error': 'Limit exceeded'}), 429
+        data = request.get_json()
+        job_data = data.get('job')
+        template_type = (data.get('template') or 'MODERN').lower()
+        
+        with store_lock:
+            if g.user_id not in pipeline_store:
+                pipeline_store[g.user_id] = _rehydrate_pipeline_from_profile(g.user_id, g.client)
+            pipeline = pipeline_store.get(g.user_id)
+            if not pipeline: pipeline = JobApplicationPipeline(); pipeline_store[g.user_id] = pipeline
+        
+        if not getattr(pipeline, 'cv_engine', None):
+             profile_info = profile_store.get(g.user_id)
+             if profile_info and profile_info.get('cv_content'):
+                 pipeline.cv_engine = CVTailoringEngine(profile_info['cv_content'], profile_info.get('profile_data', {}))
+                 pipeline.profile = profile_info.get('profile_data', {})
+             else:
+                 return jsonify({'success': False, 'error': 'No CV found'}), 400
+        
+        cv_content, ats_analysis = pipeline.cv_engine.generate_tailored_cv(job_data, template_type)
+        version_id = list(pipeline.cv_engine.cv_versions.keys())[-1]
+        cv_data = pipeline.cv_engine.get_cv_version(version_id) or {}
+        
+        generator = PDFGenerator()
+        header = pipeline.cv_engine._extract_header_info()
+        sections = pipeline.cv_engine._build_sections(cv_data)
+        cv_html = generator.generate_html(cv_content, template_name=template_type, header=header, sections=sections)
+        
+        cl_markdown = pipeline.cv_engine._generate_cover_letter_markdown(job_data, tailored_cv=cv_content)
+        header['date'] = datetime.now().strftime('%B %d, %Y')
+        cl_html = generator.generate_html(cl_markdown, template_name='cover_letter', header=header)
+        
+        return jsonify({'success': True, 'cv_html': cv_html, 'cover_letter_html': cl_html, 'ats': {'analysis': ats_analysis, 'score': cv_data.get('ats_score')}})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/debug/cv', methods=['GET'])
+@login_required
+def debug_cv():
+    try:
+        return jsonify({'success': True, 'message': 'Debug endpoint active'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Cleanup thread
 def _cleanup_apply_jobs():
