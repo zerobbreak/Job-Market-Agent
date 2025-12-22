@@ -511,14 +511,15 @@ allowed_origins = os.getenv('CORS_ORIGINS', '').split(',')
 default_origins = [
     'http://localhost:5173',
     'https://job-market-agent.vercel.app',
+    'https://job-market-frontend.vercel.app',
     'https://job-market-agent.onrender.com'
 ]
 active_origins = list(set([o.strip() for o in allowed_origins + default_origins if o.strip()]))
-origin_patterns = active_origins + [r"^https://.*\.vercel\.app$"]
 
 CORS(app, resources={
     r"/api/*": {
-        "origins": origin_patterns,
+        "origins": active_origins,
+        "origin_regex": r"^https://.*\.vercel\.app$",
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "X-Appwrite-Project", "X-Appwrite-JWT"],
         "supports_credentials": True
