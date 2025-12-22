@@ -1120,6 +1120,60 @@ def list_profiles():
         logger.error(f"Error listing profiles: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/profile/<file_id>', methods=['DELETE'])
+@login_required
+def delete_profile(file_id):
+    """Delete a CV profile and its associated file"""
+    try:
+        databases = Databases(g.client)
+        storage = Storage(g.client)
+        
+        # Find the profile document by cv_file_id
+        result = databases.list_documents(
+            DATABASE_ID,
+            COLLECTION_ID_PROFILES,
+            queries=[
+                Query.equal('userId', g.user_id),
+                Query.equal('cv_file_id', file_id)
+            ]
+        )
+        
+        if result.get('total', 0) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Profile not found or access denied'
+            }), 404
+        
+        profile_doc = result['documents'][0]
+        profile_id = profile_doc['$id']
+        
+        # Delete the file from storage
+        try:
+            storage.delete_file(BUCKET_ID_CVS, file_id)
+            logger.info(f"Deleted file {file_id} from storage")
+        except Exception as e:
+            logger.warning(f"File deletion failed (may not exist): {e}")
+        
+        # Delete the profile document
+        databases.delete_document(
+            DATABASE_ID,
+            COLLECTION_ID_PROFILES,
+            profile_id
+        )
+        logger.info(f"Deleted profile {profile_id} for user {g.user_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Profile and file deleted successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting profile: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/match-jobs', methods=['POST'])
 @login_required
 def match_jobs():
