@@ -37,17 +37,6 @@ RUN mkdir -p applications cvs job_cache uploads
 # Expose port (Railway will set the PORT environment variable)
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/api/health', timeout=5)" || exit 1
-
-# Start command using Gunicorn
+# Start command using Gunicorn with shell to properly expand PORT variable
 # Railway will provide the PORT environment variable
-CMD gunicorn main:app \
-    --bind 0.0.0.0:${PORT:-8000} \
-    --workers 2 \
-    --threads 4 \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level info
+CMD sh -c "gunicorn main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - --log-level info"
