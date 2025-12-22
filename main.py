@@ -1452,24 +1452,67 @@ def update_application_status(doc_id):
 @app.route('/api/storage/download', methods=['GET'])
 @login_required
 def storage_download():
+    """Download a file from Appwrite storage with proper headers"""
     try:
         bucket_id = request.args.get('bucket_id')
         file_id = request.args.get('file_id')
-        if not bucket_id or not file_id: return jsonify({'error': 'Missing params'}), 400
+        if not bucket_id or not file_id: 
+            return jsonify({'error': 'Missing bucket_id or file_id parameters'}), 400
+        
+        # Get file metadata first to determine filename and content type
+        try:
+            storage = Storage(g.client)
+            file_info = storage.get_file(bucket_id, file_id)
+            filename = file_info.get('name', 'download')
+            
+            # Determine MIME type based on file extension
+            if filename.endswith('.pdf'):
+                content_type = 'application/pdf'
+            elif filename.endswith('.txt'):
+                content_type = 'text/plain'
+            elif filename.endswith('.docx'):
+                content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            elif filename.endswith('.doc'):
+                content_type = 'application/msword'
+            else:
+                content_type = 'application/octet-stream'
+        except Exception as e:
+            logger.error(f"Error getting file metadata: {e}")
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Stream the file download using direct API call for better performance
         endpoint = os.getenv('APPWRITE_API_ENDPOINT', 'https://cloud.appwrite.io/v1')
         project_id = os.getenv('APPWRITE_PROJECT_ID')
         auth_header = request.headers.get('Authorization')
         token = auth_header.split(' ')[1] if auth_header and auth_header.startswith('Bearer ') else None
-        if not project_id or not token: return jsonify({'error': 'Storage download unavailable'}), 500
+        
+        if not project_id or not token: 
+            return jsonify({'error': 'Storage download unavailable'}), 500
+        
         url = f"{endpoint}/storage/buckets/{bucket_id}/files/{file_id}/download"
         headers = {'X-Appwrite-Project': project_id, 'X-Appwrite-JWT': token}
+        
         import requests as _req
         r = _req.get(url, headers=headers, stream=True)
+        
+        if r.status_code != 200:
+            logger.error(f"Appwrite storage download failed: {r.status_code}")
+            return jsonify({'error': 'Failed to download file from storage'}), r.status_code
+        
         def generate():
             for chunk in r.iter_content(chunk_size=8192):
-                if chunk: yield chunk
-        return Response(generate(), headers={'Content-Type': 'application/octet-stream'})
+                if chunk: 
+                    yield chunk
+        
+        return Response(
+            generate(), 
+            headers={
+                'Content-Type': content_type,
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
+        )
     except Exception as e:
+        logger.error(f"Error in storage download: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/analytics', methods=['POST'])
