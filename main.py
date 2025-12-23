@@ -564,6 +564,79 @@ store_lock = threading.Lock()
 pipeline_store = {}
 profile_store = {}
 
+# ==========================================
+# Caching Layer
+# ==========================================
+from datetime import timedelta
+import hashlib
+
+# Profile cache with TTL (1 hour)
+profile_cache = {}  # {user_id: {data, cached_at}}
+profile_cache_ttl = timedelta(hours=1)
+
+# Match results cache with TTL (6 hours)
+match_cache = {}  # {cache_key: {matches, cached_at}}
+match_cache_ttl = timedelta(hours=6)
+
+def get_cached_profile(user_id: str):
+    """Get profile from cache if not expired"""
+    if user_id in profile_cache:
+        cached = profile_cache[user_id]
+        if datetime.now() - cached['cached_at'] < profile_cache_ttl:
+            logger.info(f"Profile cache hit for user {user_id}")
+            return cached['data']
+        else:
+            del profile_cache[user_id]  # Expired, remove
+    return None
+
+def cache_profile(user_id: str, profile_data: dict):
+    """Cache profile data with timestamp"""
+    profile_cache[user_id] = {
+        'data': profile_data,
+        'cached_at': datetime.now()
+    }
+    logger.info(f"Cached profile for user {user_id}")
+
+def invalidate_profile_cache(user_id: str):
+    """Invalidate profile cache when CV is uploaded"""
+    if user_id in profile_cache:
+        del profile_cache[user_id]
+        logger.info(f"Invalidated profile cache for user {user_id}")
+
+def get_match_cache_key(user_id: str, location: str) -> str:
+    """Generate cache key for match results"""
+    key_str = f"{user_id}:{location}"
+    return hashlib.md5(key_str.encode()).hexdigest()
+
+def get_cached_matches(user_id: str, location: str):
+    """Get cached match results"""
+    cache_key = get_match_cache_key(user_id, location)
+    if cache_key in match_cache:
+        cached = match_cache[cache_key]
+        if datetime.now() - cached['cached_at'] < match_cache_ttl:
+            logger.info(f"Match cache hit for user {user_id}, location {location}")
+            return cached['matches']
+        else:
+            del match_cache[cache_key]
+    return None
+
+def cache_matches(user_id: str, location: str, matches: list):
+    """Cache match results"""
+    cache_key = get_match_cache_key(user_id, location)
+    match_cache[cache_key] = {
+        'matches': matches,
+        'cached_at': datetime.now()
+    }
+    logger.info(f"Cached {len(matches)} matches for user {user_id}, location {location}")
+
+def invalidate_match_cache(user_id: str):
+    """Clear all cached matches for a user"""
+    keys_to_remove = [k for k in match_cache.keys() if k.startswith(hashlib.md5(f"{user_id}:".encode()).hexdigest()[:8])]
+    for key in keys_to_remove:
+        del match_cache[key]
+    if keys_to_remove:
+        logger.info(f"Invalidated {len(keys_to_remove)} match cache entries for user {user_id}")
+
 apply_jobs = {}
 APPLY_JOB_TIMEOUT_SECS = 300
 APPLY_JOB_CLEANUP_SECS = 600
@@ -573,6 +646,7 @@ MAX_RATE_ANALYTICS_PER_MIN = 60
 MAX_RATE_MATCHES_PER_MIN = 20
 MAX_RATE_APPLY_PER_MIN = 5
 MAX_RATE_ANALYZE_PER_MIN = 5
+
 
 def check_rate(endpoint: str, limit: int, window_sec: int = 60):
     try:
@@ -1047,6 +1121,11 @@ def analyze_cv():
                         'cv_hash': file_hash
                     }
                     pipeline_store[g.user_id] = pipeline
+                
+                # Invalidate caches for this user (new CV uploaded)
+                invalidate_profile_cache(g.user_id)
+                invalidate_match_cache(g.user_id)
+
 
             except Exception as db_error:
                 logger.error(f"Appwrite DB/Storage Error: {db_error}")
@@ -1189,6 +1268,15 @@ def match_jobs():
         session_id = g.user_id
         print(f"DEBUG: Session ID: {session_id}")
         
+        # Check match cache first
+        cached_matches = get_cached_matches(session_id, location)
+        if cached_matches:
+            return jsonify({
+                'success': True,
+                'matches': cached_matches,
+                'cached': True
+            })
+        
         # 1. Rehydration
         print("DEBUG: Acquiring store_lock...")
         with store_lock:
@@ -1307,6 +1395,10 @@ def match_jobs():
              })
         
         matches.sort(key=lambda x: x['match_score'], reverse=True)
+        
+        # Cache the results for future requests
+        cache_matches(session_id, location, matches)
+        
         return jsonify({'success': True, 'matches': matches, 'cached': False})
 
     except Exception as e:
