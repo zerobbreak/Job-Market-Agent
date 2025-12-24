@@ -98,15 +98,46 @@ class CVParser:
         'projects': r'(?i).*(projects|key\s+projects|portfolio).*',
     }
     
-    # Contact information patterns
     CONTACT_PATTERNS = {
         'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-        'phone': r'(?:\+?27|0)[\s\-]?\d{2,3}[\s\-]?\d{3}[\s\-]?\d{4}|\d{10}',
+        'phone': r'(?:\+?27|0)[\s\-]?\d{2,3}[\s\-]?\d{3}[\s\-]?\d{4}|\d{10}|\+\d{1,3}[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}',
         'linkedin': r'(?:https?://)?(?:www\.)?linkedin\.com/in/[\w\-]+/?',
         'github': r'(?:https?://)?(?:www\.)?github\.com/[\w\-]+/?',
         'portfolio': r'(?:https?://)?[\w\-]+\.(?:vercel\.app|netlify\.app|herokuapp\.com|github\.io)[\w\-/]*',
         'url': r'https?://[^\s]+',
     }
+    
+    # Headers that should NOT be treated as names
+    SKIP_AS_NAME = [
+        'contact', 'personal', 'details', 'information', 'resume', 'cv', 
+        'curriculum vitae', 'profile', 'summary', 'about', 'email', 'phone',
+        'address', 'location', 'skills', 'experience', 'education', 'name'
+    ]
+    
+    # Common technical skills for fallback extraction
+    COMMON_SKILLS = [
+        # Programming Languages
+        'python', 'javascript', 'typescript', 'java', 'c#', 'c++', 'c', 'go', 'golang',
+        'rust', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'r', 'matlab', 'perl',
+        # Frontend
+        'react', 'react.js', 'reactjs', 'angular', 'vue', 'vue.js', 'vuejs', 'svelte',
+        'next.js', 'nextjs', 'nuxt', 'gatsby', 'html', 'html5', 'css', 'css3', 
+        'sass', 'scss', 'less', 'tailwind', 'tailwindcss', 'bootstrap', 'material-ui',
+        # Backend
+        'node.js', 'nodejs', 'express', 'express.js', 'fastapi', 'django', 'flask',
+        'spring', 'spring boot', '.net', 'asp.net', 'laravel', 'rails', 'ruby on rails',
+        # Databases
+        'sql', 'mysql', 'postgresql', 'postgres', 'mongodb', 'redis', 'elasticsearch',
+        'dynamodb', 'sqlite', 'oracle', 'ms sql', 'mssql', 'firebase', 'supabase',
+        # Cloud & DevOps
+        'aws', 'azure', 'gcp', 'google cloud', 'docker', 'kubernetes', 'k8s',
+        'terraform', 'jenkins', 'ci/cd', 'github actions', 'gitlab', 'linux',
+        # Tools & Other
+        'git', 'github', 'jira', 'agile', 'scrum', 'rest', 'restful', 'graphql',
+        'api', 'microservices', 'machine learning', 'ml', 'ai', 'data science',
+        'pandas', 'numpy', 'tensorflow', 'pytorch', 'selenium', 'cypress',
+        'react native', 'flutter', 'ionic', 'electron', 'unity', 'unreal'
+    ]
     
     def __init__(self, file_path: str = None, raw_text: str = None):
         """Initialize parser with PDF path or raw text"""
@@ -115,10 +146,60 @@ class CVParser:
         self.lines = []
         if self.raw_text:
              self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
+    
+    def _sanitize_pdf_text(self, text: str) -> str:
+        """Clean up common PDF extraction artifacts"""
+        if not text:
+            return ""
+        
+        # Remove (cid:XXX) patterns (PDF ligatures/special chars) - replace with bullet or space
+        text = re.sub(r'\(cid:\d+\)', ' • ', text)
+        
+        # Fix concatenated words: add space before capital letters that follow lowercase
+        # e.g., "MongoDBCSS3React.js" -> "MongoDB CSS3 React.js"
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+        
+        # Fix concatenated words with dots: "Storage.MongoDB" -> "Storage, MongoDB"
+        text = re.sub(r'\.([A-Z])', r', \1', text)
+        
+        # Fix concatenated words with closing paren: "Apps)Azure" -> "Apps, Azure"
+        text = re.sub(r'\)([A-Z])', r'), \1', text)
+        
+        # Remove excessive dots and clean up
+        text = re.sub(r'\.{2,}', '.', text)
+        
+        # Clean up multiple spaces
+        text = re.sub(r' {2,}', ' ', text)
+        
+        # Clean up multiple bullets
+        text = re.sub(r'(• ){2,}', '• ', text)
+        
+        return text.strip()
+    
+    def _split_concatenated_skills(self, skill_text: str) -> List[str]:
+        """Split concatenated skill strings into individual skills"""
+        # First sanitize
+        skill_text = self._sanitize_pdf_text(skill_text)
+        
+        # Split by common delimiters
+        skills = re.split(r'[,;•|/]|\s{2,}', skill_text)
+        
+        # Clean and filter
+        cleaned_skills = []
+        for skill in skills:
+            skill = skill.strip(' .-:()')
+            # Skip empty, too short, or generic entries
+            if skill and len(skill) > 1 and skill.lower() not in ['and', 'or', 'the', 'a', 'an']:
+                cleaned_skills.append(skill)
+        
+        return cleaned_skills
         
     def extract_text(self) -> str:
         """Extract text from PDF preserving structure, or return provided raw text"""
         if self.raw_text and not self.file_path:
+            # Sanitize provided raw text too
+            self.raw_text = self._sanitize_pdf_text(self.raw_text)
+            self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
             return self.raw_text
 
         if self.file_path and self.file_path.lower().endswith('.pdf'):
@@ -135,8 +216,8 @@ class CVParser:
                 print(f"pdfplumber extraction failed: {e}")
                 # Fallback handled by caller or kept empty if raw_text was provided
         
-        # If no internal extraction happened (e.g. non-pdf file provided without raw_text), 
-        # we expect raw_text to be set externally or this remains empty.
+        # Sanitize the extracted text
+        self.raw_text = self._sanitize_pdf_text(self.raw_text)
         
         self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
         return self.raw_text
@@ -146,15 +227,10 @@ class CVParser:
         """Extract contact information from the beginning of CV"""
         contact = ContactInfo()
         
-        # Name is typically the first significant line
-        if self.lines:
-            # First non-empty line is usually the name
-            contact.name = self.lines[0]
-        
         # Search first 30 lines for contact info
         search_text = "\n".join(self.lines[:30])
         
-        # Extract email
+        # Extract email first (needed for name fallback)
         email_match = re.search(self.CONTACT_PATTERNS['email'], search_text)
         if email_match:
             contact.email = email_match.group(0)
@@ -185,12 +261,77 @@ class CVParser:
                 contact.address = line.split(':', 1)[1].strip() if ':' in line else line
                 break
             # Look for city/area names
-            elif re.search(r'\b(?:johannesburg|pretoria|cape town|durban|midrand|sandton|london|new york|berlin)\b', line, re.I):
+            elif re.search(r'\b(?:johannesburg|pretoria|cape town|durban|midrand|sandton|london|new york|berlin|remote)\b', line, re.I):
                 if not any(x in line.lower() for x in ['phone', 'email', 'http', '.com']):
                     contact.address = line
                     break
         
+        # Name extraction - more sophisticated approach
+        contact.name = self._extract_name()
+        
         return contact
+    
+    def _extract_name(self) -> str:
+        """Extract name using multiple strategies"""
+        # Strategy 1: Look for the first line that looks like a name
+        # (not a section header, not an email, not a phone, etc.)
+        for i, line in enumerate(self.lines[:15]):
+            line_lower = line.lower().strip()
+            
+            # Skip if it's a common section header
+            if any(header in line_lower for header in self.SKIP_AS_NAME):
+                continue
+            
+            # Skip if it contains email, phone, or URL patterns
+            if re.search(self.CONTACT_PATTERNS['email'], line):
+                continue
+            if re.search(self.CONTACT_PATTERNS['phone'], line):
+                continue
+            if re.search(r'https?://', line):
+                continue
+            if re.search(r'linkedin|github|www\.', line, re.I):
+                continue
+            
+            # Skip if it looks like an address (contains numbers with other chars)
+            if re.search(r'\d+.*(?:street|road|avenue|drive|st\.|rd\.)|\b\d{4,}\b', line, re.I):
+                continue
+            
+            # Skip if it looks like a location (contains city names)
+            if re.search(r'\b(?:johannesburg|pretoria|cape town|durban|midrand|sandton|london|new york|berlin|remote|noordwyk|centurion|randburg|soweto|kempton)\b', line, re.I):
+                continue
+            
+            # Check if it looks like a name (2-5 words, mostly letters)
+            words = line.split()
+            if 1 <= len(words) <= 5:
+                # Name words should be mostly alphabetic
+                alpha_words = sum(1 for w in words if re.match(r'^[A-Za-z\-\'\.]+$', w))
+                if alpha_words >= len(words) * 0.5:
+                    # Capitalize each word properly
+                    name_parts = []
+                    for w in words:
+                        if w.isupper() or w.islower():
+                            name_parts.append(w.title())
+                        else:
+                            name_parts.append(w)
+                    return ' '.join(name_parts)
+        
+        # Strategy 2: Extract from email prefix
+        search_text = "\n".join(self.lines[:30])
+        email_match = re.search(self.CONTACT_PATTERNS['email'], search_text)
+        if email_match:
+            email = email_match.group(0)
+            prefix = email.split('@')[0]
+            # Clean the prefix
+            prefix = re.sub(r'[\d_\-\.]+', ' ', prefix)
+            words = prefix.split()
+            if words:
+                return ' '.join(w.title() for w in words)
+        
+        # Strategy 3: Fallback - just return first non-empty line
+        if self.lines:
+            return self.lines[0]
+        
+        return "Unknown"
 
     def find_section_boundaries(self) -> Dict[str, tuple]:
         """Identify section headers and their boundaries"""
@@ -237,33 +378,85 @@ class CVParser:
 
     def extract_skills(self, sections: Dict[str, tuple]) -> Dict[str, List[str]]:
         """Extract technical skills organized by category"""
-        if 'skills' not in sections:
-            # Fallback: scan whole doc if section missing? For now just return empty or simple scan
-            return {}
-        
-        start, end = sections['skills']
         skills = {}
-        current_category = "General" 
         
-        for line in self.lines[start:end]:
-            if ':' in line:
-                parts = line.split(':', 1)
-                category = parts[0].strip()
-                skill_list = parts[1].strip()
-                skills_items = re.split(r'[,;]', skill_list)
-                skills[category] = [s.strip() for s in skills_items if s.strip()]
-                current_category = category
+        if 'skills' in sections:
+            start, end = sections['skills']
+            current_category = "General"
             
-            elif current_category and line and not re.match(r'^[A-Z\s]{3,}$', line):
-                additional_skills = re.split(r'[,;]', line)
-                items = [s.strip() for s in additional_skills if s.strip()]
-                if not items: continue
+            for line in self.lines[start:end]:
+                # Clean the line first
+                line = self._sanitize_pdf_text(line)
                 
-                if current_category not in skills:
-                    skills[current_category] = []
-                skills[current_category].extend(items)
+                if ':' in line:
+                    parts = line.split(':', 1)
+                    category = parts[0].strip()
+                    skill_list = parts[1].strip()
+                    
+                    # Use the helper to split concatenated skills
+                    parsed_skills = self._split_concatenated_skills(skill_list)
+                    if parsed_skills:
+                        skills[category] = parsed_skills
+                        current_category = category
+                
+                elif current_category and line and not re.match(r'^[A-Z\s]{3,}$', line):
+                    # Split and clean additional skills
+                    parsed_skills = self._split_concatenated_skills(line)
+                    if parsed_skills:
+                        if current_category not in skills:
+                            skills[current_category] = []
+                        skills[current_category].extend(parsed_skills)
         
-        return skills
+        # Fallback: If no skills found or very few, scan entire document for known skills
+        all_skills = []
+        for cat_skills in skills.values():
+            all_skills.extend(cat_skills)
+        
+        if len(all_skills) < 3:
+            # Scan entire document for common tech skills
+            fallback_skills = self._extract_skills_fallback()
+            if fallback_skills:
+                skills['Detected Skills'] = fallback_skills
+        
+        # Clean up any remaining corruption in skill names
+        cleaned_skills = {}
+        for category, skill_list in skills.items():
+            cleaned = []
+            for skill in skill_list:
+                # Skip corrupted entries
+                if not skill or len(skill) < 2:
+                    continue
+                if skill.startswith('•') or skill.startswith('('):
+                    skill = skill.lstrip('•( ').strip()
+                if skill and len(skill) >= 2:
+                    cleaned.append(skill)
+            if cleaned:
+                cleaned_skills[category] = list(set(cleaned))  # Remove duplicates
+        
+        return cleaned_skills
+    
+    def _extract_skills_fallback(self) -> List[str]:
+        """Scan entire document for common technical skills"""
+        found_skills = []
+        full_text = ' '.join(self.lines).lower()
+        
+        for skill in self.COMMON_SKILLS:
+            # Use word boundaries for accurate matching
+            pattern = r'\b' + re.escape(skill.lower()) + r'\b'
+            if re.search(pattern, full_text):
+                # Add with proper capitalization
+                found_skills.append(skill.title() if skill.islower() else skill)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_skills = []
+        for skill in found_skills:
+            skill_lower = skill.lower()
+            if skill_lower not in seen:
+                seen.add(skill_lower)
+                unique_skills.append(skill)
+        
+        return unique_skills
 
     def extract_education(self, sections: Dict[str, tuple]) -> List[Education]:
         """Extract education entries"""

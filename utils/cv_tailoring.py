@@ -1,30 +1,92 @@
 """
 CV Tailoring Engine
 Generate job-specific CV versions from master CV using AI optimization
+With robust fallback using CVBuilder when AI fails
 """
 
 import os
 from datetime import datetime
 from .scraping import extract_job_keywords
 from agents import application_writer
-from .cv_templates import CVTemplates
+from .cv_templates import CVTemplates, CVBuilder
 from .pdf_generator import PDFGenerator
 
 class CVTailoringEngine:
     """
-    Generate job-specific CV versions from master CV
+    Generate job-specific CV versions from master CV.
+    Uses AI for optimization but falls back to CVBuilder for guaranteed output.
     """
-    def __init__(self, master_cv, student_profile):
+    def __init__(self, master_cv, student_profile, parsed_cv_data=None):
         """
         Initialize the CV Tailoring Engine
 
         Args:
             master_cv (str): The original CV content
             student_profile (dict): Student profile information
+            parsed_cv_data: Optional CVData object from cv_parser for robust fallback
         """
         self.master_cv = master_cv
         self.profile = student_profile
+        self.parsed_cv_data = parsed_cv_data
         self.cv_versions = {}
+
+    def _build_cv_from_parsed_data(self, job_posting: dict, template_type: str = 'modern') -> str:
+        """
+        Build a structured CV using CVBuilder from parsed CV data.
+        This is the robust fallback that works without AI.
+        
+        Args:
+            job_posting: Job posting dict with title, company, description
+            template_type: 'modern', 'professional', or 'academic'
+            
+        Returns:
+            Formatted CV content as markdown string
+        """
+        # Try to get parsed CV data - if not provided, try to parse master_cv
+        cv_data = self.parsed_cv_data
+        if not cv_data and self.master_cv:
+            try:
+                from .cv_parser import CVParser
+                parser = CVParser(raw_text=self.master_cv)
+                cv_data = parser.parse()
+            except Exception as e:
+                print(f"Could not parse master CV: {e}")
+                cv_data = None
+        
+        # Create CVBuilder with available data
+        builder = CVBuilder(
+            cv_data=cv_data,
+            profile=self.profile if isinstance(self.profile, dict) else {},
+            job_data=job_posting
+        )
+        
+        # Build based on template type
+        if template_type.lower() == 'academic':
+            return builder.build_academic_cv()
+        elif template_type.lower() == 'professional':
+            return builder.build_professional_cv()
+        else:
+            return builder.build_modern_cv()
+    
+    def _build_cover_letter_from_parsed_data(self, job_posting: dict) -> str:
+        """
+        Build a structured cover letter using CVBuilder from parsed CV data.
+        """
+        cv_data = self.parsed_cv_data
+        if not cv_data and self.master_cv:
+            try:
+                from .cv_parser import CVParser
+                parser = CVParser(raw_text=self.master_cv)
+                cv_data = parser.parse()
+            except Exception:
+                cv_data = None
+        
+        builder = CVBuilder(
+            cv_data=cv_data,
+            profile=self.profile if isinstance(self.profile, dict) else {},
+            job_data=job_posting
+        )
+        return builder.build_cover_letter()
 
     def _extract_json_from_text(self, text):
         """
@@ -177,91 +239,11 @@ class CVTailoringEngine:
             role_name = self._sanitize_filename(job_posting.get('title', 'Position'))
             version_id = f"{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
-            # Ensure non-empty content by building a structured fallback if needed
+            # Ensure non-empty content by using CVBuilder fallback if needed
             if not cv_content or len(cv_content.strip()) < 50:
-                template_md = CVTemplates.get_template(template_type or 'PROFESSIONAL')
-                # Build a minimal structured CV using available data
-                prof = self.profile if isinstance(self.profile, dict) else {}
-                skills_list = []
-                if isinstance(prof, dict):
-                    s = prof.get('skills')
-                    if isinstance(s, list):
-                        skills_list = [str(x) for x in s if str(x).strip()]
-                summary_text = ''
-                if isinstance(prof, dict):
-                    summary_text = str(prof.get('career_goals') or '').strip()
-                exp_bullets = sections.get('experience') or []
-                proj_bullets = sections.get('projects') or []
-                edu_bullets = sections.get('education') or []
-                # Add job keywords into skills if missing
-                merged_skills = list({*(skills_list or []), *([str(k) for k in job_keywords] or [])})
-                summary_label = 'PROFESSIONAL SUMMARY' if (template_type or 'PROFESSIONAL').upper() == 'PROFESSIONAL' else 'SUMMARY'
-                experience_label = 'PROFESSIONAL EXPERIENCE' if (template_type or 'PROFESSIONAL').upper() in ('MODERN', 'PROFESSIONAL') else 'EXPERIENCE'
-                lower_set = [x.lower() for x in merged_skills]
-                langs = []
-                frameworks = []
-                tools = []
-                soft = []
-                certs = []
-                for sk in merged_skills:
-                    l = sk.lower()
-                    if any(k in l for k in ['python','java','javascript','typescript','c#','c++','go','ruby','php','rust','sql','r','matlab','swift','kotlin']):
-                        langs.append(sk)
-                    elif any(k in l for k in ['react','angular','vue','next','node','django','flask','spring','fastapi','express','.net','dotnet','laravel','rails','tensorflow','pytorch','keras','pandas','numpy','scikit']):
-                        frameworks.append(sk)
-                    elif any(k in l for k in ['git','docker','kubernetes','aws','azure','gcp','postgresql','mysql','mongodb','redis','jira','confluence','linux','bash','terraform']):
-                        tools.append(sk)
-                    elif any(k in l for k in ['communication','leadership','teamwork','problem','time','adaptability','attention']):
-                        soft.append(sk)
-                    elif any(k in l for k in ['cert','pmp','scrum','cissp','security+','network+']):
-                        certs.append(sk)
-                    else:
-                        tools.append(sk)
-                def join_cat(arr):
-                    uniq = []
-                    seen = set()
-                    for a in arr:
-                        k = a.lower()
-                        if k not in seen:
-                            seen.add(k)
-                            uniq.append(a)
-                    return ', '.join(uniq[:15]) if uniq else ''
-                skills_block = ''
-                if langs: skills_block += f"- **Languages:** {join_cat(langs)}\n"
-                if frameworks: skills_block += f"- **Frameworks:** {join_cat(frameworks)}\n"
-                if tools: skills_block += f"- **Tools:** {join_cat(tools)}\n"
-                if certs: skills_block += f"- **Certifications:** {join_cat(certs)}\n"
-                if soft: skills_block += f"- **Soft Skills:** {join_cat(soft)}\n"
-                if not skills_block:
-                    skills_block = '\n'.join([f'- {s}' for s in merged_skills[:15]]) or '-'
-                projects_bullets = '\n'.join([f'- {p}' for p in proj_bullets[:6]]) or '- See experience section'
-                experience_bullets = '\n'.join([f'- {e}' for e in exp_bullets[:8]]) or '- Experience details available upon request'
-                education_bullets = '\n'.join([f'- {e}' for e in edu_bullets[:4]]) or ''
-                if not summary_text:
-                    top = [x for x in (langs+frameworks+tools) if x][:3]
-                    role = job_posting.get('title','a role')
-                    company = job_posting.get('company','a company')
-                    summary_text = f"Experienced in {', '.join(top) if top else 'key technologies'}, seeking {role} at {company}."
-                cv_content = f"""# {header.get('name') or 'Candidate'}
-{header.get('title') or ''}
-
-## {summary_label}
-{summary_text or 'Results-driven professional seeking '+(job_posting.get('title','a role'))+' at '+(job_posting.get('company','a company'))+'.'}
-
-## SKILLS
-{skills_block}
-
-## TECHNICAL PROJECTS
-{projects_bullets}
-
-## {experience_label}
-{experience_bullets}
-
-## EDUCATION
-{education_bullets}
-"""
-                ats_analysis = ats_analysis or "Fallback structured CV created when AI generation failed."
-                ats_score = ats_score
+                print("AI content insufficient, using CVBuilder fallback")
+                cv_content = self._build_cv_from_parsed_data(job_posting, template_type or 'modern')
+                ats_analysis = ats_analysis or "CV generated using structured builder from parsed data."
             if ats_score is None:
                 ats_score = self._estimate_ats_score(job_keywords, sections, cv_content)
                 ats_analysis = ats_analysis or "Estimated ATS score based on content analysis."
@@ -288,13 +270,18 @@ class CVTailoringEngine:
                 company_name = self._sanitize_filename(job_posting.get('company', 'Unknown'))
                 role_name = self._sanitize_filename(job_posting.get('title', 'Position'))
                 version_id = f"{company_name}_{role_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
-                content = self._sanitize_markdown(self.master_cv or '')
-                if not content or len(content.strip()) < 50:
-                    content = f"# Candidate\n\nApplied for {job_posting.get('title','Position')} at {job_posting.get('company','Company')}.\n\n## Summary\nGenerated fallback CV."
+                
+                # Use CVBuilder for robust fallback content
+                content = self._build_cv_from_parsed_data(job_posting, template_type or 'modern')
+                
                 self.cv_versions[version_id] = {
                     'cv_content': content,
-                    'ats_analysis': 'AI generation failed; using fallback.',
-                    'ats_score': None,
+                    'ats_analysis': 'Generated using CVBuilder fallback.',
+                    'ats_score': self._estimate_ats_score(
+                        extract_job_keywords(job_posting.get('description','') or ''),
+                        {'summary': '', 'experience': [], 'projects': [], 'education': []},
+                        content
+                    ),
                     'job_match_score': job_posting.get('match_score', 0),
                     'job_keywords': extract_job_keywords(job_posting.get('description','') or ''),
                     'created_at': datetime.now(),
@@ -305,7 +292,8 @@ class CVTailoringEngine:
                     'sections': {'summary': '', 'experience': [], 'projects': [], 'education': []}
                 }
                 return self.cv_versions[version_id]['cv_content'], self.cv_versions[version_id]['ats_analysis']
-            except Exception:
+            except Exception as inner_e:
+                print(f"CVBuilder fallback also failed: {inner_e}")
                 return None, f"Error: {e}"
 
     def get_cv_version(self, version_id):
