@@ -18,9 +18,13 @@ import threading
 import tempfile
 import traceback
 import uuid
+import hashlib
+import hmac
+import base64
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlencode, quote
 
 # Fix Windows Unicode Output
 if sys.platform == 'win32':
@@ -57,8 +61,10 @@ from appwrite.role import Role
 from agents import (
     profile_builder,
     job_intelligence,
-    interview_prep_agent
+    interview_prep_agent,
+    browser_automation
 )
+from agents.browser_automation import BrowserAutomation
 from utils import AdvancedJobScraper, CVTailoringEngine, ApplicationTracker
 from utils.scraping import extract_skills_from_description
 from utils.ai_retries import retry_ai_call
@@ -469,12 +475,39 @@ class JobApplicationPipeline:
             # Save interview prep to file
             out_dir = Path(output_dir) if output_dir else self.output_dir
             out_dir.mkdir(parents=True, exist_ok=True)
-            prep_path = out_dir / 'interview_prep.txt'
-            with open(prep_path, 'w', encoding='utf-8') as f:
+            
+            # FIX: Generate PDF instead of TXT
+            prep_path = out_dir / 'interview_prep.pdf'
+            
+            try:
+                # Use PDFGenerator to create a PDF version
+                generator = PDFGenerator()
+                header = {
+                    'title': f"Interview Prep: {job_title}",
+                    'company': company,
+                    'date': datetime.now().strftime('%Y-%m-%d')
+                }
+                
+                success = generator.generate_pdf(
+                    markdown_content=response.content,
+                    output_path=str(prep_path),
+                    template_name='modern',
+                    header=header
+                )
+                
+                if success:
+                    print(f"✓ Interview prep saved: {prep_path}")
+                    return str(prep_path)
+            except Exception as pdf_err:
+                logger.warning(f"PDF generation failed for interview prep: {pdf_err}")
+                
+            # Fallback to text if PDF generation fails
+            txt_path = out_dir / 'interview_prep.txt'
+            with open(txt_path, 'w', encoding='utf-8') as f:
                 f.write(response.content)
             
-            print(f"✓ Interview prep saved: {prep_path}")
-            return str(prep_path)
+            print(f"✓ Interview prep saved (fallback): {txt_path}")
+            return str(txt_path)
             
         except Exception as e:
             logger.error(f"Error preparing interview materials: {e}")
@@ -568,6 +601,68 @@ apply_jobs = {}
 APPLY_JOB_TIMEOUT_SECS = 300
 APPLY_JOB_CLEANUP_SECS = 600
 
+# Robust Persistence for Jobs
+JOBS_DATA_FILE = "jobs_data.json"
+preview_jobs = {}
+automation_jobs = {}
+jobs_lock = threading.Lock() # Lock for thread safety
+
+# OTP Storage (Legacy - kept for backward compatibility)
+otp_store = {}
+otp_lock = threading.Lock()
+OTP_EXPIRY_SECONDS = 300 # 5 minutes
+
+# Signed URL Configuration (Industry Standard - AWS S3/Cloudflare R2 Pattern)
+SIGNED_URL_SECRET = os.getenv('SIGNED_URL_SECRET') or os.getenv('SECRET_KEY') or os.urandom(32).hex()
+SIGNED_URL_EXPIRY_SECONDS = 3600  # 1 hour (industry standard for file downloads)
+
+def _load_jobs_data():
+    global preview_jobs, automation_jobs
+    try:
+        if os.path.exists(JOBS_DATA_FILE):
+            with open(JOBS_DATA_FILE, 'r') as f:
+                data = json.load(f)
+                preview_jobs = data.get('preview_jobs', {})
+                automation_jobs = data.get('automation_jobs', {})
+            print(f"✓ Loaded {len(preview_jobs)} preview jobs and {len(automation_jobs)} automation jobs from disk")
+    except Exception as e:
+        print(f"⚠️ Failed to load jobs data: {e}")
+
+def _save_jobs_data():
+    try:
+        # Clone data under lock to minimize lock time during IO
+        with jobs_lock:
+            data = {
+                'preview_jobs': preview_jobs,
+                'automation_jobs': automation_jobs
+            }
+        
+        # Atomic write
+        temp_file = f"{JOBS_DATA_FILE}.tmp"
+        with open(temp_file, 'w') as f:
+            json.dump(data, f)
+        os.replace(temp_file, JOBS_DATA_FILE)
+    except Exception as e:
+        print(f"⚠️ Failed to save jobs data: {e}")
+
+# Load on startup
+_load_jobs_data()
+
+def _preview_job_save(job_id, data):
+    with jobs_lock:
+        if job_id not in preview_jobs:
+            preview_jobs[job_id] = {}
+        preview_jobs[job_id].update(data)
+    _save_jobs_data()
+
+def _automation_job_save(job_id, data):
+    with jobs_lock:
+        if job_id not in automation_jobs:
+            automation_jobs[job_id] = {}
+        automation_jobs[job_id].update(data)
+    _save_jobs_data()
+
+
 rate_limits = {}
 MAX_RATE_ANALYTICS_PER_MIN = 60
 MAX_RATE_MATCHES_PER_MIN = 20
@@ -598,11 +693,33 @@ def allowed_file(filename):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        token = None
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Missing or invalid authorization header'}), 401
         
-        token = auth_header.split(' ')[1]
+        # 1. Check for Bearer Token (Standard API calls)
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            
+        # 2. Check for OTP (Download links via window.location)
+        elif request.args.get('token'):
+            otp = request.args.get('token')
+            with otp_lock:
+                if otp in otp_store:
+                    data = otp_store[otp]
+                    if time.time() < data['expires']:
+                        token = data['jwt']
+                        # Optional: One-time use? 
+                        # del otp_store[otp] 
+                        # We keep it for a few seconds in case of retries or parallel requests, 
+                        # but strictly it should be one-time. 
+                        # Given browser behavior, safer to let it expire by time or remove after success.
+                        # For now, let's remove it to be strict.
+                        del otp_store[otp]
+                    else:
+                        del otp_store[otp] # Expired
+        
+        if not token:
+            return jsonify({'error': 'Missing or invalid authorization header/token'}), 401
         
         try:
             # Create a new client instance for this request
@@ -620,9 +737,97 @@ def login_required(f):
             
         except Exception as e:
             return jsonify({'error': 'Invalid or expired token'}), 401
-            
+             
         return f(*args, **kwargs)
     return decorated_function
+
+# ==========================================
+# Signed URL System (Industry Standard - AWS S3/Cloudflare R2 Pattern)
+# ==========================================
+
+def generate_signed_url(file_id: str, bucket_id: str, file_type: str = 'storage', 
+                       expires_in: int = SIGNED_URL_EXPIRY_SECONDS, base_url: str = None) -> str:
+    """
+    Generate a cryptographically signed URL for secure file downloads.
+    
+    This follows the industry-standard presigned URL pattern used by:
+    - AWS S3 (Presigned URLs)
+    - Cloudflare R2 (Signed URLs)
+    - Google Cloud Storage (Signed URLs)
+    
+    Args:
+        file_id: The file identifier (Appwrite file ID or preview job ID)
+        bucket_id: The bucket/collection identifier
+        file_type: Type of file ('storage', 'preview_cv', 'preview_cover_letter')
+        expires_in: Expiration time in seconds (default: 1 hour)
+        base_url: Base URL for the signed URL (defaults to request.host_url or env var)
+    
+    Returns:
+        A signed URL with embedded signature and expiration
+    """
+    # Create expiration timestamp
+    expires_at = int(time.time()) + expires_in
+    
+    # Create signature payload (canonical string)
+    # Format: file_type|file_id|bucket_id|expires_at
+    payload = f"{file_type}|{file_id}|{bucket_id}|{expires_at}"
+    
+    # Generate HMAC-SHA256 signature (industry standard)
+    signature = hmac.new(
+        SIGNED_URL_SECRET.encode('utf-8'),
+        payload.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Encode parameters
+    params = {
+        'file_id': file_id,
+        'bucket_id': bucket_id,
+        'file_type': file_type,
+        'expires': expires_at,
+        'signature': signature
+    }
+    
+    # Build URL - try multiple sources for base URL
+    if not base_url:
+        try:
+            # Try to get from request context (if available)
+            base_url = request.host_url.rstrip('/')
+        except RuntimeError:
+            # Not in request context, use environment variable or default
+            base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
+    
+    # Ensure base_url has protocol
+    if not base_url.startswith('http'):
+        base_url = f"http://{base_url}"
+    
+    signed_url = f"{base_url}/api/files/download-signed?{urlencode(params)}"
+    return signed_url
+
+def validate_signed_url(file_id: str, bucket_id: str, file_type: str, 
+                        expires: int, signature: str) -> bool:
+    """
+    Validate a signed URL signature and expiration.
+    
+    Returns:
+        True if signature is valid and not expired, False otherwise
+    """
+    # Check expiration
+    if int(time.time()) > expires:
+        return False
+    
+    # Recreate signature payload
+    payload = f"{file_type}|{file_id}|{bucket_id}|{expires}"
+    
+    # Generate expected signature
+    expected_signature = hmac.new(
+        SIGNED_URL_SECRET.encode('utf-8'),
+        payload.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Constant-time comparison to prevent timing attacks
+    return hmac.compare_digest(signature, expected_signature)
 
 def parse_profile(profile_output):
     """Clean and normalize profile data"""
@@ -739,9 +944,11 @@ def send_job_match_notification(user_email, user_name, matches, threshold=70):
 
 def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationPipeline | None:
     try:
+        print(f"DEBUG: Attempting rehydration for user {session_id}")
         databases = Databases(client)
         storage = Storage(client)
         
+        # 1. Fetch Profile Document
         existing_profiles = databases.list_documents(
             database_id=DATABASE_ID,
             collection_id=COLLECTION_ID_PROFILES,
@@ -749,14 +956,20 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
         )
 
         if existing_profiles.get('total', 0) == 0:
+            print("DEBUG: No profile document found in DB")
             return None
+            
         doc = existing_profiles['documents'][0]
         file_id = doc.get('cv_file_id')
-        cv_text = doc.get('cv_text')
+        cv_text = doc.get('cv_text') # We might not store this to save space, but check anyway
         
+        # 2. Try to reconstruct from text if available (fastest)
         if cv_text:
+            print("DEBUG: Rehydrating from stored cv_text")
             pipeline = JobApplicationPipeline()
             pipeline.build_profile(cv_text)
+            
+            # Update Stores
             with store_lock:
                 pipeline_store[session_id] = pipeline
                 profile_store[session_id] = {
@@ -768,18 +981,29 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                 }
             return pipeline
         
-        # Fallback download
+        # 3. Download file if text missing (Robust Fallback)
         if file_id:
+            print(f"DEBUG: Downloading CV file {file_id} for rehydration")
             try:
-                tmp_name = f"rehydrated_{file_id}.pdf"
+                # Use a unique temp path to avoid collisions
+                tmp_name = f"rehydrated_{session_id}_{file_id}.pdf"
                 cv_path = os.path.join(app.config['UPLOAD_FOLDER'], tmp_name)
-                data = storage.get_file_download(bucket_id=BUCKET_ID_CVS, file_id=file_id)
-                with open(cv_path, 'wb') as f:
-                    f.write(data)
+                
+                # Check if we already have it locally to save bandwidth
+                if not os.path.exists(cv_path):
+                    data = storage.get_file_download(bucket_id=BUCKET_ID_CVS, file_id=file_id)
+                    with open(cv_path, 'wb') as f:
+                        f.write(data)
                 
                 pipeline = JobApplicationPipeline(cv_path=cv_path)
                 cv_content = pipeline.load_cv()
+                
+                if not cv_content or len(cv_content) < 50:
+                     print("DEBUG: Downloaded CV content is empty/invalid")
+                     return None
+
                 pipeline.build_profile(cv_content)
+                
                 with store_lock:
                     pipeline_store[session_id] = pipeline
                     profile_store[session_id] = {
@@ -789,11 +1013,15 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> JobApplicationP
                         'cv_content': cv_content,
                         'file_id': file_id
                     }
+                print("DEBUG: Rehydration successful")
                 return pipeline
-            except Exception:
-                pass
+            except Exception as dl_err:
+                print(f"DEBUG: Download/Rehydration failed: {dl_err}")
+                return None
+                
         return None
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: Global rehydration error: {e}")
         return None
 
 def ensure_database_schema():
@@ -831,6 +1059,12 @@ def ensure_database_schema():
             _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'career_goals', 2000)
             _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'strengths', 2500) # Reduced from 10k
             _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'cv_hash', 64) # SHA-256 hash
+            
+            # Personal Info Persistence
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'name', 255)
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'email', 255)
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'phone', 50)
+            _create_attr(admin_db, DATABASE_ID, COLLECTION_ID_PROFILES, 'location', 255)
 
         except Exception as e:
             print(f"Schema update error: {e}")
@@ -854,6 +1088,248 @@ def index():
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy'})
+
+@app.route('/api/auth/otp', methods=['POST'])
+@login_required
+def generate_otp():
+    """Generate a short-lived one-time password (OTP) for file downloads"""
+    try:
+        # Extract the current valid JWT from the header (validated by @login_required)
+        auth_header = request.headers.get('Authorization')
+        jwt = auth_header.split(' ')[1]
+        
+        otp = str(uuid.uuid4())
+        
+        with otp_lock:
+            # Clean up old OTPs occasionally
+            now = time.time()
+            to_remove = [k for k, v in otp_store.items() if v['expires'] < now]
+            for k in to_remove:
+                del otp_store[k]
+                
+            otp_store[otp] = {
+                'jwt': jwt,
+                'expires': now + OTP_EXPIRY_SECONDS
+            }
+            
+        return jsonify({'success': True, 'token': otp})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/files/signed-url', methods=['POST'])
+@login_required
+def generate_signed_url_endpoint():
+    """
+    Generate a signed URL for secure file downloads (Industry Standard).
+    
+    This endpoint follows the AWS S3/Cloudflare R2 presigned URL pattern.
+    The signed URL allows direct file access without requiring authentication headers,
+    making it perfect for browser downloads.
+    
+    Request body:
+        {
+            "file_id": "file_123",
+            "bucket_id": "bucket_456",
+            "file_type": "storage" | "preview_cv" | "preview_cover_letter",
+            "expires_in": 3600  # Optional, defaults to 1 hour
+        }
+    """
+    try:
+        data = request.get_json() or {}
+        file_id = data.get('file_id')
+        bucket_id = data.get('bucket_id')
+        file_type = data.get('file_type', 'storage')
+        expires_in = data.get('expires_in', SIGNED_URL_EXPIRY_SECONDS)
+        
+        if not file_id or not bucket_id:
+            return jsonify({'success': False, 'error': 'Missing file_id or bucket_id'}), 400
+        
+        # Validate file_type
+        valid_types = ['storage', 'preview_cv', 'preview_cover_letter']
+        if file_type not in valid_types:
+            return jsonify({'success': False, 'error': f'Invalid file_type. Must be one of: {valid_types}'}), 400
+        
+        # Generate signed URL with proper base URL
+        # Try to get base URL from request or environment
+        try:
+            base_url = request.host_url.rstrip('/')
+        except RuntimeError:
+            # Not in request context, use environment variable
+            base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
+        
+        signed_url = generate_signed_url(file_id, bucket_id, file_type, expires_in, base_url)
+        
+        return jsonify({
+            'success': True,
+            'url': signed_url,
+            'expires_at': int(time.time()) + expires_in,
+            'expires_in': expires_in
+        })
+    except Exception as e:
+        logger.error(f"Error generating signed URL: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/files/download-signed', methods=['GET'])
+def download_signed():
+    """
+    Download a file using a signed URL (No authentication required).
+    
+    This endpoint validates the cryptographic signature and expiration,
+    then serves the file directly. This is the industry-standard pattern
+    used by AWS S3, Cloudflare R2, and Google Cloud Storage.
+    
+    Query parameters:
+        - file_id: File identifier
+        - bucket_id: Bucket/collection identifier
+        - file_type: Type of file ('storage', 'preview_cv', 'preview_cover_letter')
+        - expires: Expiration timestamp
+        - signature: HMAC-SHA256 signature
+    """
+    try:
+        file_id = request.args.get('file_id')
+        bucket_id = request.args.get('bucket_id')
+        file_type = request.args.get('file_type', 'storage')
+        expires = request.args.get('expires')
+        signature = request.args.get('signature')
+        
+        if not all([file_id, bucket_id, expires, signature]):
+            return jsonify({'error': 'Missing required parameters'}), 400
+        
+        # Validate signature
+        if not validate_signed_url(file_id, bucket_id, file_type, int(expires), signature):
+            return jsonify({'error': 'Invalid or expired signature'}), 403
+        
+        # Route to appropriate download handler based on file_type
+        if file_type == 'storage':
+            return _download_storage_file(file_id, bucket_id)
+        elif file_type == 'preview_cv':
+            return _download_preview_file(file_id, 'cv')
+        elif file_type == 'preview_cover_letter':
+            return _download_preview_file(file_id, 'cover_letter')
+        else:
+            return jsonify({'error': 'Invalid file_type'}), 400
+            
+    except Exception as e:
+        logger.error(f"Error in signed download: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def _download_storage_file(file_id: str, bucket_id: str):
+    """Helper to download file from Appwrite storage"""
+    try:
+        # We need to create a client with API key for server-side access
+        # Since this is a signed URL, we bypass user authentication
+        client = Client()
+        client.set_endpoint(os.getenv('APPWRITE_API_ENDPOINT', 'https://cloud.appwrite.io/v1'))
+        client.set_project(os.getenv('APPWRITE_PROJECT_ID'))
+        client.set_key(os.getenv('APPWRITE_API_KEY'))
+        
+        storage = Storage(client)
+        file_info = storage.get_file(bucket_id, file_id)
+        filename = file_info.get('name', 'download')
+        
+        # Determine content type
+        if filename.endswith('.pdf'):
+            content_type = 'application/pdf'
+        elif filename.endswith('.txt'):
+            content_type = 'text/plain'
+        elif filename.endswith('.docx'):
+            content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        elif filename.endswith('.doc'):
+            content_type = 'application/msword'
+        else:
+            content_type = 'application/octet-stream'
+        
+        # Stream file download
+        endpoint = os.getenv('APPWRITE_API_ENDPOINT', 'https://cloud.appwrite.io/v1')
+        project_id = os.getenv('APPWRITE_PROJECT_ID')
+        api_key = os.getenv('APPWRITE_API_KEY')
+        
+        url = f"{endpoint}/storage/buckets/{bucket_id}/files/{file_id}/download"
+        headers = {'X-Appwrite-Project': project_id, 'X-Appwrite-Key': api_key}
+        
+        import requests as _req
+        r = _req.get(url, headers=headers, stream=True)
+        
+        if r.status_code != 200:
+            logger.error(f"Appwrite storage download failed: {r.status_code}")
+            return jsonify({'error': 'Failed to download file from storage'}), r.status_code
+        
+        def generate():
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        return Response(
+            generate(),
+            headers={
+                'Content-Type': content_type,
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error downloading storage file: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def _download_preview_file(job_id: str, doc_type: str):
+    """Helper to download preview file (CV or cover letter)"""
+    try:
+        if job_id not in preview_jobs:
+            return jsonify({'error': 'Job not found'}), 404
+        
+        job_info = preview_jobs[job_id]
+        if job_info.get('status') != 'done':
+            return jsonify({'error': 'Preview not ready'}), 400
+        
+        result = job_info.get('result', {})
+        template_type = job_info.get('template_type', 'modern')
+        
+        generator = PDFGenerator()
+        
+        # Create temp file
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+            output_path = tmp.name
+        
+        try:
+            if doc_type == 'cv':
+                markdown_content = result.get('cv_markdown', '')
+                header = result.get('header', {})
+                sections = result.get('sections', {})
+                
+                if not markdown_content:
+                    return jsonify({'error': 'Source content missing'}), 404
+                
+                success = generator.generate_pdf(markdown_content, output_path, 
+                                                 template_name=template_type, 
+                                                 header=header, sections=sections)
+                filename = f"CV_{job_info.get('job_data', {}).get('company', 'Job')}.pdf"
+                
+            elif doc_type == 'cover_letter':
+                markdown_content = result.get('cl_markdown', '')
+                header = result.get('header', {})
+                
+                if not markdown_content:
+                    return jsonify({'error': 'Source content missing'}), 404
+                
+                success = generator.generate_pdf(markdown_content, output_path, 
+                                               template_name='cover_letter', 
+                                               header=header)
+                filename = f"Cover_Letter_{job_info.get('job_data', {}).get('company', 'Job')}.pdf"
+            else:
+                return jsonify({'error': 'Invalid document type'}), 400
+            
+            if success:
+                return send_file(output_path, as_attachment=True, download_name=filename)
+            else:
+                return jsonify({'error': 'PDF generation failed'}), 500
+                
+        finally:
+            # Cleanup temp file after a delay (Flask send_file streams it)
+            # In production, use a background task or rely on OS cleanup
+            pass
+            
+    except Exception as e:
+        logger.error(f"Error downloading preview file: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/search-jobs', methods=['POST'])
 @login_required
@@ -940,12 +1416,30 @@ def analyze_cv():
                 if file_exists_in_storage:
                     # Check if same file (by hash) or same filename
                     if file_hash == existing_hash:
-                        return jsonify({
-                            'success': False,
-                            'error': 'duplicate_exact',
-                            'message': 'This exact CV file has already been uploaded.',
-                            'existing_filename': existing_filename
-                        }), 409
+                        logger.info(f"Duplicate CV upload detected for {g.user_id}. Returning existing profile (Idempotent).")
+                        
+                        # Rehydrate pipeline to ensure memory is fresh and get profile data
+                        pipeline = _rehydrate_pipeline_from_profile(g.user_id, g.client)
+                        
+                        if pipeline and pipeline.profile:
+                            profile_data = parse_profile(pipeline.profile)
+                            
+                            # Ensure global stores are synced
+                            with store_lock:
+                                pipeline_store[g.user_id] = pipeline
+                                # profile_store should have been updated by _rehydrate...
+                                
+                            return jsonify({
+                                'success': True,
+                                'session_id': g.user_id,
+                                'profile': profile_data,
+                                'raw_profile': pipeline.profile,
+                                'cv_filename': existing_filename,
+                                'message': 'CV already exists. Profile loaded successfully.'
+                            })
+                        else:
+                            # If rehydration failed for some reason, we allow the upload to proceed to "fix" it
+                            logger.warning("Duplicate CV found but rehydration failed. Proceeding with re-analysis.")
                     
                     if filename == existing_filename and not overwrite:
                         return jsonify({
@@ -994,7 +1488,8 @@ def analyze_cv():
                     queries=[Query.equal('userId', g.user_id)]
                 )
                 
-                profile_doc_data = {
+                # Prepare basic data (guaranteed schema)
+                profile_doc_data_basic = {
                     'userId': g.user_id,
                     'skills': json.dumps(profile_data.get('skills', [])),
                     'experience_level': profile_data.get('experience_level', 'N/A'),
@@ -1003,9 +1498,17 @@ def analyze_cv():
                     'career_goals': profile_data.get('career_goals', ''),
                     'cv_file_id': file_id,
                     'cv_filename': filename,
-                    'cv_hash': file_hash  # Store hash for duplicate detection
-                    # Removed cv_text to save space and avoid row limits
+                    'cv_hash': file_hash
                 }
+                
+                # Prepare extended data (requires schema update)
+                profile_doc_data_extended = profile_doc_data_basic.copy()
+                profile_doc_data_extended.update({
+                    'name': profile_data.get('name', ''),
+                    'email': profile_data.get('email', ''),
+                    'phone': profile_data.get('phone', ''),
+                    'location': profile_data.get('location', '')
+                })
 
                 # Retry logic for Appwrite operations (handles 502 errors)
                 max_retries = 3
@@ -1014,12 +1517,26 @@ def analyze_cv():
                 
                 for attempt in range(max_retries):
                     try:
-                        if existing_profiles['total'] > 0:
-                            databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profiles['documents'][0]['$id'], data=profile_doc_data)
-                            logger.info("Existing profile updated.")
-                        else:
-                            databases.create_document(DATABASE_ID, COLLECTION_ID_PROFILES, ID.unique(), data=profile_doc_data)
-                            logger.info("New profile created.")
+                        # Try extended save first
+                        data_to_save = profile_doc_data_extended
+                        try:
+                            if existing_profiles['total'] > 0:
+                                databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profiles['documents'][0]['$id'], data=data_to_save)
+                                logger.info("Existing profile updated (Extended).")
+                            else:
+                                databases.create_document(DATABASE_ID, COLLECTION_ID_PROFILES, ID.unique(), data=data_to_save)
+                                logger.info("New profile created (Extended).")
+                        except Exception as extended_err:
+                            # If extended fails (likely schema mismatch), fallback to basic
+                            logger.warning(f"Extended profile save failed (Schema mismatch?): {extended_err}. Falling back to basic.")
+                            data_to_save = profile_doc_data_basic
+                            if existing_profiles['total'] > 0:
+                                databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, existing_profiles['documents'][0]['$id'], data=data_to_save)
+                                logger.info("Existing profile updated (Basic).")
+                            else:
+                                databases.create_document(DATABASE_ID, COLLECTION_ID_PROFILES, ID.unique(), data=data_to_save)
+                                logger.info("New profile created (Basic).")
+                        
                         break  # Success, exit retry loop
                     except Exception as retry_error:
                         last_error = retry_error
@@ -1040,7 +1557,7 @@ def analyze_cv():
                     # Store fresh profile data
                     profile_store[g.user_id] = {
                         'profile_data': profile_data,
-                        'raw_profile': profile_text,
+                        'raw_profile': pipeline.profile,
                         'cv_filename': filename,
                         'cv_content': cv_content,
                         'file_id': file_id,
@@ -1345,39 +1862,84 @@ def _process_application_async(job_data, session_id, client_jwt_client, template
             return {'error': 'Application generation failed. Please try a different template or re-upload your CV.'}
         interview_prep_path = pipeline.prepare_interview(job_data, output_dir=app_result.get('app_dir'))
         files_payload = {}
-        try:
-            databases = Databases(client_jwt_client)
-            storage = Storage(client_jwt_client)
-            cv_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['cv_path']))
-            cl_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['cover_letter_path']))
-            meta_upload = None
-            if app_result.get('metadata_path'):
-                meta_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(app_result['metadata_path']))
-            prep_upload = None
-            if interview_prep_path:
-                prep_upload = storage.create_file(bucket_id=BUCKET_ID_CVS, file_id=ID.unique(), file=InputFile.from_path(interview_prep_path))
-            files_payload = {
-                'cv': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cv_upload['$id']}",
-                'cover_letter': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cl_upload['$id']}",
-                'interview_prep': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={prep_upload['$id']}" if prep_upload else None,
-                'metadata': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={meta_upload['$id']}" if meta_upload else None
-            }
-            databases.create_document(
-                database_id=DATABASE_ID,
-                collection_id=COLLECTION_ID_APPLICATIONS,
-                document_id=ID.unique(),
-                data={
-                    'userId': session_id,
-                    'jobTitle': job_data.get('title', 'Unknown'),
-                    'company': job_data.get('company', 'Unknown'),
-                    'jobUrl': job_data.get('url', ''),
-                    'location': job_data.get('location', ''),
-                    'status': 'applied',
-                    'files': files_payload
-                }
-            )
-        except Exception as e:
-            print(f"Error saving application to DB: {e}")
+        
+        databases = Databases(client_jwt_client)
+        storage = Storage(client_jwt_client)
+        
+        # Helper for uploading with fallback
+        def _upload_safe(path, bucket_id):
+            try:
+                if not path or not os.path.exists(path):
+                    return None
+                
+                # Check extension compatibility with Appwrite bucket if known
+                # But mostly just try and catch
+                return storage.create_file(bucket_id=bucket_id, file_id=ID.unique(), file=InputFile.from_path(path))
+            except Exception as e:
+                logger.warning(f"Upload failed for {path}: {e}")
+                
+                # Fallback: If it's a txt file and failed, maybe try to convert to PDF?
+                # Or if it's metadata (json), maybe skip
+                if str(path).endswith('.txt') and 'extension' in str(e).lower():
+                    try:
+                        # Attempt on-the-fly conversion to PDF
+                        from utils.pdf_generator import PDFGenerator
+                        gen = PDFGenerator()
+                        pdf_path = str(path).replace('.txt', '.pdf')
+                        with open(path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        if gen.generate_pdf(content, pdf_path, header={'title': 'Document'}):
+                            return storage.create_file(bucket_id=bucket_id, file_id=ID.unique(), file=InputFile.from_path(pdf_path))
+                    except Exception as conv_err:
+                        logger.warning(f"Conversion fallback failed: {conv_err}")
+                return None
+
+        cv_upload = _upload_safe(app_result['cv_path'], BUCKET_ID_CVS)
+        cl_upload = _upload_safe(app_result['cover_letter_path'], BUCKET_ID_CVS)
+        meta_upload = _upload_safe(app_result.get('metadata_path'), BUCKET_ID_CVS)
+        prep_upload = _upload_safe(interview_prep_path, BUCKET_ID_CVS) if interview_prep_path else None
+
+        if not cv_upload:
+             # Critical failure if CV cannot be uploaded
+             return {'error': 'Failed to upload CV to storage (Check file extension allowed in Appwrite)'}
+
+        files_payload = {
+            'cv': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cv_upload['$id']}",
+            'cover_letter': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={cl_upload['$id']}" if cl_upload else None,
+            'interview_prep': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={prep_upload['$id']}" if prep_upload else None,
+            'metadata': f"/api/storage/download?bucket_id={BUCKET_ID_CVS}&file_id={meta_upload['$id']}" if meta_upload else None
+        }
+            
+        # Robust DB Save with Retry
+        db_save_success = False
+        save_error = None
+        for attempt in range(3):
+            try:
+                databases.create_document(
+                    database_id=DATABASE_ID,
+                    collection_id=COLLECTION_ID_APPLICATIONS,
+                    document_id=ID.unique(),
+                    data={
+                        'userId': session_id,
+                        'jobTitle': job_data.get('title', 'Unknown'),
+                        'company': job_data.get('company', 'Unknown'),
+                        'jobUrl': job_data.get('url', ''),
+                        'location': job_data.get('location', ''),
+                        'status': 'applied',
+                        'files': json.dumps(files_payload) # Store as string to be safe
+                    }
+                )
+                db_save_success = True
+                break
+            except Exception as db_e:
+                save_error = db_e
+                time.sleep(1)
+        
+        if not db_save_success:
+            print(f"CRITICAL: Failed to save application to DB after retries: {save_error}")
+            # We return an error so the frontend knows it failed, even though files were generated
+            return {'error': f"Application generated but failed to save to history: {str(save_error)}"}
+            
         return {'files': files_payload, 'ats_score': app_result.get('ats_score'), 'ats_analysis': app_result.get('ats_analysis')}
     except Exception as e:
         print(f"Async apply error: {e}")
@@ -1654,6 +2216,7 @@ def get_structured_profile():
         result = databases.list_documents(DATABASE_ID, COLLECTION_ID_PROFILES, queries=[Query.equal('userId', g.user_id), Query.limit(10)])
         if result.get('total', 0) == 0: return jsonify({'success': False, 'error': 'No profile found'}), 404
         doc = result['documents'][0]
+        
         def _safe_json(field, default):
             try:
                 v = doc.get(field)
@@ -1662,7 +2225,13 @@ def get_structured_profile():
                     return json.loads(v)
                 return v if v is not None else default
             except Exception: return default
+            
+        # Initial Profile Construction
         profile = {
+            'name': doc.get('name', '') or '',
+            'email': doc.get('email', '') or '',
+            'phone': doc.get('phone', '') or '',
+            'location': doc.get('location', '') or '',
             'skills': _safe_json('skills', []),
             'experience_level': doc.get('experience_level', '') or '',
             'education': doc.get('education', '') or '',
@@ -1671,6 +2240,42 @@ def get_structured_profile():
             'notification_enabled': bool(doc.get('notification_enabled', False)),
             'notification_threshold': int(doc.get('notification_threshold', 70) or 70)
         }
+        
+        # Self-Healing / Read-Repair Logic
+        # If critical fields are missing, try to rehydrate from CV and heal the DB record
+        if not profile['name'] or not profile['email'] or not profile['skills']:
+            logger.info(f"Profile incomplete for user {g.user_id}. Attempting self-healing/rehydration...")
+            
+            # 1. Attempt Rehydration (parses CV file)
+            pipeline = _rehydrate_pipeline_from_profile(g.user_id, g.client)
+            
+            if pipeline and pipeline.profile:
+                logger.info("Rehydration successful. Healing database record...")
+                healed_data = parse_profile(pipeline.profile)
+                
+                # Update local profile object
+                profile['name'] = healed_data.get('name') or profile['name']
+                profile['email'] = healed_data.get('email') or profile['email']
+                profile['phone'] = healed_data.get('phone') or profile['phone']
+                profile['location'] = healed_data.get('location') or profile['location']
+                if not profile['skills']: profile['skills'] = healed_data.get('skills', [])
+                if not profile['education']: profile['education'] = healed_data.get('education', '')
+                
+                # 2. Write-Back to Database (Async-like but blocking for safety here)
+                try:
+                    update_data = {
+                        'name': profile['name'],
+                        'email': profile['email'],
+                        'phone': profile['phone'],
+                        'location': profile['location'],
+                        # Don't overwrite existing complex fields if they exist, but do if empty
+                        # For simplicity, we only update the missing scalar fields to avoid JSON overwrites
+                    }
+                    databases.update_document(DATABASE_ID, COLLECTION_ID_PROFILES, doc['$id'], data=update_data)
+                    logger.info("Database record healed successfully.")
+                except Exception as db_err:
+                    logger.warning(f"Failed to heal database record: {db_err}")
+                    
         return jsonify({'success': True, 'profile': profile})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1714,6 +2319,304 @@ def apply_preview():
         return jsonify({'success': True, 'cv_html': cv_html, 'cover_letter_html': cl_html, 'ats': {'analysis': ats_analysis, 'score': cv_data.get('ats_score')}})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+def _process_preview_async(job_id, job_data, template_type, user_id, client_jwt_client):
+    try:
+        _preview_job_save(job_id, {'status': 'processing', 'progress': 10, 'created_at': time.time()})
+        
+        # 1. Rehydrate Pipeline
+        pipeline = None
+        with store_lock:
+            if user_id in pipeline_store:
+                pipeline = pipeline_store[user_id]
+            else:
+                pipeline = _rehydrate_pipeline_from_profile(user_id, client_jwt_client)
+                if pipeline:
+                    pipeline_store[user_id] = pipeline
+        
+        if not pipeline:
+            _preview_job_save(job_id, {'status': 'error', 'error': 'Profile not found'})
+            return
+
+        _preview_job_save(job_id, {'status': 'processing', 'progress': 30, 'created_at': time.time()})
+
+        # 2. Generate CV
+        if not getattr(pipeline, 'cv_engine', None):
+             profile_info = profile_store.get(user_id)
+             if profile_info and profile_info.get('cv_content'):
+                 pipeline.cv_engine = CVTailoringEngine(profile_info['cv_content'], profile_info.get('profile_data', {}))
+                 pipeline.profile = profile_info.get('profile_data', {})
+             else:
+                 _preview_job_save(job_id, {'status': 'error', 'error': 'CV content missing'})
+                 return
+
+        _preview_job_save(job_id, {'status': 'processing', 'progress': 50, 'created_at': time.time()})
+
+        cv_content, ats_analysis = pipeline.cv_engine.generate_tailored_cv(job_data, template_type)
+        version_id = list(pipeline.cv_engine.cv_versions.keys())[-1]
+        cv_data = pipeline.cv_engine.get_cv_version(version_id) or {}
+        
+        _preview_job_save(job_id, {'status': 'processing', 'progress': 80, 'created_at': time.time()})
+
+        # 3. Generate HTML
+        generator = PDFGenerator()
+        header = pipeline.cv_engine._extract_header_info()
+        sections = pipeline.cv_engine._build_sections(cv_data)
+        cv_html = generator.generate_html(cv_content, template_name=template_type, header=header, sections=sections)
+        
+        cl_markdown = pipeline.cv_engine._generate_cover_letter_markdown(job_data, tailored_cv=cv_content)
+        header['date'] = datetime.now().strftime('%B %d, %Y')
+        cl_html = generator.generate_html(cl_markdown, template_name='cover_letter', header=header)
+        
+        # Explicitly check for empty HTML
+        if not cv_html or len(cv_html) < 100:
+            print("⚠️ Generated CV HTML is too short/empty. Setting error state.")
+            raise ValueError("Generated HTML content is invalid/empty")
+
+        # 4. Save Final Result
+        _preview_job_save(job_id, {
+            'status': 'done', 
+            'progress': 100,
+            'result': {
+                'cv_html': cv_html,
+                'cover_letter_html': cl_html,
+                'cv_markdown': cv_content,
+                'cl_markdown': cl_markdown,
+                'header': header,
+                'sections': sections,
+                'ats': {'analysis': ats_analysis, 'score': cv_data.get('ats_score')}
+            },
+            'job_data': job_data, # Persist job data for automation later
+            'user_id': user_id,
+            'created_at': time.time(),
+            'template_type': template_type
+        })
+
+    except Exception as e:
+        print(f"Preview Async Error: {e}")
+        _preview_job_save(job_id, {'status': 'error', 'error': str(e)})
+
+@app.route('/api/apply-preview/start', methods=['POST'])
+@login_required
+def apply_preview_start():
+    try:
+        data = request.get_json()
+        job_data = data.get('job')
+        template_type = (data.get('template') or 'MODERN').lower()
+        
+        job_id = str(uuid.uuid4())
+        _preview_job_save(job_id, {'status': 'initializing', 'progress': 0, 'created_at': time.time()})
+        
+        # Capture context for thread
+        user_id = g.user_id
+        # We need a fresh client for the thread or pass the existing one carefully
+        # Here we pass the client object which is thread-safe enough for this usage
+        client_jwt_client = g.client 
+        
+        threading.Thread(target=_process_preview_async, args=(job_id, job_data, template_type, user_id, client_jwt_client), daemon=True).start()
+        
+        return jsonify({'success': True, 'job_id': job_id})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/apply-preview/status', methods=['GET'])
+@login_required
+def apply_preview_status():
+    job_id = request.args.get('job_id')
+    if not job_id or job_id not in preview_jobs:
+        return jsonify({'success': False, 'error': 'Job not found'}), 404
+    
+    return jsonify({'success': True, **preview_jobs[job_id]})
+
+@app.route('/api/apply-preview/download', methods=['GET'])
+@login_required
+def apply_preview_download():
+    job_id = request.args.get('job_id')
+    doc_type = request.args.get('type', 'cv') # cv or cover_letter
+    
+    if not job_id or job_id not in preview_jobs:
+        return jsonify({'success': False, 'error': 'Job not found'}), 404
+    
+    job_info = preview_jobs[job_id]
+    if job_info.get('status') != 'done':
+        return jsonify({'success': False, 'error': 'Preview not ready'}), 400
+        
+    result = job_info.get('result', {})
+    template_type = job_info.get('template_type', 'modern')
+    
+    generator = PDFGenerator()
+    
+    # Create temp file
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+        output_path = tmp.name
+        
+    try:
+        if doc_type == 'cv':
+            markdown_content = result.get('cv_markdown', '')
+            header = result.get('header', {})
+            sections = result.get('sections', {})
+            
+            # If markdown missing (legacy), try to convert HTML? 
+            # PDFGenerator.generate_pdf expects markdown.
+            # But we saved markdown in recent update.
+            if not markdown_content:
+                 return jsonify({'success': False, 'error': 'Source content missing'}), 404
+                 
+            success = generator.generate_pdf(markdown_content, output_path, template_name=template_type, header=header, sections=sections)
+            filename = f"CV_{job_info.get('job_data', {}).get('company', 'Job')}.pdf"
+            
+        elif doc_type == 'cover_letter':
+            markdown_content = result.get('cl_markdown', '')
+            header = result.get('header', {})
+            
+            if not markdown_content:
+                 return jsonify({'success': False, 'error': 'Source content missing'}), 404
+                 
+            # Cover letter uses 'cover_letter' template usually
+            success = generator.generate_pdf(markdown_content, output_path, template_name='cover_letter', header=header)
+            filename = f"Cover_Letter_{job_info.get('job_data', {}).get('company', 'Job')}.pdf"
+            
+        else:
+            return jsonify({'success': False, 'error': 'Invalid type'}), 400
+
+        if success:
+             return send_file(output_path, as_attachment=True, download_name=filename)
+        else:
+             return jsonify({'success': False, 'error': 'PDF generation failed'}), 500
+             
+    finally:
+        # Cleanup is tricky with send_file as it streams. 
+        # But send_file usually keeps file open?
+        # A common trick is to use a background task to delete, or rely on OS temp cleanup.
+        # For now, we leave it in temp (it's small) or try to delete after request?
+        # Flask send_file doesn't auto-delete.
+        # We can accept small temp file leak or use a proper cleanup mechanism.
+        pass
+
+
+
+
+@app.route('/api/apply-automation/start', methods=['POST'])
+@login_required
+def apply_automation_start():
+    try:
+        data = request.get_json()
+        preview_job_id = data.get('job_id')
+        
+        if not preview_job_id or preview_job_id not in preview_jobs:
+             return jsonify({'success': False, 'error': 'Invalid preview job ID'}), 400
+             
+        preview_data = preview_jobs[preview_job_id]
+        if preview_data.get('status') != 'done':
+             return jsonify({'success': False, 'error': 'Preview not ready'}), 400
+        
+        job_data = preview_data.get('job_data')
+        files_data = preview_data.get('files', {})
+        user_id = g.user_id
+        
+        # Ensure profile exists in memory before starting thread
+        profile_data_for_auto = {}
+        with store_lock:
+             if user_id not in profile_store:
+                 _rehydrate_pipeline_from_profile(user_id, g.client)
+             
+             profile_info = profile_store.get(user_id)
+             if profile_info:
+                 profile_data_for_auto = profile_info.get('profile_data', {}).copy()
+        
+        if not profile_data_for_auto:
+             # Try one last attempt with direct DB fetch if rehydration failed or store is weird
+             try:
+                 databases = Databases(g.client)
+                 res = databases.list_documents(DATABASE_ID, COLLECTION_ID_PROFILES, queries=[Query.equal('userId', user_id)])
+                 if res['total'] > 0:
+                     doc = res['documents'][0]
+                     # Construct basic profile from doc
+                     profile_data_for_auto = {
+                         'name': doc.get('name', ''),
+                         'email': doc.get('email', ''),
+                         'phone': doc.get('phone', ''),
+                         'location': doc.get('location', ''),
+                         'education': doc.get('education', ''),
+                         'experience_level': doc.get('experience_level', ''),
+                         'links': {
+                             'linkedin': doc.get('linkedin', ''),
+                             'portfolio': doc.get('portfolio', '')
+                         }
+                     }
+             except Exception as e:
+                 print(f"Fallback profile fetch failed: {e}")
+
+        if not profile_data_for_auto:
+             return jsonify({'success': False, 'error': 'Profile data not found. Please upload a CV first.'}), 400
+
+        automation_id = str(uuid.uuid4())
+        _automation_job_save(automation_id, {'status': 'initializing', 'created_at': time.time()})
+        
+        def _run_automation(auto_id, job, user, files, p_data):
+             try:
+                 _automation_job_save(auto_id, {'status': 'running', 'step': 'Initializing Browser'})
+                 
+                 # Prepare form data
+                 form_data = {
+                     'name': p_data.get('name', ''),
+                     'email': p_data.get('email', ''),
+                     'phone': p_data.get('phone', ''),
+                     'location': p_data.get('location', ''),
+                     'org': p_data.get('experience', [{}])[0].get('company', '') if p_data.get('experience') else '',
+                     'linkedin': p_data.get('links', {}).get('linkedin', ''),
+                     'portfolio': p_data.get('links', {}).get('portfolio', ''),
+                     'education': p_data.get('education', []),
+                     'experience': p_data.get('experience', []),
+                     'urls': p_data.get('links', {})
+                 }
+
+                 _automation_job_save(auto_id, {'status': 'running', 'step': 'Launching Browser'})
+                 
+                 with BrowserAutomation(headless=False) as bot:
+                     def log_cb(msg):
+                         _automation_job_save(auto_id, {'status': 'running', 'step': msg})
+                     
+                     job_url = job.get('url')
+                     if not job_url:
+                         raise ValueError("Job URL missing")
+                         
+                     result = bot.apply_to_job(job_url, form_data, files, log_callback=log_cb)
+                     
+                     if result['success']:
+                         _automation_job_save(auto_id, {'status': 'submitted', 'result': 'Application Submitted!'})
+                     else:
+                         _automation_job_save(auto_id, {'status': 'manual_review_needed', 'error': 'Could not fully automate. Manual review required.', 'screenshot': result.get('screenshot')})
+                         
+             except Exception as e:
+                 import traceback
+                 error_msg = str(e)
+                 error_trace = traceback.format_exc()
+                 print(f"Automation Error: {error_msg}")
+                 print(error_trace)
+                 _automation_job_save(auto_id, {
+                     'status': 'error', 
+                     'error': error_msg,
+                     'traceback': error_trace
+                 })
+
+        threading.Thread(target=_run_automation, args=(automation_id, job_data, user_id, files_data, profile_data_for_auto), daemon=True).start()
+        
+        return jsonify({'success': True, 'automation_id': automation_id})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/apply-automation/status', methods=['GET'])
+@login_required
+def apply_automation_status():
+    auto_id = request.args.get('automation_id')
+    with jobs_lock:
+        if not auto_id or auto_id not in automation_jobs:
+            return jsonify({'status': 'not_found'}), 404
+        return jsonify(automation_jobs[auto_id])
+
 
 @app.route('/api/debug/cv', methods=['GET'])
 @login_required

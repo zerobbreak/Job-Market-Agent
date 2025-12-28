@@ -22,3 +22,5 @@ Flask
 flask-cors
 gunicorn
 tenacity
+playwright
+playwright-stealth

@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Social Media and Email Marketing Specialist (remote)",
+    "company": "Ruby Digital",
+    "location": "Unknown Location",
+    "url": "https://za.indeed.com/viewjob?jk=31bc81fd592c49cc"
+  },
+  "cv": {
+    "version_id": "Ruby_Digital_Social_Media_and_Email_Marketing_Specialist_remote_20251226_0736",
+    "ats_analysis": "AI generation failed; using fallback.",
+    "ats_score": null,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['Ruby', 'R', 'Git'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": [],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['design'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": null,
+  "paths": {
+    "cv": "applications\\Ruby_Digital_Social_Media_and_Email_Marketing_Specialist_(remote)_20251226_0736\\CV_Ruby_Digital_Social_Media_and_Email_Marketing_Specialist_remote_20251226_0736.pdf",
+    "cover_letter": "applications\\Ruby_Digital_Social_Media_and_Email_Marketing_Specialist_(remote)_20251226_0736\\cover_letter.txt"
+  }
+}

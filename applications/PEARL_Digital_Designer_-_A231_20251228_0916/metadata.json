@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Digital Designer - A231",
+    "company": "PEARL",
+    "location": "Unknown Location",
+    "url": "https://za.indeed.com/viewjob?jk=a1ea1e0df21128c6"
+  },
+  "cv": {
+    "version_id": "PEARL_Digital_Designer_-_A231_20251228_0916",
+    "ats_analysis": "AI generation failed; using fallback.",
+    "ats_score": null,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['R', 'Git'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": [],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['design'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": null,
+  "paths": {
+    "cv": "applications\\PEARL_Digital_Designer_-_A231_20251228_0916\\cv.pdf",
+    "cover_letter": "applications\\PEARL_Digital_Designer_-_A231_20251228_0916\\cover_letter.txt"
+  }
+}

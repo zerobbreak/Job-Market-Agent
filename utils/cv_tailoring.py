@@ -710,6 +710,8 @@ class CVTailoringEngine:
         """
         if not text:
             return ""
+        if not isinstance(text, str):
+            return str(text)
         # Strip surrounding backticks/code fences
         if text.strip().startswith("```"):
             try:

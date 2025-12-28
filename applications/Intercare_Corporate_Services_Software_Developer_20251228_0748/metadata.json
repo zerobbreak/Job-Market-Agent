@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Software Developer",
+    "company": "Intercare Corporate Services",
+    "location": "Unknown Location",
+    "url": "https://za.indeed.com/viewjob?jk=728f99e7d9a7193e"
+  },
+  "cv": {
+    "version_id": "Intercare_Corporate_Services_Software_Developer_20251228_0748",
+    "ats_analysis": "AI generation failed; using fallback.",
+    "ats_score": null,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['Scala', 'R', 'AI'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": [],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['develop', 'design', 'maintain', 'test'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": null,
+  "paths": {
+    "cv": "applications\\Intercare_Corporate_Services_Software_Developer_20251228_0748\\cv.pdf",
+    "cover_letter": "applications\\Intercare_Corporate_Services_Software_Developer_20251228_0748\\cover_letter.txt"
+  }
+}
