@@ -240,3 +240,5 @@ docker-volumes/
 # Build artifacts
 dist/
 build/
+# Frontend
+Job-Market-Frontend/
