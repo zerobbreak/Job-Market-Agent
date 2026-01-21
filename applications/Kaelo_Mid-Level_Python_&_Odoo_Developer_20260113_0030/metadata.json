@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Mid-Level Python & Odoo Developer",
+    "company": "Kaelo",
+    "location": "Unknown Location",
+    "url": "https://www.linkedin.com/jobs/view/4361203201"
+  },
+  "cv": {
+    "version_id": "Kaelo_Mid-Level_Python_Odoo_Developer_20260113_0031",
+    "ats_analysis": "Analysis not available",
+    "ats_score": 87,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['Python', 'Java', 'JavaScript', 'Go', 'Scala', 'R', 'HTML', 'CSS', 'Django', 'Flask', 'SQL', 'PostgreSQL'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": ['communication', 'leadership', 'problem solving'],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['develop', 'design', 'implement', 'manage', 'build', 'maintain', 'optimize', 'deploy', 'lead', 'automate'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": 1.0,
+  "paths": {
+    "cv": "applications\\Kaelo_Mid-Level_Python_&_Odoo_Developer_20260113_0030\\cv.pdf",
+    "cover_letter": "applications\\Kaelo_Mid-Level_Python_&_Odoo_Developer_20260113_0030\\cover_letter.txt"
+  }
+}

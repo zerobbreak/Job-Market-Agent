@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Analyst Model Risk Validation",
+    "company": "ABSA BANK LIMITED",
+    "location": "Unknown Location",
+    "url": "https://za.indeed.com/viewjob?jk=aa226ce8274f5af9"
+  },
+  "cv": {
+    "version_id": "ABSA_BANK_LIMITED_Analyst_Model_Risk_Validation_20260113_0034",
+    "ats_analysis": "Analysis not available",
+    "ats_score": 46,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['Python', 'Go', 'Scala', 'R', 'AI'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": ['3'],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": ['communication'],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['develop', 'design', 'implement', 'manage', 'build', 'maintain', 'test', 'document', 'research', 'engineer'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": 0.5,
+  "paths": {
+    "cv": "applications\\ABSA_BANK_LIMITED_Analyst_Model_Risk_Validation_20260113_0032\\cv.pdf",
+    "cover_letter": "applications\\ABSA_BANK_LIMITED_Analyst_Model_Risk_Validation_20260113_0032\\cover_letter.txt"
+  }
+}

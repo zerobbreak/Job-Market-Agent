@@ -2,110 +2,275 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ name }} - CV</title>
     <style>
         @page {
             margin: 0;
             size: A4;
         }
-        body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            color: #333;
-            line-height: 1.6;
+        
+        * {
             margin: 0;
             padding: 0;
-            background: #fff;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', 'Calibri', 'Helvetica Neue', sans-serif;
+            color: #2c3e50;
+            line-height: 1.6;
+            background: #ffffff;
             display: flex;
             min-height: 100vh;
+            font-size: 11pt;
         }
 
-        /* Sidebar Styling */
+        /* Sidebar Styling - ATS-Friendly Structure */
         aside {
-            width: 30%;
-            background: #2c3e50;
+            width: 32%;
+            background: #1a252f;
             color: #ecf0f1;
-            padding: 40px 20px;
-            box-sizing: border-box;
+            padding: 35px 25px;
             display: flex;
             flex-direction: column;
         }
+        
         aside h2 {
             color: #3498db;
             border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
-            margin-top: 30px;
-            font-size: 1.2em;
+            padding-bottom: 8px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.1em;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            font-weight: 600;
         }
-        aside h2:first-child { margin-top: 0; }
-        aside p, aside li { font-size: 0.9em; }
-        .contact-info div { margin-bottom: 10px; }
-        .contact-info strong { display: block; color: #bdc3c7; font-size: 0.8em; }
+        
+        aside h2:first-of-type {
+            margin-top: 0;
+        }
+        
+        .contact-info {
+            margin-bottom: 20px;
+        }
+        
+        .contact-info div {
+            margin-bottom: 12px;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        
+        .contact-info strong {
+            display: block;
+            color: #bdc3c7;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+            font-weight: 600;
+        }
+        
+        .contact-info a {
+            color: #ecf0f1;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        
+        .contact-info a:hover {
+            color: #3498db;
+        }
 
         .skill-tag {
             display: inline-block;
             background: #34495e;
-            color: #fff;
-            padding: 4px 8px;
-            margin: 2px;
-            border-radius: 4px;
+            color: #ffffff;
+            padding: 5px 10px;
+            margin: 3px 3px 3px 0;
+            border-radius: 3px;
             font-size: 0.85em;
+            font-weight: normal;
+        }
+        
+        aside p, aside li {
+            font-size: 0.9em;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        
+        aside ul {
+            list-style: none;
+            padding-left: 0;
         }
 
-        /* Main Content Styling */
+        /* Main Content Styling - ATS-Optimized */
         main {
-            width: 70%;
-            padding: 40px;
-            box-sizing: border-box;
+            width: 68%;
+            padding: 40px 35px;
+            background: #ffffff;
         }
+        
         header {
-            margin-bottom: 40px;
-            border-bottom: 2px solid #ecf0f1;
+            margin-bottom: 30px;
             padding-bottom: 20px;
+            border-bottom: 3px solid #3498db;
         }
+        
         h1 {
             margin: 0;
-            font-size: 2.5em;
-            color: #2c3e50;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+            font-size: 2.2em;
+            color: #1a252f;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
         }
+        
         .subtitle {
-            font-size: 1.2em;
+            font-size: 1.15em;
             color: #7f8c8d;
+            font-weight: 400;
             margin-top: 5px;
-            font-weight: 300;
         }
 
+        /* Section Headings - Proper Hierarchy for ATS */
         main h2 {
-            color: #2c3e50;
-            font-size: 1.4em;
-            margin-top: 30px;
-            margin-bottom: 15px;
-            border-left: 5px solid #3498db;
-            padding-left: 10px;
+            color: #1a252f;
+            font-size: 1.3em;
+            margin-top: 28px;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #ecf0f1;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
         }
+        
+        main h2:first-of-type {
+            margin-top: 0;
+        }
+        
         main h3 {
-            margin-bottom: 5px;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            color: #2980b9;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        
+        main h4 {
+            margin-top: 12px;
+            margin-bottom: 6px;
+            color: #34495e;
+            font-size: 1em;
+            font-weight: 600;
+        }
+        
+        main p {
+            margin-bottom: 10px;
+            text-align: left;
+            line-height: 1.7;
+        }
+        
+        main ul {
+            padding-left: 22px;
+            margin-bottom: 18px;
+            list-style-type: disc;
+        }
+        
+        main li {
+            margin-bottom: 6px;
+            line-height: 1.7;
+        }
+        
+        main ol {
+            padding-left: 22px;
+            margin-bottom: 18px;
+        }
+        
+        main ol li {
+            margin-bottom: 6px;
+            line-height: 1.7;
+        }
+
+        /* Experience/Project Entries */
+        .experience-item, .project-item {
+            margin-bottom: 20px;
+        }
+        
+        .experience-item h3, .project-item h3 {
+            margin-bottom: 4px;
+        }
+        
+        .meta-info {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            font-style: italic;
+            margin-bottom: 8px;
+        }
+
+        /* Links - ATS-Friendly */
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        main a {
             color: #2980b9;
         }
-        main p { margin-bottom: 10px; text-align: justify; }
-        main ul { padding-left: 20px; margin-bottom: 20px; }
-        main li { margin-bottom: 5px; }
 
-        /* Links */
-        a { color: #3498db; text-decoration: none; }
+        /* Print Optimizations */
+        @media print {
+            body {
+                display: flex;
+            }
+            
+            aside {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            main {
+                page-break-inside: avoid;
+            }
+            
+            h2 {
+                page-break-after: avoid;
+            }
+        }
+
+        /* Ensure proper spacing and readability */
+        .section {
+            margin-bottom: 25px;
+        }
+        
+        /* Strong emphasis for key achievements */
+        strong {
+            font-weight: 600;
+            color: #2c3e50;
+        }
     </style>
 </head>
 <body>
     <aside>
         <div class="contact-info">
-            <h2>Contact</h2>
-            <div><strong>Email</strong> {{ email }}</div>
-            <div><strong>Phone</strong> {{ phone }}</div>
-            <div><strong>Location</strong> {{ location }}</div>
+            <h2>Contact Information</h2>
+            <div>
+                <strong>Email</strong>
+                <a href="mailto:{{ email }}">{{ email }}</a>
+            </div>
+            <div>
+                <strong>Phone</strong>
+                {{ phone }}
+            </div>
+            <div>
+                <strong>Location</strong>
+                {{ location }}
+            </div>
             {{ contact_extra }}
         </div>
 

@@ -1,0 +1,20 @@
+Fetching attributes for collection: profiles...
+Total Attributes: 17
+----------------------------------------
+- userId (string) [size: 255] [available]
+- skills (string) [size: 5000] [available]
+- experience_level (string) [size: 100] [available]
+- notification_enabled (boolean) [size: N/A] [available]
+- notification_threshold (integer) [size: N/A] [available]
+- cv_filename (string) [size: 255] [available]
+- cv_file_id (string) [size: 255] [available]
+- updated_at (string) [size: 64] [available]
+- education (string) [size: 2000] [available]
+- career_goals (string) [size: 2000] [available]
+- strengths (string) [size: 2500] [available]
+- cv_hash (string) [size: 64] [available]
+- name (string) [size: 255] [available]
+- email (string) [size: 255] [available]
+- phone (string) [size: 50] [available]
+- location (string) [size: 255] [available]
+- is_active (boolean) [size: N/A] [available]

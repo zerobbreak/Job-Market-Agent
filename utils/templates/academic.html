@@ -1,61 +1,189 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }} - CV</title>
     <style>
         @page {
             size: A4;
-            margin: 2.5cm;
+            margin: 2.5cm 2cm;
         }
-
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: 'Georgia', serif;
-            color: #222;
-            line-height: 1.6;
+            font-family: 'Times New Roman', 'Georgia', serif;
+            color: #222222;
+            line-height: 1.7;
             font-size: 11pt;
+            background: #ffffff;
         }
 
-        h1 {
-            font-size: 22pt;
-            margin-bottom: 5px;
-        }
-
-        h2 {
-            font-size: 14pt;
-            margin-top: 25px;
-            margin-bottom: 10px;
-            font-weight: bold;
-            color: #444;
-        }
-
-        p {
-            margin-bottom: 10px;
-        }
-
-        ul {
-            padding-left: 20px;
-        }
-
-        li {
-            margin-bottom: 5px;
-        }
-
+        /* Header Section */
         .header-info {
             margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #cccccc;
+        }
+        
+        .header-info .name {
+            font-size: 18pt;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: #1a252f;
+        }
+        
+        .header-info .title {
+            font-size: 12pt;
+            color: #34495e;
             font-style: italic;
-            color: #555;
+            margin-bottom: 10px;
+        }
+        
+        .header-info .contact {
+            font-size: 10pt;
+            line-height: 1.8;
+            color: #2c3e50;
+        }
+        
+        .header-info .contact span {
+            margin: 0 10px;
+        }
+        
+        .header-info .contact a {
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        
+        .header-info .contact a:hover {
+            text-decoration: underline;
+        }
+
+        /* Section Headings - ATS-Friendly */
+        h2 {
+            font-size: 13pt;
+            font-weight: 700;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: #1a252f;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #cccccc;
+            padding-bottom: 4px;
+        }
+        
+        h2:first-of-type {
+            margin-top: 0;
+        }
+        
+        h3 {
+            font-size: 11.5pt;
+            font-weight: 600;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            color: #2c3e50;
+        }
+        
+        h4 {
+            font-size: 10.5pt;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-bottom: 6px;
+            color: #34495e;
+        }
+
+        /* Content Styling */
+        p {
+            margin-bottom: 10px;
+            text-align: left;
+            line-height: 1.8;
+        }
+        
+        ul {
+            padding-left: 25px;
+            margin-top: 8px;
+            margin-bottom: 15px;
+            list-style-type: disc;
+        }
+        
+        li {
+            margin-bottom: 7px;
+            line-height: 1.8;
+        }
+        
+        ol {
+            padding-left: 25px;
+            margin-top: 8px;
+            margin-bottom: 15px;
+        }
+        
+        ol li {
+            margin-bottom: 7px;
+            line-height: 1.8;
+        }
+
+        /* Publication and Research Formatting */
+        .publication-item, .research-item {
+            margin-bottom: 12px;
+            padding-left: 0;
+        }
+        
+        .meta-info {
+            color: #555555;
+            font-size: 10pt;
+            font-style: italic;
+            margin-bottom: 5px;
+        }
+
+        /* Links */
+        a {
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Strong emphasis */
+        strong {
+            font-weight: 700;
+        }
+
+        /* Print Optimizations */
+        @media print {
+            body {
+                font-size: 11pt;
+            }
+            
+            h2 {
+                page-break-after: avoid;
+            }
+        }
+
+        /* Section spacing */
+        .section {
+            margin-bottom: 22px;
         }
     </style>
 </head>
-
 <body>
     <div class="header-info">
-        <div><strong>{{ name }}</strong> — {{ title }}</div>
-        <div>{{ email }} • {{ phone }} • {{ location }}</div>
-        <div>{{ contact_extra }}</div>
+        <div class="name"><strong>{{ name }}</strong></div>
+        <div class="title">{{ title }}</div>
+        <div class="contact">
+            <span>{{ email }}</span> • 
+            <span>{{ phone }}</span> • 
+            <span>{{ location }}</span>
+            <div style="margin-top: 6px;">{{ contact_extra }}</div>
+        </div>
     </div>
+    
     {{ content }}
 </body>
-
 </html>

@@ -39,4 +39,4 @@ EXPOSE 8000
 
 # Start command using Gunicorn with shell to properly expand PORT variable
 # Railway will provide the PORT environment variable
-CMD sh -c "gunicorn main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - --log-level info"
+CMD sh -c "gunicorn 'api_app:create_app()' --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - --log-level info"

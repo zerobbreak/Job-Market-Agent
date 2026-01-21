@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Junior Full Stack Software Developer",
+    "company": "Digicall Group",
+    "location": "Unknown Location",
+    "url": "https://www.linkedin.com/jobs/view/4354623595"
+  },
+  "cv": {
+    "version_id": "Digicall_Group_Junior_Full_Stack_Software_Developer_20260106_1158",
+    "ats_analysis": "Analysis not available",
+    "ats_score": 88,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['Go', 'R', 'AI'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": [],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": ['problem solving'],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['develop', 'implement', 'maintain', 'deploy', 'test', 'architect', 'engineer'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": 0.4,
+  "paths": {
+    "cv": "applications\\Digicall_Group_Junior_Full_Stack_Software_Developer_20260106_1158\\cv.pdf",
+    "cover_letter": "applications\\Digicall_Group_Junior_Full_Stack_Software_Developer_20260106_1158\\cover_letter.txt"
+  }
+}

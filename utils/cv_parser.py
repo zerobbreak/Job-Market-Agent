@@ -1,92 +1,61 @@
 """
-CV Parser - Rule-based text extraction from PDF resumes
-Extracts structured information using pattern matching and section identification
+CV Parser - Hybrid AI & Rule-based text extraction from PDF resumes
+Extracts structured information using Google Gemini AI with a rule-based fallback
 """
 
 import re
 import pdfplumber
 from typing import Dict, List, Optional, Union
-from dataclasses import dataclass, asdict
 import json
 import os
+import google.genai as genai
+from pydantic import BaseModel, Field
 
-@dataclass
-class ContactInfo:
+# --- Pydantic Models for Structured Output ---
+
+class ContactInfo(BaseModel):
     """Contact information structure"""
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    address: Optional[str] = None
-    linkedin: Optional[str] = None
-    portfolio: Optional[str] = None
-    github: Optional[str] = None
+    name: Optional[str] = Field(None, description="Full name of the candidate")
+    phone: Optional[str] = Field(None, description="Phone number")
+    email: Optional[str] = Field(None, description="Email address")
+    address: Optional[str] = Field(None, description="Physical address or location (City, Country)")
+    linkedin: Optional[str] = Field(None, description="LinkedIn profile URL")
+    portfolio: Optional[str] = Field(None, description="Portfolio website URL")
+    github: Optional[str] = Field(None, description="GitHub profile URL")
 
-
-@dataclass
-class Education:
+class Education(BaseModel):
     """Education entry structure"""
-    degree: str
-    institution: str
-    year: Optional[str] = None
-    details: List[str] = None
-    
-    def __post_init__(self):
-        if self.details is None:
-            self.details = []
+    degree: str = Field(..., description="Degree obtained (e.g. BSc Computer Science)")
+    institution: str = Field(..., description="University or Institution name")
+    year: Optional[str] = Field(None, description="Year of graduation or duration (e.g. 2020-2023)")
+    details: List[str] = Field(default_factory=list, description="Additional details or achievements")
 
-
-@dataclass
-class WorkExperience:
+class WorkExperience(BaseModel):
     """Work experience entry structure"""
-    title: str
-    company: str
-    duration: Optional[str] = None
-    responsibilities: List[str] = None
-    
-    def __post_init__(self):
-        if self.responsibilities is None:
-            self.responsibilities = []
+    title: str = Field(..., description="Job title")
+    company: str = Field(..., description="Company name")
+    duration: Optional[str] = Field(None, description="Employment duration (e.g. Jan 2020 - Present)")
+    responsibilities: List[str] = Field(default_factory=list, description="List of responsibilities and achievements")
 
-
-@dataclass
-class Project:
+class Project(BaseModel):
     """Project entry structure"""
-    name: str
-    description: str
-    technologies: List[str] = None
-    details: List[str] = None
-    
-    def __post_init__(self):
-        if self.technologies is None:
-            self.technologies = []
-        if self.details is None:
-            self.details = []
+    name: str = Field(..., description="Project name")
+    description: str = Field(..., description="Brief description of the project")
+    technologies: List[str] = Field(default_factory=list, description="Technologies used")
+    details: List[str] = Field(default_factory=list, description="Additional details")
 
-
-@dataclass
-class CVData:
+class CVData(BaseModel):
     """Complete CV data structure"""
     contact_info: ContactInfo
-    professional_profile: Optional[str] = None
-    technical_skills: Dict[str, List[str]] = None
-    education: List[Education] = None
-    work_experience: List[WorkExperience] = None
-    projects: List[Project] = None
-    raw_text: str = ""
-    
-    def __post_init__(self):
-        if self.technical_skills is None:
-            self.technical_skills = {}
-        if self.education is None:
-            self.education = []
-        if self.work_experience is None:
-            self.work_experience = []
-        if self.projects is None:
-            self.projects = []
-
+    professional_profile: Optional[str] = Field(None, description="Professional summary or objective")
+    technical_skills: Dict[str, List[str]] = Field(default_factory=dict, description="Skills grouped by category (e.g. Languages, Frameworks)")
+    education: List[Education] = Field(default_factory=list)
+    work_experience: List[WorkExperience] = Field(default_factory=list)
+    projects: List[Project] = Field(default_factory=list)
+    raw_text: str = Field("", description="Raw text content of the CV")
 
 class CVParser:
-    """Rule-based CV parser"""
+    """Hybrid CV parser using AI with Rule-based fallback"""
     
     # Common section headers in CVs
     SECTION_PATTERNS = {
@@ -216,15 +185,152 @@ class CVParser:
                 print(f"pdfplumber extraction failed: {e}")
                 # Fallback handled by caller or kept empty if raw_text was provided
         
-        # Sanitize the extracted text
-        self.raw_text = self._sanitize_pdf_text(self.raw_text)
-        
         self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
         return self.raw_text
     
-    
+    def parse_with_ai(self) -> Optional[CVData]:
+        """Parse CV using Google Gemini AI (Multimodal & Structured)"""
+        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            return None
+
+        try:
+            client = genai.Client(api_key=api_key)
+            
+            prompt = """
+            You are an expert CV parser. Extract information from the provided CV document into the specified structure.
+            
+            Guidelines:
+            1. **Accuracy**: Copy names, dates, and titles exactly as they appear.
+            2. **Skills**: 
+               - Split concatenated skills (e.g. 'Java/Python' -> ['Java', 'Python']).
+               - categorize them logically (Languages, Frameworks, Tools).
+               - Ignore generic headers like "Technical Skills" as skill items.
+            3. **Experience**: Focus on the most recent and relevant roles.
+            4. **Inference**: If a section is missing (e.g. no explicit "Skills" section), infer skills from the project descriptions or work history.
+            """
+
+            # Prepare contents
+            contents = []
+            
+            # 1. Add File Content (Multimodal) if available
+            if self.file_path and os.path.exists(self.file_path) and self.file_path.lower().endswith('.pdf'):
+                try:
+                    with open(self.file_path, "rb") as f:
+                        file_bytes = f.read()
+                    contents.append({
+                        "mime_type": "application/pdf",
+                        "data": file_bytes
+                    })
+                except Exception as e:
+                    print(f"Failed to read PDF file for AI: {e}")
+                    # Fallback to text if file read fails
+                    if self.raw_text:
+                        contents.append(self.raw_text[:50000])
+            elif self.raw_text:
+                # Text-only fallback
+                contents.append(self.raw_text[:50000])
+            else:
+                # Try extracting text if not yet done
+                if not self.raw_text:
+                    self.extract_text()
+                if self.raw_text:
+                    contents.append(self.raw_text[:50000])
+                else:
+                    return None # No data to parse
+
+            # 2. Add Prompt
+            contents.append(prompt)
+
+            # 3. Call API with Structured Output
+            # Use gemini-1.5-flash for speed/cost, or gemini-1.5-pro for complex layouts
+            response = client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=contents,
+                config={
+                    'response_mime_type': 'application/json',
+                    'response_schema': CVData
+                }
+            )
+            
+            # 4. Parse Response
+            # The SDK should return a parsed object if response_schema is used, 
+            # or we parse the text manually if it returns raw JSON string.
+            # Newer SDKs might return a `parsed` attribute.
+            
+            if hasattr(response, 'parsed') and response.parsed:
+                cv_data = response.parsed
+                # Ensure raw_text is populated if it wasn't extracted before
+                if not cv_data.raw_text and self.raw_text:
+                    cv_data.raw_text = self.raw_text
+                elif not cv_data.raw_text and not self.raw_text:
+                     # If we used multimodal, we might not have raw text yet.
+                     # We can leave it empty or try to extract it now.
+                     self.extract_text()
+                     cv_data.raw_text = self.raw_text
+                return cv_data
+                
+            # Fallback: Parse text manually
+            text_resp = response.text
+            data = json.loads(text_resp.strip())
+            
+            # Clean skills logic (still useful if AI is messy)
+            if 'technical_skills' in data:
+                data['technical_skills'] = self._clean_skills(data['technical_skills'])
+
+            # Convert dict to Pydantic model
+            cv_data = CVData(**data)
+            
+            # Ensure raw_text is preserved
+            if not cv_data.raw_text:
+                cv_data.raw_text = self.raw_text or ""
+                
+            return cv_data
+            
+        except Exception as e:
+            print(f"AI Parsing failed: {e}")
+            return None
+
+    def _clean_skills(self, skills_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
+        """Clean up extracted skills by removing headers and splitting merged items"""
+        cleaned_skills = {}
+        
+        # Common section headers to filter out
+        headers_to_remove = {
+            'programming languages', 'frameworks & tools', 'additional skills', 
+            'technical skills', 'soft skills', 'tools & technologies',
+            'languages', 'frameworks', 'tools', 'databases', 'cloud'
+        }
+        
+        for category, skill_list in skills_dict.items():
+            cleaned_list = []
+            for skill in skill_list:
+                s = skill.strip()
+                if not s: continue
+                
+                # Skip if it's likely a header
+                if s.lower() in headers_to_remove:
+                    continue
+                    
+                # Skip if it looks like a concatenated header string (long and contains common header words)
+                if len(s) > 30 and any(h in s.lower() for h in ['languages', 'frameworks', 'tools', 'skills']):
+                    continue
+                
+                # Split by obvious delimiters that might have been missed
+                if '   ' in s: # multiple spaces
+                    parts = re.split(r'\s{3,}', s)
+                    cleaned_list.extend([p.strip() for p in parts if p.strip()])
+                    continue
+                    
+                cleaned_list.append(s)
+            
+            if cleaned_list:
+                cleaned_skills[category] = cleaned_list
+                
+        return cleaned_skills
+
     def extract_contact_info(self) -> ContactInfo:
-        """Extract contact information from the beginning of CV"""
+        """Extract contact information from the beginning of CV (Rule-based)"""
         contact = ContactInfo()
         
         # Search first 30 lines for contact info
@@ -625,8 +731,8 @@ class CVParser:
         
         return projects
     
-    def parse(self) -> CVData:
-        """Main parsing method - extracts all CV information"""
+    def parse_with_rules(self) -> CVData:
+        """Original rule-based parsing method"""
         # Extract text if not already done
         if not self.lines:
             self.extract_text()
@@ -656,19 +762,26 @@ class CVParser:
         )
         
         return cv_data
+
+    def parse(self) -> CVData:
+        """Main parsing method - tries AI first, falls back to rules"""
+        # Always ensure text is extracted first (if we have no file path, or just to have raw_text available)
+        if not self.lines and self.raw_text:
+            self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
+            
+        # Try AI Parsing first
+        ai_result = self.parse_with_ai()
+        if ai_result:
+            print("Successfully parsed CV with Gemini AI")
+            return ai_result
+            
+        print("AI parsing unavailable or failed, falling back to rule-based parser")
+        return self.parse_with_rules()
     
     def to_dict(self, cv_data: CVData) -> dict:
         """Convert CV data to dictionary"""
-        result = {
-            'contact_info': asdict(cv_data.contact_info),
-            'professional_profile': cv_data.professional_profile,
-            'technical_skills': cv_data.technical_skills,
-            'education': [asdict(edu) for edu in cv_data.education],
-            'work_experience': [asdict(exp) for exp in cv_data.work_experience],
-            'projects': [asdict(proj) for proj in cv_data.projects],
-        }
-        return result
+        return cv_data.model_dump()
     
     def to_json(self, cv_data: CVData, indent: int = 2) -> str:
         """Convert CV data to JSON string"""
-        return json.dumps(self.to_dict(cv_data), indent=indent, ensure_ascii=False)
+        return cv_data.model_dump_json(indent=indent)

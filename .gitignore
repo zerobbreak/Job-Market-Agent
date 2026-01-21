@@ -162,6 +162,7 @@ generated_*.txt
 jobs*.json
 jobs*.csv
 job_cache/
+preview_jobs_data/
 *.log
 
 # Generated Applications
@@ -240,3 +241,5 @@ docker-volumes/
 # Build artifacts
 dist/
 build/
+# Frontend
+Job-Market-Frontend/
