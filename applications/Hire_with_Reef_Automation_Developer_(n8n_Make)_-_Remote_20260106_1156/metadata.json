@@ -1,0 +1,19 @@
+{
+  "job": {
+    "title": "Automation Developer (n8n/Make) - Remote",
+    "company": "Hire with Reef",
+    "location": "Unknown Location",
+    "url": "https://za.indeed.com/viewjob?jk=4f6a61ae4d6a3324"
+  },
+  "cv": {
+    "version_id": "Hire_with_Reef_Automation_Developer_n8nMake_-_Remote_20260106_1156",
+    "ats_analysis": "Analysis not available",
+    "ats_score": 91,
+    "job_keywords": "\n{\n  \"MUST_HAVE_KEYWORDS\": {\n    \"technical_skills\": ['Python', 'Java', 'JavaScript', 'Rust', 'R', 'AI'],\n    \"certifications_and_qualifications\": [],\n    \"years_of_experience\": ['2'],\n    \"industry_specific_terms\": []\n  },\n  \"NICE_TO_HAVE_KEYWORDS\": {\n    \"soft_skills\": ['communication'],\n    \"preferred_qualifications\": [],\n    \"domain_knowledge\": []\n  },\n  \"ACTION_VERBS\": ['develop', 'design', 'create', 'build', 'maintain', 'document', 'architect'],\n  \"KEYWORD_VARIATIONS\": {\n    \"note\": \"Keywords extracted using efficient pattern matching without AI calls.\"\n  }\n}\n"
+  },
+  "relevance_score": 0.7,
+  "paths": {
+    "cv": "applications\\Hire_with_Reef_Automation_Developer_(n8n_Make)_-_Remote_20260106_1156\\cv.pdf",
+    "cover_letter": "applications\\Hire_with_Reef_Automation_Developer_(n8n_Make)_-_Remote_20260106_1156\\cover_letter.txt"
+  }
+}

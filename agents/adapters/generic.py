@@ -117,19 +117,8 @@ class GenericAdapter:
                             break
                     
                     if val_to_fill and str(val_to_fill).strip():
-                        # Use human-like filling
                         try:
-                            selector = inp.evaluate('el => {
-                                if (el.id) return `#${el.id}`;
-                                if (el.name) return `[name="${el.name}"]`;
-                                return null;
-                            }')
-                            
-                            if selector:
-                                human_fill(self.page, selector, str(val_to_fill))
-                            else:
-                                inp.fill(str(val_to_fill))
-                            
+                            inp.fill(str(val_to_fill))
                             filled_count += 1
                             self.log(f"Filled {field_key} field: '{label_text[:30]}...'")
                             human_delay(200, 400)  # Pause between fields
@@ -139,7 +128,7 @@ class GenericAdapter:
                 except Exception as e:
                     continue  # Ignore errors on individual fields
 
-            # 3. File Uploads with better detection
+            # 3. File Uploads with better detection and retry logic
             file_inputs = []
             for attempt in range(max_retries):
                 try:
@@ -152,6 +141,7 @@ class GenericAdapter:
             
             if file_inputs:
                 self.log(f"Found {len(file_inputs)} file inputs")
+                upload_success = False
                 for idx, finp in enumerate(file_inputs):
                     try:
                         if not finp.is_visible():
@@ -172,11 +162,35 @@ class GenericAdapter:
                             file_to_upload = files.get('cover_letter') or files.get('cv')
                         
                         if file_to_upload and os.path.exists(file_to_upload):
-                            finp.set_input_files(file_to_upload)
-                            self.log(f"Uploaded file: {os.path.basename(file_to_upload)}")
-                            human_delay(2000, 3000)  # Wait for upload processing
+                            # Retry upload with exponential backoff
+                            for upload_attempt in range(3):
+                                try:
+                                    finp.set_input_files(file_to_upload)
+                                    self.log(f"Uploaded file: {os.path.basename(file_to_upload)}")
+                                    human_delay(2000, 3000)  # Wait for upload processing
+                                    
+                                    # Verify upload succeeded by checking for error messages or success indicators
+                                    try:
+                                        error_elements = self.page.locator('text=/error|failed|invalid/i').all()
+                                        if not error_elements:
+                                            upload_success = True
+                                            break
+                                    except:
+                                        upload_success = True
+                                        break
+                                except Exception as upload_err:
+                                    if upload_attempt < 2:
+                                        self.log(f"Upload attempt {upload_attempt + 1} failed, retrying...")
+                                        human_delay(1000 * (upload_attempt + 1), 2000 * (upload_attempt + 1))
+                                    else:
+                                        raise upload_err
+                            
+                            if upload_success:
+                                break
                     except Exception as e:
                         self.log(f"File upload {idx + 1} failed: {e}")
+                        if idx == len(file_inputs) - 1 and not upload_success:
+                            self.log("Warning: All file upload attempts failed")
 
             if filled_count == 0 and not file_inputs:
                 self.log("No fields matched or filled. Generic adapter may have failed.")

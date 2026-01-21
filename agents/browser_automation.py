@@ -14,6 +14,7 @@ except ImportError:
     HAS_STEALTH = False
 
 from .utils import human_delay, simulate_human_browsing
+from services.job_store import get_recent_failures
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,14 @@ class BrowserAutomation:
         Main entry point to apply for a job.
         Detects ATS and delegates to specific adapter.
         """
+        # Circuit Breaker Check
+        recent_failures = get_recent_failures(limit=5)
+        if recent_failures >= 3:
+            msg = "Circuit Breaker Tripped: Too many recent failures. Aborting automation to prevent blocking."
+            logger.error(msg)
+            if log_callback: log_callback(msg)
+            return {'success': False, 'status': 'circuit_breaker_open', 'error': msg}
+
         if not self.browser:
             raise RuntimeError("Browser not initialized. Use 'with BrowserAutomation() as bot:'")
 
@@ -207,6 +216,9 @@ class BrowserAutomation:
                 ats_detected = 'linkedin'
                 log("Detected LinkedIn Easy Apply")
             
+            # Additional human-like delay before starting form fill
+            simulate_human_browsing(page)
+
             # Route to appropriate adapter
             if ats_detected == 'lever':
                 from .adapters.lever import LeverAdapter

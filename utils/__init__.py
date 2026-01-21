@@ -15,7 +15,6 @@ from .scraping import (
     API_CONFIG
 )
 from .cv_tailoring import CVTailoringEngine
-from .tracker import ApplicationTracker
 
 __all__ = [
 
@@ -31,8 +30,5 @@ __all__ = [
     'API_CONFIG',
     
     # CV Tailoring
-    'CVTailoringEngine',
-    
-    # Application Tracking
-    'ApplicationTracker'
+    'CVTailoringEngine'
 ]

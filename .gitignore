@@ -162,6 +162,7 @@ generated_*.txt
 jobs*.json
 jobs*.csv
 job_cache/
+preview_jobs_data/
 *.log
 
 # Generated Applications

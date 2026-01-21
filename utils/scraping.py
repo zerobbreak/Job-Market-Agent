@@ -32,19 +32,35 @@ from threading import Lock
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Initialize Gemini client
+# Initialize Gemini client lazily
 # The client gets the API key from the environment variable `GEMINI_API_KEY` or `GOOGLE_API_KEY`
-try:
-    # Check both GEMINI_API_KEY and GOOGLE_API_KEY (code supports both)
-    gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
-    if gemini_api_key and gemini_api_key != 'your_google_api_key_here':
-        client = genai.Client(api_key=gemini_api_key)
-    else:
-        client = None
-        logging.warning("GEMINI_API_KEY or GOOGLE_API_KEY not set or is placeholder. AI features will be disabled.")
-except Exception as e:
-    client = None
-    logging.warning(f"Failed to initialize Gemini client: {e}. AI features will be disabled.")
+_client = None
+_client_initialized = False
+
+def get_gemini_client():
+    """Lazy initialization of Gemini client - checks API key when actually needed"""
+    global _client, _client_initialized
+    
+    if _client_initialized:
+        return _client
+    
+    _client_initialized = True
+    
+    try:
+        # Check both GEMINI_API_KEY and GOOGLE_API_KEY (code supports both)
+        gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+        if gemini_api_key and gemini_api_key.strip() and gemini_api_key != 'your_google_api_key_here':
+            _client = genai.Client(api_key=gemini_api_key)
+            logging.info("Gemini client initialized successfully.")
+        else:
+            _client = None
+            # Only warn if we actually try to use it and it's not available
+            # Don't warn at import time since env might not be loaded yet
+    except Exception as e:
+        _client = None
+        logging.warning(f"Failed to initialize Gemini client: {e}. AI features will be disabled.")
+    
+    return _client
 
 # ============================================================================
 # CONFIGURATION & UTILITIES
@@ -732,7 +748,11 @@ class AdvancedJobScraper:
             
             for model_id in models_to_try:
                 try:
-                    response = client.models.generate_content(
+                    gemini_client = get_gemini_client()
+                    if gemini_client is None:
+                        self.logger.warning("Gemini client not available. Skipping AI description generation.")
+                        break
+                    response = gemini_client.models.generate_content(
                         model=model_id,
                         contents=prompt,
                         config=genai.GenerateContentConfig(
@@ -1117,8 +1137,11 @@ def check_api_status():
     Returns: (is_available: bool, status_message: str)
     """
     try:
+        gemini_client = get_gemini_client()
+        if gemini_client is None:
+            return False, "Gemini client not initialized. Please set GEMINI_API_KEY or GOOGLE_API_KEY environment variable."
         # Simple test request to check API availability
-        response = client.models.generate_content(
+        response = gemini_client.models.generate_content(
             model="gemini-2.0-flash",
             contents="Hello",
             config={'max_output_tokens': 10}  # Minimal response
