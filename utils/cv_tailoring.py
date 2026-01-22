@@ -115,37 +115,18 @@ class CVTailoringEngine:
             # For now, we proceed to content generation.
 
             # Step 2: Content Generation (The Core Work)
-            # We use the consolidated application_writer but with a more focused prompt structure
-            # to ensure it completes within limits.
+            # We use the consolidated application_writer with our elite strategy instructions.
             
             tailored_result = application_writer.run(f"""
-            Create an optimized CV package for this job.
+            Task: Create a tailored application package.
             
             Master CV: {self.master_cv}
             Job Posting: {job_posting}
             Job Keywords: {job_keywords}
             Student Profile: {self.profile}
-            
-            REQUIRED STRUCTURE (Follow this strictly):
-            {selected_template}
+            Template Style: {selected_template}
 
-            Instructions:
-            1. Optimize for ATS compatibility (score 85+)
-            2. Reorder experiences by relevance to job
-            3. Rewrite bullet points to include job keywords naturally
-            4. Adjust professional summary to match job requirements
-            5. Highlight most relevant skills
-            
-            Return the response in strict JSON format with the following structure:
-            {{
-                "cv_content": "Full markdown of the CV",
-                "ats_analysis": "Brief ATS analysis (max 2 sentences)",
-                "ats_score": 85,
-                "summary": "Professional summary",
-                "experience": ["Role 1...", "Role 2..."],
-                "projects": [],
-                "education": []
-            }}
+            Output Requirement: Return ONLY the JSON object as specified in your system instructions.
             """)
 
             # Parse the response
@@ -157,30 +138,41 @@ class CVTailoringEngine:
                      raise ValueError("Failed to extract JSON from response")
 
                 cv_content = (
-                    parsed_result.get('cv_content')
-                    or parsed_result.get('optimized_cv')
+                    parsed_result.get('optimized_cv')
+                    or parsed_result.get('cv_content')
                     or parsed_result.get('cv_markdown')
-                    or parsed_result.get('cv')
                 )
                 
                 # Fallback if cv_content is still None but we parsed something
                 if not cv_content:
                      # Try to use the raw content if JSON didn't contain the key
-                     # This happens if the model returns just the CV text in strict mode sometimes
                      content_str = tailored_result.content if hasattr(tailored_result, 'content') else str(tailored_result)
                      if "```" not in content_str and len(content_str) > 100:
                          cv_content = content_str
                      else:
                          cv_content = ""
 
-                ats_analysis = parsed_result.get('ats_analysis', "Analysis not available")
-                ats_score = parsed_result.get('ats_score')
+                ats_analysis = parsed_result.get('ats_analysis') # Legacy key support
+                if not ats_analysis:
+                    strat = parsed_result.get('strategic_analysis', {})
+                    ats_analysis = strat.get('gap_strategy') or "Optimized based on job requirements."
+
+                ats_score_data = parsed_result.get('ats_score_prediction', {})
+                ats_score = ats_score_data.get('score') if isinstance(ats_score_data, dict) else parsed_result.get('ats_score')
+                
+                # Extract sections if available (legacy support or if model provides them)
                 sections = {
                     'summary': parsed_result.get('summary') or '',
                     'experience': parsed_result.get('experience') or [],
                     'projects': parsed_result.get('projects') or [],
                     'education': parsed_result.get('education') or []
                 }
+                
+                # New fields
+                strategic_analysis = parsed_result.get('strategic_analysis', {})
+                cv_improvements = parsed_result.get('cv_improvements', [])
+                application_answers = parsed_result.get('application_answers', {})
+                
             except Exception as e:
                 print(f"Error parsing AI response: {e}")
                 # Fallback: treat the whole response as CV content if parsing fails
@@ -297,7 +289,11 @@ class CVTailoringEngine:
                 'job_title': job_posting.get('title', ''),
                 'company': job_posting.get('company', ''),
                 'template_type': template_type.lower(),
-                'sections': sections
+                'sections': sections,
+                'application_answers': application_answers,
+                # New "Industry Leader" features
+                'strategic_analysis': strategic_analysis,
+                'cv_improvements': cv_improvements
             }
 
             return self.cv_versions[version_id]['cv_content'], self.cv_versions[version_id]['ats_analysis']

@@ -5,6 +5,7 @@ from appwrite.id import ID
 from appwrite.query import Query
 from config import Config
 from services import job_store
+from services.recommendation_engine import engine
 import json
 import logging
 from datetime import datetime
@@ -97,4 +98,17 @@ def update_analytics_status():
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"Error updating status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@analytics_bp.route('/market-stats', methods=['GET'])
+@login_required
+def get_market_stats():
+    try:
+        role = request.args.get('role')
+        location = request.args.get('location')
+        
+        stats = engine.get_market_stats(role, location)
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        logger.error(f"Error getting market stats: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

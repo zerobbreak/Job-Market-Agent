@@ -1108,7 +1108,9 @@ class AdvancedJobScraper:
             return []
 
         # Save to cache
-        if use_cache and cache_key and processed_jobs:
+        # Always save to cache if we scraped fresh data, unless explicitly disabled
+        # Or if force_refresh was used (implied fresh data)
+        if (use_cache or force_refresh) and cache_key and processed_jobs:
             self.save_to_cache(cache_key, processed_jobs)
 
         # Log metrics summary

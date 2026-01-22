@@ -14,7 +14,6 @@ from services import job_store
 from utils.pdf_generator import PDFGenerator
 from utils.scraping import extract_skills_from_description
 from utils.ai_retries import retry_ai_call
-from services.matching_service import SemanticMatcher
 from appwrite.services.databases import Databases
 from appwrite.services.storage import Storage
 from appwrite.query import Query
@@ -29,9 +28,6 @@ logger = logging.getLogger(__name__)
 pipeline_store = {}
 profile_store = {}
 store_lock = threading.Lock()
-
-# Initialize Matcher
-matcher = SemanticMatcher()
 
 def parse_profile(profile_output):
     """Clean and normalize profile data"""
@@ -387,7 +383,7 @@ class JobApplicationPipeline:
             self.cv_engine = CVTailoringEngine(cv_content, self.profile)
             return self.profile
 
-    def search_jobs(self, query, location, max_results):
+    def search_jobs(self, query, location, max_results, force_refresh=False):
         """Search for jobs using the scraper"""
         try:
             return self.scraper.scrape_jobs(
@@ -395,7 +391,8 @@ class JobApplicationPipeline:
                 search_term=query,
                 location=location,
                 results_wanted=max_results,
-                country_indeed=location
+                country_indeed=location,
+                force_refresh=force_refresh
             )
         except Exception as e:
             logger.error(f"Error searching jobs: {e}")

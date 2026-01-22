@@ -53,6 +53,11 @@ class CVData(BaseModel):
     work_experience: List[WorkExperience] = Field(default_factory=list)
     projects: List[Project] = Field(default_factory=list)
     raw_text: str = Field("", description="Raw text content of the CV")
+    
+    # Inferred Fields
+    seniority: Optional[str] = Field(None, description="Inferred seniority level (Intern, Junior, Mid-Level, Senior, Lead, Principal)")
+    suggested_roles: List[str] = Field(default_factory=list, description="List of 3-5 job titles this candidate is best suited for")
+    key_strengths: List[str] = Field(default_factory=list, description="Top 3-5 unique selling points or key strengths")
 
 class CVParser:
     """Hybrid CV parser using AI with Rule-based fallback"""
@@ -117,7 +122,7 @@ class CVParser:
             client = genai.Client(api_key=api_key)
             
             prompt = """
-            You are an expert CV parser. Extract information from the provided CV document into the specified structure.
+            You are an expert CV parser and Career Coach. Extract information from the provided CV document into the specified structure.
             
             Guidelines:
             1. **Accuracy**: Copy names, dates, and titles exactly as they appear.
@@ -127,6 +132,11 @@ class CVParser:
                - Ignore generic headers like "Technical Skills" as skill items.
             3. **Experience**: Focus on the most recent and relevant roles.
             4. **Inference**: If a section is missing (e.g. no explicit "Skills" section), infer skills from the project descriptions or work history.
+            
+            **CRITICAL - INTELLIGENT PROFILING**:
+            5. **Seniority**: Infer the candidate's seniority level (Intern, Junior, Mid-Level, Senior, Lead, Principal) based on years of experience and complexity of roles.
+            6. **Suggested Roles**: Suggest 3-5 specific job titles this candidate is BEST suited for (e.g., "Senior Python Developer", "Backend Lead").
+            7. **Key Strengths**: Identify 3-5 unique selling points or key strengths (e.g., "Strong cloud architecture background", "Proven team leadership").
             """
 
             # Prepare contents

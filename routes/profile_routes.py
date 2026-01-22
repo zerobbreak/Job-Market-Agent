@@ -506,6 +506,18 @@ def analyze_cv():
         
         # Step 9: Save profile to database
         try:
+            # Prepare data with new inferred fields
+            seniority = parsed.get('seniority') or parsed.get('experience_level', '')
+            
+            # Format suggested roles as career goals if available
+            career_goals = parsed.get('career_goals', '')
+            suggested_roles = parsed.get('suggested_roles', [])
+            if not career_goals and suggested_roles:
+                career_goals = ", ".join(suggested_roles)
+            elif suggested_roles:
+                # Append if both exist
+                career_goals = f"{career_goals}. Suggested: {', '.join(suggested_roles)}"
+            
             profile_data_for_db = {
                 'userId': g.user_id,
                 'name': parsed.get('name', ''),
@@ -513,12 +525,12 @@ def analyze_cv():
                 'phone': parsed.get('phone', ''),
                 'location': parsed.get('location', ''),
                 'skills': json.dumps(parsed.get('skills', [])),
-                'experience_level': parsed.get('experience_level', ''),
+                'experience_level': seniority,
                 'education': json.dumps(parsed.get('education', [])),
                 # 'work_experience' removed as it's not in schema
                 # 'projects': json.dumps(parsed.get('projects', [])), # projects also not in schema dump
-                'strengths': json.dumps(parsed.get('strengths', [])),
-                'career_goals': parsed.get('career_goals', ''),
+                'strengths': json.dumps(parsed.get('key_strengths') or parsed.get('strengths', [])),
+                'career_goals': career_goals,
                 'cv_filename': filename,
                 'cv_hash': file_hash,
                 'cv_file_id': cv_file_id,
@@ -608,7 +620,7 @@ def set_active_profile(profile_id):
         logger.error(f"Error setting active profile: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@profile_bp.route('/list', methods=['GET'])
+@profile_bp.route('/profile/list', methods=['GET', 'OPTIONS'])
 @login_required
 def list_profiles():
     """List all CV profiles for the current user"""
@@ -737,3 +749,42 @@ def storage_download():
         return Response(generate(), headers={'Content-Disposition': f'attachment; filename="download"'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@profile_bp.route('/improve-text', methods=['POST'])
+@login_required
+def improve_text():
+    """
+    Improve specific text sections of the CV using AI.
+    """
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        section = data.get('section', 'general') # e.g. 'summary', 'experience'
+        
+        if not text:
+            return jsonify({'success': False, 'error': 'No text provided'}), 400
+
+        # Import inside function to avoid circular imports if any
+        from agents import application_writer
+        
+        prompt = f"""
+        Act as an expert CV writer. Improve the following {section} text to be more impactful, professional, and result-oriented.
+        Use active verbs and quantifiable metrics where possible. Keep it concise.
+        
+        Original Text:
+        "{text}"
+        
+        Return ONLY the improved text. Do not add any conversational filler like "Here is the improved text".
+        """
+        
+        improved = application_writer.run(prompt)
+        
+        # Clean up response
+        clean_text = improved.content if hasattr(improved, 'content') else str(improved)
+        # Remove any surrounding quotes if present
+        clean_text = clean_text.strip().strip('"').strip("'")
+        
+        return jsonify({'success': True, 'improved_text': clean_text})
+    except Exception as e:
+        logger.error(f"Error improving text: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

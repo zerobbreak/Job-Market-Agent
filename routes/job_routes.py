@@ -11,6 +11,7 @@ from services.job_store import (
     delete_job_state,
     update_job_progress
 )
+from services.task_manager import task_manager
 from agents.browser_automation import BrowserAutomation
 from utils.pdf_generator import PDFGenerator
 from flask import Blueprint, request, jsonify, g, send_file
@@ -75,7 +76,7 @@ def matches_last():
             
             if force_refresh:
                 # Perform fresh matching with semantic AI
-                return _perform_fresh_matching(g.user_id, g.client, location, max_results, min_score)
+                return _perform_fresh_matching(g.user_id, g.client, location, max_results, min_score, force_refresh=True)
         
         # GET or cached: Try to fetch cached matches
         databases = Databases(g.client)
@@ -120,7 +121,7 @@ def matches_last():
                 logger.warning(f"Timestamp comparison failed: {e}")
         
         if should_invalidate_cache:
-             return _perform_fresh_matching(g.user_id, g.client, location, max_results=20, min_score=0.0)
+             return _perform_fresh_matching(g.user_id, g.client, location, max_results=20, min_score=0.0, force_refresh=True)
 
         matches = json.loads(doc.get('matches', '[]') or '[]')
         last_seen = datetime.now().isoformat()
@@ -131,12 +132,12 @@ def matches_last():
         return jsonify({'success': False, 'error': 'Failed to fetch last matches'}), 200
 
 
-def _perform_fresh_matching(user_id: str, client, location: str = None, max_results: int = 20, min_score: float = 0.0):
+def _perform_fresh_matching(user_id: str, client, location: str = None, max_results: int = 20, min_score: float = 0.0, force_refresh: bool = False):
     """
-    Perform fresh job matching using semantic AI.
+    Perform fresh job matching using semantic AI (New Recommendation Engine).
     """
     try:
-        from services.matching_service import SemanticMatcher
+        from services.recommendation_engine import engine
         
         # Get user profile
         databases = Databases(client)
@@ -146,10 +147,11 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
             queries=[Query.equal('userId', user_id)]
         )
         
-        # FALLBACK: If profile not found with User Client, try Admin Client (Fix for permissions/consistency)
+        # FALLBACK: If profile not found with User Client, try Admin Client
         if profile_result.get('total', 0) == 0:
             logger.warning(f"Profile not found for {user_id} using User Client. Trying Admin Client...")
             try:
+                from appwrite.client import Client
                 admin_client = Client()
                 admin_client.set_endpoint(Config.APPWRITE_ENDPOINT)
                 admin_client.set_project(Config.APPWRITE_PROJECT_ID)
@@ -162,19 +164,12 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
                     queries=[Query.equal('userId', user_id)]
                 )
                 if profile_result.get('total', 0) > 0:
-                    logger.info(f"✅ Profile found using Admin Client! (Permission/Consistency issue detected)")
+                    logger.info(f"✅ Profile found using Admin Client!")
             except Exception as e:
                 logger.error(f"Admin Client fallback failed: {e}")
 
         if profile_result.get('total', 0) == 0:
             logger.error(f"FRESH MATCHING FAILED: Profile not found for user_id={user_id}")
-            # Debug: List all profile user IDs to see if there's a mismatch
-            try:
-                all_profiles = databases.list_documents(Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, queries=[Query.limit(5), Query.order_desc('$updatedAt')])
-                found_ids = [d.get('userId') for d in all_profiles['documents']]
-                logger.info(f"Available Profile UserIDs in DB: {found_ids}")
-            except: pass
-            
             return jsonify({'success': False, 'error': 'Profile not found. Please upload a CV first.'}), 400
         
         profile_doc = profile_result['documents'][0]
@@ -189,87 +184,62 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
             'strengths': json.loads(profile_doc.get('strengths', '[]') or '[]')
         }
         
-        # Discover and match jobs using semantic matching
+        # Discover jobs
         location_str = location or profile_data.get('location', 'South Africa')
-        
-        # Use semantic matcher
-        matcher = SemanticMatcher()
-        
-        # Search for jobs
         pipeline = JobApplicationPipeline()
         
-        # IMPROVED QUERY LOGIC:
-        # Construct a query that combines experience level, top skill, and inferred role
-        
+        # Construct Search Query
         skills = profile_data.get('skills', [])
-        top_skill = (skills + ['Developer'])[0]
         exp_level = profile_data.get('experience_level', '')
         career_goals = profile_data.get('career_goals', '')
         
-        # 1. Try to extract a role title from career goals or recent experience
-        # (This is a simplified heuristic)
         role_title = "Developer"
-        
-        # Clean up career goals to avoid conversational search queries
         clean_goals = career_goals.lower().strip()
         ignored_phrases = ['i want', 'looking for', 'seeking', 'passionate', 'goal is', 'to become', 'aim to']
         
         if len(career_goals) > 3 and len(career_goals) < 50 and not any(p in clean_goals for p in ignored_phrases):
              role_title = career_goals
         elif skills:
-             # Use top 1-2 skills for better specificity
              top_skills = " ".join(skills[:2])
              role_title = f"{top_skills} Developer"
              
-        # 2. Combine into a search query
         search_query = f"{exp_level} {role_title}".strip()
         
-        # Sanity check: If query is too long, truncate or fallback
         if len(search_query) > 60:
              top_skill = (skills + ['Developer'])[0]
              search_query = f"{exp_level} {top_skill} Developer".strip()
 
-        logger.info(f"Generated Smart Search Query: '{search_query}' (Exp: {exp_level}, Skill: {top_skill})")
+        logger.info(f"Generated Smart Search Query: '{search_query}'")
         
+        # Fetch jobs (Search Stage)
         jobs = pipeline.search_jobs(
             query=search_query,
             location=location_str,
-            max_results=max_results * 2  # Get more to filter by score
+            max_results=max_results * 2,
+            force_refresh=force_refresh
         )
 
-        # FALLBACK SEARCH LOGIC
         if not jobs:
-             logger.info(f"Smart query '{search_query}' returned 0 jobs. Trying fallback query...")
+             # Fallback
+             logger.info(f"Smart query returned 0 jobs. Trying fallback...")
              top_skill = (profile_data.get('skills', []) + ['Developer'])[0]
-             fallback_query = f"{top_skill} Developer"
-             logger.info(f"Fallback Query: '{fallback_query}'")
              jobs = pipeline.search_jobs(
-                query=fallback_query,
+                query=f"{top_skill} Developer",
                 location=location_str,
-                max_results=max_results * 2
+                max_results=max_results * 2,
+                force_refresh=force_refresh
              )
         
         if not jobs:
             return jsonify({'success': True, 'matches': [], 'cached': False, 'message': 'No jobs found'})
         
-        # Match jobs using semantic AI
-        matched_jobs = []
-        for job in jobs:
-            match_result = matcher.calculate_match(profile_data, job)
-            logger.info(f"Job: {job.get('title')} | Score: {match_result.total_score} | Min: {min_score}")
-            if match_result.total_score >= min_score:
-                # Enrich job with match data
-                job['match_score'] = match_result.total_score
-                job['match_reasons'] = match_result.explanation
-                job['semantic_score'] = match_result.semantic_score
-                job['score_breakdown'] = {
-                    'semantic': match_result.semantic_score,
-                    'keyword': match_result.keyword_score
-                }
-                matched_jobs.append(job)
+        # Match & Rank (Ranking Stage)
+        # fresh_only=True ensures we act as a Real-Time Aggregator, 
+        # only showing the jobs we just fetched from live sources.
+        matched_jobs = engine.match_jobs(profile_data, jobs, fresh_only=True)
         
-        # Sort by score
-        matched_jobs.sort(key=lambda x: x['match_score'], reverse=True)
+        # Filter by min_score
+        matched_jobs = [j for j in matched_jobs if j.get('match_score', 0) >= min_score]
         
         # Limit results
         matched_jobs = matched_jobs[:max_results]
@@ -289,44 +259,43 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
                 'match_score': job.get('match_score', 0),
                 'match_reasons': job.get('match_reasons', []),
                 'score_breakdown': job.get('score_breakdown', {}),
-                'semantic_score': job.get('semantic_score', 0)
+                'semantic_score': job.get('score_breakdown', {}).get('semantic', 0)
             })
         
-        # Optionally cache the results
+        # Cache results
         try:
             match_doc_id = f"match_{user_id}_{location_str}".replace(' ', '_')
+            match_data = {
+                'userId': user_id,
+                'location': location_str,
+                'matches': json.dumps(formatted_matches),
+                'last_seen': datetime.now().isoformat()
+            }
+            
             try:
+                databases.update_document(
+                    Config.DATABASE_ID,
+                    Config.COLLECTION_ID_MATCHES,
+                    match_doc_id,
+                    data={'matches': match_data['matches'], 'last_seen': match_data['last_seen']}
+                )
+            except Exception:
+                match_data['created_at'] = datetime.now().isoformat()
                 databases.create_document(
                     Config.DATABASE_ID,
                     Config.COLLECTION_ID_MATCHES,
                     document_id=match_doc_id,
-                    data={
-                        'userId': user_id,
-                        'location': location_str,
-                        'matches': json.dumps(formatted_matches),
-                        'created_at': datetime.now().isoformat(),
-                        'last_seen': datetime.now().isoformat()
-                    }
+                    data=match_data
                 )
-            except Exception:
-                 databases.update_document(
-                    Config.DATABASE_ID,
-                    Config.COLLECTION_ID_MATCHES,
-                    match_doc_id,
-                    data={
-                        'matches': json.dumps(formatted_matches),
-                        'last_seen': datetime.now().isoformat()
-                    }
-                )
-        except Exception:
-            pass  # Cache failure is not critical
+        except Exception as e:
+            logger.warning(f"Cache update failed: {e}")
         
         return jsonify({
             'success': True,
             'matches': formatted_matches,
             'location': location_str,
             'cached': False,
-            'matching_method': 'semantic_ai'
+            'matching_method': 'semantic_rag'
         })
         
     except Exception as e:
@@ -502,6 +471,7 @@ def apply_preview_start():
                     'cl_markdown': cl_markdown,
                     'header': header,
                     'sections': sections,
+                    'application_answers': cv_data.get('application_answers', {}),
                     'ats': {'analysis': ats_analysis, 'score': cv_data.get('ats_score')}
                 }
                 
