@@ -15,7 +15,7 @@ from agents.browser_automation import BrowserAutomation
 from utils.pdf_generator import PDFGenerator
 from flask import Blueprint, request, jsonify, g, send_file
 from routes.auth_routes import login_required
-from appwrite.services.databases import Databases
+from appwrite.services.tables_db import TablesDB
 from appwrite.query import Query
 from config import Config
 import logging
@@ -29,6 +29,10 @@ from datetime import datetime
 
 job_bp = Blueprint('job', __name__)
 logger = logging.getLogger(__name__)
+
+# Request deduplication: Track in-flight requests to prevent duplicate API calls
+_in_flight_requests = {}
+_request_lock = threading.Lock()
 
 @job_bp.route('/search-jobs', methods=['POST'])
 @login_required
@@ -63,8 +67,11 @@ def matches_last():
     """
     Get matched jobs - enhanced with semantic matching.
     Supports both cached matches and fresh matching with semantic AI.
+    Only performs fresh matching when explicitly requested via POST with force_refresh=True.
     """
     try:
+        logger.info(f"Match jobs request: method={request.method}, user_id={g.user_id}")
+        
         # Check if POST request with fresh matching requested
         if request.method == 'POST':
             data = request.get_json() or {}
@@ -76,8 +83,9 @@ def matches_last():
             if force_refresh:
                 # Perform fresh matching with semantic AI
                 return _perform_fresh_matching(g.user_id, g.client, location, max_results, min_score)
+            # POST without force_refresh: treat same as GET (return cached)
         
-        # GET or cached: Try to fetch cached matches
+        # GET or POST without force_refresh: Try to fetch cached matches
         databases = Databases(g.client)
         location = request.args.get('location')
         
@@ -98,13 +106,24 @@ def matches_last():
         except Exception:
             profile_updated_at = None
 
-        queries = [Query.equal('userId', g.user_id), Query.limit(1)]
-        if location: queries.insert(1, Query.equal('location', location))
+        # Query for matches - query by userId only (location is stored in document but not used for filtering)
+        queries = [Query.equal('userId', g.user_id), Query.order_desc('$createdAt'), Query.limit(1)]
         result = databases.list_documents(Config.DATABASE_ID, Config.COLLECTION_ID_MATCHES, queries=queries)
         
+        logger.info(f"Query for cached matches: userId={g.user_id}, location={location}, found={result.get('total', 0) if result else 0} documents")
+        
         if not result or result.get('total', 0) == 0:
-            # No cached matches - perform fresh matching
-            return _perform_fresh_matching(g.user_id, g.client, location, max_results=20, min_score=0.0)
+            # No cached matches - return empty result instead of automatically fetching
+            # This prevents unnecessary API calls on every page render
+            logger.info(f"No cached matches found for user {g.user_id} (location={location}). Returning empty result. Use POST with force_refresh=True to perform fresh search.")
+            return jsonify({
+                'success': True, 
+                'matches': [], 
+                'location': location or '', 
+                'cached': False,
+                'total_matches': 0,
+                'message': 'No matches found. Click search to find new jobs.'
+            })
         
         doc = result['documents'][0]
         match_updated_at = doc.get('$updatedAt')
@@ -114,33 +133,91 @@ def matches_last():
             try:
                 # Simple string comparison works for ISO8601
                 if profile_updated_at > match_updated_at:
-                    logger.info(f"Cache Invalidation: Profile ({profile_updated_at}) is newer than Matches ({match_updated_at}). Forcing refresh.")
-                    should_invalidate_cache = True
+                    logger.info(f"Cache Invalidation: Profile ({profile_updated_at}) is newer than Matches ({match_updated_at}). Returning empty result. Use POST with force_refresh=True to refresh.")
+                    # Don't automatically refresh - let user explicitly request it
+                    return jsonify({
+                        'success': True,
+                        'matches': [],
+                        'location': doc.get('location', ''),
+                        'cached': False,
+                        'total_matches': 0,
+                        'message': 'Profile updated. Click search to refresh matches.'
+                    })
             except Exception as e:
                 logger.warning(f"Timestamp comparison failed: {e}")
         
-        if should_invalidate_cache:
-             return _perform_fresh_matching(g.user_id, g.client, location, max_results=20, min_score=0.0)
-
-        matches = json.loads(doc.get('matches', '[]') or '[]')
+        # Return cached matches
+        matches_json = doc.get('matches', '[]') or '[]'
+        try:
+            matches = json.loads(matches_json) if isinstance(matches_json, str) else matches_json
+        except json.JSONDecodeError as je:
+            logger.error(f"Failed to parse matches JSON: {je}")
+            matches = []
+        
+        # Ensure matches is a list
+        if not isinstance(matches, list):
+            logger.warning(f"Matches is not a list, got {type(matches)}. Converting to list.")
+            matches = []
+        
         last_seen = datetime.now().isoformat()
-        databases.update_document(Config.DATABASE_ID, Config.COLLECTION_ID_MATCHES, doc['$id'], data={'last_seen': last_seen})
-        return jsonify({'success': True, 'matches': matches, 'location': doc.get('location', ''), 'created_at': doc.get('$createdAt'), 'last_seen': last_seen, 'cached': True})
+        try:
+            databases.update_document(Config.DATABASE_ID, Config.COLLECTION_ID_MATCHES, doc['$id'], data={'last_seen': last_seen})
+        except Exception as update_error:
+            logger.warning(f"Failed to update last_seen: {update_error}")
+        
+        logger.info(f"Returning {len(matches)} cached matches for user {g.user_id}")
+        return jsonify({
+            'success': True, 
+            'matches': matches, 
+            'location': doc.get('location', ''), 
+            'created_at': doc.get('$createdAt'), 
+            'last_seen': last_seen, 
+            'cached': True,
+            'total_matches': len(matches)
+        })
     except Exception as e:
         logger.error(f"Error in last matches: {e}")
-        return jsonify({'success': False, 'error': 'Failed to fetch last matches'}), 200
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False, 
+            'error': 'Failed to fetch last matches',
+            'matches': []  # Always return matches array even on error
+        }), 500
 
 
 def _perform_fresh_matching(user_id: str, client, location: str = None, max_results: int = 20, min_score: float = 0.0):
     """
     Perform fresh job matching using semantic AI.
+    Includes request deduplication to prevent duplicate API calls.
     """
+    # Create a unique request key for deduplication
+    request_key = f"{user_id}_{location}_{max_results}_{min_score}"
+    
+    # Check if there's already an in-flight request
+    with _request_lock:
+        if request_key in _in_flight_requests:
+            logger.info(f"Duplicate request detected for {request_key}. Returning existing promise.")
+            # Return the existing request result if available, or wait for it
+            existing_request = _in_flight_requests[request_key]
+            if existing_request.get('result'):
+                return existing_request['result']
+            # If still processing, return a message indicating it's in progress
+            return jsonify({
+                'success': False,
+                'error': 'Request already in progress. Please wait.',
+                'in_progress': True
+            }), 429
+        
+        # Mark request as in-flight
+        _in_flight_requests[request_key] = {'started_at': time.time(), 'result': None}
+    
     try:
         from services.matching_service import SemanticMatcher
         
         # Get user profile
-        databases = Databases(client)
-        profile_result = databases.list_documents(
+        tablesDB = TablesDB(client)
+        profile_result = tablesDB.list_rows(
             Config.DATABASE_ID,
             Config.COLLECTION_ID_PROFILES,
             queries=[Query.equal('userId', user_id)]
@@ -150,13 +227,14 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
         if profile_result.get('total', 0) == 0:
             logger.warning(f"Profile not found for {user_id} using User Client. Trying Admin Client...")
             try:
+                from appwrite.client import Client
                 admin_client = Client()
                 admin_client.set_endpoint(Config.APPWRITE_ENDPOINT)
                 admin_client.set_project(Config.APPWRITE_PROJECT_ID)
                 admin_client.set_key(Config.APPWRITE_API_KEY)
-                admin_db = Databases(admin_client)
+                admin_tablesDB = TablesDB(admin_client)
                 
-                profile_result = admin_db.list_documents(
+                profile_result = admin_tablesDB.list_rows(
                     Config.DATABASE_ID,
                     Config.COLLECTION_ID_PROFILES,
                     queries=[Query.equal('userId', user_id)]
@@ -170,14 +248,20 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
             logger.error(f"FRESH MATCHING FAILED: Profile not found for user_id={user_id}")
             # Debug: List all profile user IDs to see if there's a mismatch
             try:
-                all_profiles = databases.list_documents(Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, queries=[Query.limit(5), Query.order_desc('$updatedAt')])
-                found_ids = [d.get('userId') for d in all_profiles['documents']]
+                all_profiles = tablesDB.list_rows(Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, queries=[Query.limit(5), Query.order_desc('$updatedAt')])
+                # TablesDB returns 'rows' instead of 'documents' in the new API
+                rows = all_profiles.get('rows', all_profiles.get('documents', []))
+                found_ids = [d.get('userId') for d in rows]
                 logger.info(f"Available Profile UserIDs in DB: {found_ids}")
             except: pass
             
             return jsonify({'success': False, 'error': 'Profile not found. Please upload a CV first.'}), 400
         
-        profile_doc = profile_result['documents'][0]
+        # TablesDB returns 'rows' instead of 'documents' in the new API
+        rows = profile_result.get('rows', profile_result.get('documents', []))
+        profile_doc = rows[0] if rows else None
+        if not profile_doc:
+            return jsonify({'success': False, 'error': 'Profile not found. Please upload a CV first.'}), 400
         profile_data = {
             'name': profile_doc.get('name', ''),
             'email': profile_doc.get('email', ''),
@@ -190,7 +274,10 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
         }
         
         # Discover and match jobs using semantic matching
-        location_str = location or profile_data.get('location', 'South Africa')
+        # Ensure location is never empty - use fallback to 'South Africa' if empty
+        location_str = (location or profile_data.get('location') or 'South Africa').strip()
+        if not location_str:
+            location_str = 'South Africa'
         
         # Use semantic matcher
         matcher = SemanticMatcher()
@@ -231,10 +318,14 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
 
         logger.info(f"Generated Smart Search Query: '{search_query}' (Exp: {exp_level}, Skill: {top_skill})")
         
+        # For fresh matching triggered from the dashboard "Live Feed" button,
+        # we explicitly disable the scraper's disk cache (use_cache=False) so the
+        # user always sees truly live results instead of older scraped data.
         jobs = pipeline.search_jobs(
             query=search_query,
             location=location_str,
-            max_results=max_results * 2  # Get more to filter by score
+            max_results=max_results * 2,  # Get more to filter by score
+            use_cache=False,
         )
 
         # FALLBACK SEARCH LOGIC
@@ -246,11 +337,34 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
              jobs = pipeline.search_jobs(
                 query=fallback_query,
                 location=location_str,
-                max_results=max_results * 2
+                max_results=max_results * 2,
+                use_cache=False,
              )
         
+        # Filter out jobs the scraper marked as closed / expired
+        open_jobs = [job for job in jobs if not job.get('is_closed')]
+
+        if not open_jobs:
+            logger.info(f"No OPEN jobs found for query '{search_query}' in location '{location_str}'")
+            return jsonify({
+                'success': True,
+                'matches': [],
+                'cached': False,
+                'total_matches': 0,
+                'message': 'No currently open jobs found for your search criteria'
+            })
+
+        jobs = open_jobs
+
         if not jobs:
-            return jsonify({'success': True, 'matches': [], 'cached': False, 'message': 'No jobs found'})
+            logger.info(f"No jobs found for query '{search_query}' in location '{location_str}'")
+            return jsonify({
+                'success': True, 
+                'matches': [], 
+                'cached': False, 
+                'total_matches': 0,
+                'message': 'No jobs found for your search criteria'
+            })
         
         # Match jobs using semantic AI
         matched_jobs = []
@@ -277,24 +391,31 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
         # Format matches for frontend
         formatted_matches = []
         for job in matched_jobs:
-            formatted_matches.append({
-                'job': {
-                    'id': str(job.get('job_hash', job.get('url', job.get('title', '')))),
-                    'title': job.get('title', ''),
-                    'company': job.get('company', ''),
-                    'location': job.get('location', ''),
-                    'description': job.get('description', ''),
-                    'url': job.get('url', ''),
-                },
-                'match_score': job.get('match_score', 0),
-                'match_reasons': job.get('match_reasons', []),
-                'score_breakdown': job.get('score_breakdown', {}),
-                'semantic_score': job.get('semantic_score', 0)
-            })
+            try:
+                formatted_matches.append({
+                    'job': {
+                        'id': str(job.get('job_hash', job.get('url', job.get('title', '')))),
+                        'title': job.get('title', 'Unknown Position'),
+                        'company': job.get('company', 'Unknown Company'),
+                        'location': job.get('location', ''),
+                        'description': job.get('description', '')[:500] if job.get('description') else '',  # Limit description length
+                        'url': job.get('url', ''),
+                    },
+                    'match_score': round(float(job.get('match_score', 0)), 1),
+                    'match_reasons': job.get('match_reasons', []) if isinstance(job.get('match_reasons'), list) else [],
+                    'score_breakdown': job.get('score_breakdown', {}) if isinstance(job.get('score_breakdown'), dict) else {},
+                    'semantic_score': round(float(job.get('semantic_score', 0)), 1)
+                })
+            except Exception as format_error:
+                logger.warning(f"Error formatting job {job.get('title', 'unknown')}: {format_error}")
+                continue  # Skip malformed jobs
         
-        # Optionally cache the results
+        logger.info(f"Formatted {len(formatted_matches)} matches for user {user_id}")
+        
+        # Cache the results
         try:
-            match_doc_id = f"match_{user_id}_{location_str}".replace(' ', '_')
+            # Use a simpler document ID format - just userId, since we query by userId
+            match_doc_id = f"match_{user_id}"
             try:
                 databases.create_document(
                     Config.DATABASE_ID,
@@ -304,35 +425,71 @@ def _perform_fresh_matching(user_id: str, client, location: str = None, max_resu
                         'userId': user_id,
                         'location': location_str,
                         'matches': json.dumps(formatted_matches),
-                        'created_at': datetime.now().isoformat(),
-                        'last_seen': datetime.now().isoformat()
-                    }
+                        # Rely on Appwrite's built-in $createdAt field instead of
+                        # writing a custom created_at attribute that may not exist
+                        # in the collection schema.
+                        'last_seen': datetime.now().isoformat(),
+                    },
                 )
-            except Exception:
-                 databases.update_document(
-                    Config.DATABASE_ID,
-                    Config.COLLECTION_ID_MATCHES,
-                    match_doc_id,
-                    data={
-                        'matches': json.dumps(formatted_matches),
-                        'last_seen': datetime.now().isoformat()
-                    }
-                )
-        except Exception:
-            pass  # Cache failure is not critical
+                logger.info(f"Successfully cached {len(formatted_matches)} matches for user {user_id} with document ID {match_doc_id}")
+            except Exception as create_error:
+                # Document already exists, update it
+                try:
+                    databases.update_document(
+                        Config.DATABASE_ID,
+                        Config.COLLECTION_ID_MATCHES,
+                        match_doc_id,
+                        data={
+                            'location': location_str,
+                            'matches': json.dumps(formatted_matches),
+                            'last_seen': datetime.now().isoformat()
+                        }
+                    )
+                    logger.info(f"Successfully updated cached matches for user {user_id} with document ID {match_doc_id}")
+                except Exception as update_error:
+                    logger.error(f"Failed to cache matches for user {user_id}: create_error={create_error}, update_error={update_error}")
+        except Exception as cache_error:
+            logger.error(f"Cache operation failed for user {user_id}: {cache_error}")
+            # Cache failure is not critical - continue to return results
         
-        return jsonify({
+        response_data = {
             'success': True,
             'matches': formatted_matches,
             'location': location_str,
             'cached': False,
-            'matching_method': 'semantic_ai'
-        })
+            'matching_method': 'semantic_ai',
+            'total_matches': len(formatted_matches)
+        }
+        
+        logger.info(f"Returning {len(formatted_matches)} fresh matches for user {user_id}")
+        
+        result = jsonify(response_data)
+        
+        # Store result and clean up after a short delay (allows duplicate requests to use it)
+        with _request_lock:
+            if request_key in _in_flight_requests:
+                _in_flight_requests[request_key]['result'] = result
+                # Clean up after 5 seconds
+                threading.Timer(5.0, lambda: _in_flight_requests.pop(request_key, None)).start()
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error in fresh matching: {e}")
         logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': f'Failed to match jobs: {str(e)}'}), 500
+        
+        # Clean up on error
+        with _request_lock:
+            _in_flight_requests.pop(request_key, None)
+        
+        # Always return a valid response structure even on error
+        return jsonify({
+            'success': False, 
+            'error': f'Failed to match jobs: {str(e)}',
+            'matches': [],  # Always include matches array
+            'total_matches': 0,
+            'cached': False
+        }), 500
 
 @job_bp.route('/apply-job', methods=['POST'])
 @login_required

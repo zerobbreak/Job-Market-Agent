@@ -556,6 +556,9 @@ class AdvancedJobScraper:
 
         for job in tqdm(jobs, desc="Enriching jobs", unit="job"):
             try:
+                # Default availability flag
+                job['is_closed'] = False
+
                 # First, try to scrape full job description from URL if enabled
                 if enable_url_scraping and job.get('url') and job['url'] != 'N/A':
                     enhanced_description = self.scrape_full_job_description(job['url'])
@@ -567,6 +570,13 @@ class AdvancedJobScraper:
                 else:
                     job['description_source'] = 'original'
                 
+                # Check whether the job posting appears to be closed / no longer accepting
+                if enable_url_scraping and job.get('url') and job['url'] != 'N/A':
+                    is_open = self.check_job_availability(job['url'])
+                    job['is_closed'] = not is_open
+                    if job['is_closed']:
+                        self.logger.info(f"  Marked job as CLOSED based on page content: {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}")
+
                 # Polite delay between requests
                 if enable_url_scraping and job.get('url') and job['url'] != 'N/A':
                     time.sleep(base_delay)
@@ -598,6 +608,7 @@ class AdvancedJobScraper:
                 # Still add the job even if enrichment fails
                 job.setdefault('salary_info', {})
                 job.setdefault('skills', [])
+                job.setdefault('is_closed', False)
                 job.setdefault('relevance_score', 0.0)
                 job['processed_at'] = datetime.now().isoformat()
                 job['job_hash'] = self.generate_job_hash(job)
@@ -711,6 +722,59 @@ class AdvancedJobScraper:
             self.logger.debug(f"Error scraping job description from {url}: {e}")
 
         return None
+
+    def check_job_availability(self, url: str) -> bool:
+        """Heuristically determine if a job posting is still accepting applications.
+
+        Returns True if the job appears OPEN, False if it appears CLOSED.
+        On network/parse errors we default to True to avoid hiding valid jobs.
+        """
+        if not url or url == 'N/A':
+            return True
+
+        try:
+            if self.config.rotation_enabled:
+                headers = self._get_random_header()
+            else:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+
+            resp = requests.get(url, headers=headers, timeout=10)
+
+            # If the page is gone or returns an error, treat as closed
+            if resp.status_code in (404, 410):
+                self.logger.info(f"Job URL appears closed (HTTP {resp.status_code}): {url}")
+                return False
+
+            # For other 4xx/5xx, be conservative and consider it still open
+            if resp.status_code >= 500:
+                self.logger.debug(f"Job availability check got server error {resp.status_code} for {url}")
+                return True
+
+            text = resp.text.lower()
+
+            closed_markers = [
+                "no longer accepting applications",
+                "no longer accepting applicants",
+                "no longer accepts applications",
+                "this job is no longer available",
+                "this job is no longer accepting applications",
+                "job is no longer available",
+                "job has expired",
+                "no longer available",
+                "position has been filled",
+            ]
+
+            if any(marker in text for marker in closed_markers):
+                self.logger.info(f"Detected CLOSED job marker in page for {url}")
+                return False
+
+            return True
+        except Exception as e:
+            # On any error, assume open so we don't over-filter
+            self.logger.debug(f"Error checking job availability for {url}: {e}")
+            return True
 
     @retry_with_backoff(max_retries=3, base_delay=2.0, exceptions=(Exception,))
     def generate_job_description_with_ai(self, job: Dict[str, Any], search_term: str) -> str:

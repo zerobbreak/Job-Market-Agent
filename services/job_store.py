@@ -10,7 +10,7 @@ import time
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
-from appwrite.services.databases import Databases
+from appwrite.services.tables_db import TablesDB  # type: ignore
 from appwrite.services.storage import Storage
 from appwrite.client import Client
 from appwrite.query import Query
@@ -26,7 +26,7 @@ _client.set_endpoint(Config.APPWRITE_ENDPOINT)
 _client.set_project(Config.APPWRITE_PROJECT_ID)
 _client.set_key(Config.APPWRITE_API_KEY)
 
-_db = Databases(_client)
+_db = TablesDB(_client)
 _storage = Storage(_client)
 
 # --- Helper Functions ---
@@ -92,9 +92,9 @@ def save_job_state(job_id: str, state: dict) -> bool:
         }
         
         try:
-            _db.update_document(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
+            _db.update_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
         except Exception:
-            _db.create_document(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
+            _db.create_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, document_id=job_id, data=data)
         
         return True
     except Exception as e:
@@ -104,7 +104,7 @@ def save_job_state(job_id: str, state: dict) -> bool:
 def load_job_state(job_id: str) -> dict | None:
     """Load job processing state from Appwrite"""
     try:
-        doc = _db.get_document(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id)
+        doc = _db.get_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id)
         return {
             'status': doc.get('status'),
             'progress': doc.get('progress'),
@@ -124,7 +124,7 @@ def load_job_state(job_id: str) -> dict | None:
 def delete_job_state(job_id: str):
     """Delete job state from Appwrite"""
     try:
-        _db.delete_document(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id)
+        _db.delete_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id)
     except Exception as e:
         logger.error(f"Failed to delete job state {job_id}: {e}")
 
@@ -142,7 +142,7 @@ def update_job_progress(job_id: str, progress: int, status: str = None, phase: s
             data['status'] = 'done'
             data['progress'] = 100
             
-        _db.update_document(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
+        _db.update_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
         logger.info(f"Job {job_id}: {progress}% - {phase or status}")
     except Exception as e:
         logger.error(f"Failed to update progress for {job_id}: {e}")
@@ -153,7 +153,7 @@ def get_recent_failures(limit: int = 5) -> int:
     """Get count of recent consecutive failures"""
     try:
         queries = [Query.equal('status', 'error'), Query.order_desc('$createdAt'), Query.limit(limit)]
-        result = _db.list_documents(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, queries=queries)
+        result = _db.list_rows(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, queries=queries)
         return result.get('total', 0)
     except Exception:
         return 0
@@ -194,9 +194,9 @@ def save_application(job_data: Dict[str, Any], cv_path: str, cover_letter_path: 
             'views': 0
         }
         
-        result = _db.create_document(
-            database_id=Config.DATABASE_ID,
-            collection_id=Config.COLLECTION_ID_APPLICATIONS,
+        result = _db.create_row(
+            Config.DATABASE_ID,
+            Config.COLLECTION_ID_APPLICATIONS,
             document_id=ID.unique(),
             data=data
         )
@@ -217,10 +217,10 @@ def update_application_status(app_id: str, status: str, additional_data: Dict[st
         }
         # Note: additional_data processing can be added here if schema permits
         
-        _db.update_document(
-            database_id=Config.DATABASE_ID,
-            collection_id=Config.COLLECTION_ID_APPLICATIONS,
-            document_id=app_id,
+        _db.update_row(
+            Config.DATABASE_ID,
+            Config.COLLECTION_ID_APPLICATIONS,
+            app_id,
             data=data
         )
     except Exception as e:
@@ -233,12 +233,14 @@ def get_applications(status: Optional[str] = None) -> List[Dict[str, Any]]:
         if status:
             queries.append(Query.equal('status', status))
             
-        result = _db.list_documents(
-            database_id=Config.DATABASE_ID,
-            collection_id=Config.COLLECTION_ID_APPLICATIONS,
+        result = _db.list_rows(
+            Config.DATABASE_ID,
+            Config.COLLECTION_ID_APPLICATIONS,
             queries=queries
         )
-        return [doc for doc in result['documents']]
+        # TablesDB returns 'rows' instead of 'documents' in the new API
+        rows = result.get('rows', result.get('documents', []))
+        return [doc for doc in rows]
     except Exception as e:
         logger.error(f"Failed to get applications: {e}")
         return []
@@ -248,12 +250,13 @@ def get_application_stats() -> Dict[str, int]:
     try:
         # Appwrite limitation: No direct group_by in simple API. 
         # For small datasets, client-side aggregation is acceptable.
-        result = _db.list_documents(
-             database_id=Config.DATABASE_ID,
-             collection_id=Config.COLLECTION_ID_APPLICATIONS,
+        result = _db.list_rows(
+             Config.DATABASE_ID,
+             Config.COLLECTION_ID_APPLICATIONS,
              queries=[Query.limit(5000)]
         )
-        docs = result['documents']
+        # TablesDB returns 'rows' instead of 'documents' in the new API
+        docs = result.get('rows', result.get('documents', []))
         stats = {'total': len(docs)}
         for doc in docs:
             s = doc.get('status', 'unknown')
@@ -271,14 +274,16 @@ def get_engagement_analytics(days: int = 30) -> Dict[str, Any]:
             Query.greater_than_equal('date_created', cutoff),
             Query.limit(5000)
         ]
-        result = _db.list_documents(
-            database_id=Config.DATABASE_ID,
-            collection_id=Config.COLLECTION_ID_APPLICATIONS,
+        result = _db.list_rows(
+            Config.DATABASE_ID,
+            Config.COLLECTION_ID_APPLICATIONS,
             queries=queries
         )
         
+        # TablesDB returns 'rows' instead of 'documents' in the new API
+        rows = result.get('rows', result.get('documents', []))
         daily_counts = {}
-        for doc in result['documents']:
+        for doc in rows:
             # Assuming ISO format YYYY-MM-DD...
             date_str = doc['date_created'][:10] 
             daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
@@ -294,14 +299,16 @@ def get_engagement_analytics(days: int = 30) -> Dict[str, Any]:
 def get_application_heatmap() -> Dict[str, Any]:
     """Get application heatmap data (activity by day of week)"""
     try:
-        result = _db.list_documents(
-            database_id=Config.DATABASE_ID,
-            collection_id=Config.COLLECTION_ID_APPLICATIONS,
+        result = _db.list_rows(
+            Config.DATABASE_ID,
+            Config.COLLECTION_ID_APPLICATIONS,
             queries=[Query.limit(5000)]
         )
         
+        # TablesDB returns 'rows' instead of 'documents' in the new API
+        rows = result.get('rows', result.get('documents', []))
         heatmap = {} 
-        for doc in result['documents']:
+        for doc in rows:
              try:
                  dt = datetime.fromisoformat(doc['date_created'])
                  day = dt.strftime('%A')
@@ -317,12 +324,12 @@ def get_application_heatmap() -> Dict[str, Any]:
 def track_view(app_id: str):
     """Increment view count for an application"""
     try:
-        doc = _db.get_document(Config.DATABASE_ID, Config.COLLECTION_ID_APPLICATIONS, app_id)
+        doc = _db.get_row(Config.DATABASE_ID, Config.COLLECTION_ID_APPLICATIONS, app_id)
         current_views = doc.get('views', 0) or 0
-        _db.update_document(
-            database_id=Config.DATABASE_ID,
-            collection_id=Config.COLLECTION_ID_APPLICATIONS,
-            document_id=app_id,
+        _db.update_row(
+            Config.DATABASE_ID,
+            Config.COLLECTION_ID_APPLICATIONS,
+            app_id,
             data={'views': current_views + 1}
         )
     except Exception as e:

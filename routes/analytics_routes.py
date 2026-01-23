@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, g
 from routes.auth_routes import login_required
-from appwrite.services.databases import Databases
+from appwrite.services.tables_db import TablesDB
 from appwrite.id import ID
 from appwrite.query import Query
 from config import Config
@@ -27,8 +27,8 @@ def track_event():
         if not event:
             return jsonify({'success': False, 'error': 'Missing event'}), 400
             
-        databases = Databases(g.client)
-        databases.create_document(
+        tablesDB = TablesDB(g.client)
+        tablesDB.create_row(
             Config.DATABASE_ID,
             Config.COLLECTION_ID_ANALYTICS,
             ID.unique(),
@@ -37,7 +37,9 @@ def track_event():
                 'event': event,
                 'properties': json.dumps(properties),
                 'page': page or '',
-                'created_at': datetime.now().isoformat()
+                # Rely on Appwrite's built-in $createdAt field instead of
+                # writing a custom created_at attribute that may not exist
+                # in the collection schema.
             }
         )
         return jsonify({'success': True})

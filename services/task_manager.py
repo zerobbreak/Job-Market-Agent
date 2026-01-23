@@ -8,7 +8,7 @@ import threading
 import time
 import logging
 from datetime import datetime, timedelta
-from appwrite.services.databases import Databases
+from appwrite.services.tables_db import TablesDB
 from appwrite.client import Client
 from appwrite.query import Query
 from config import Config
@@ -23,7 +23,7 @@ class TaskManager:
         self.client.set_endpoint(Config.APPWRITE_ENDPOINT)
         self.client.set_project(Config.APPWRITE_PROJECT_ID)
         self.client.set_key(Config.APPWRITE_API_KEY)
-        self.db = Databases(self.client)
+        self.tablesDB = TablesDB(self.client)
         self.active_tasks = 0
         self.total_tasks_processed = 0
         self.lock = threading.Lock()
@@ -97,7 +97,7 @@ class TaskManager:
                 Query.limit(100)
             ]
             
-            result = self.db.list_documents(
+            result = self.tablesDB.list_rows(
                 Config.DATABASE_ID, 
                 Config.COLLECTION_ID_JOBS, 
                 queries=queries
@@ -105,7 +105,9 @@ class TaskManager:
             
             timeout_threshold = time.time() - 900 # 15 minutes (increased from 10m)
             
-            for doc in result['documents']:
+            # TablesDB returns 'rows' instead of 'documents' in the new API
+            rows = result.get('rows', result.get('documents', []))
+            for doc in rows:
                 updated_at_str = doc.get('$updatedAt', '')
                 # Parse ISO string
                 try:
@@ -126,7 +128,7 @@ class TaskManager:
         """Mark a job as failed"""
         try:
             logger.warning(f"Marking job {job_id} as failed: {reason}")
-            self.db.update_document(
+            self.tablesDB.update_row(
                 Config.DATABASE_ID,
                 Config.COLLECTION_ID_JOBS,
                 job_id,

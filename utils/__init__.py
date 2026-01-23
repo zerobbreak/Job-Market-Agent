@@ -6,6 +6,7 @@ Simplified to only include actively used utilities.
 
 from .scraping import (
     AdvancedJobScraper,
+    ScraperConfig,
     extract_skills_from_description,
     semantic_skill_match,
     discover_new_jobs,
@@ -21,6 +22,7 @@ __all__ = [
     
     # Job Scraping
     'AdvancedJobScraper',
+    'ScraperConfig',
     'extract_skills_from_description',
     'semantic_skill_match',
     'discover_new_jobs',

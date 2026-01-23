@@ -20,6 +20,7 @@ class APIHealthCheck(unittest.TestCase):
         endpoints = [
             ('/api/search-jobs', 'POST'),
             ('/api/profile/structured', 'GET'),
+            ('/api/cv-analysis', 'GET'),
             ('/api/matches/last', 'GET')
         ]
         print("\nChecking Endpoints:")

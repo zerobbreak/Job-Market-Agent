@@ -200,58 +200,95 @@ class CVParser:
             prompt = """
             You are an expert CV parser. Extract information from the provided CV document into the specified structure.
             
+            CRITICAL: The CV text may be extracted from PDF/DOCX and may have formatting issues. Look for section markers like [SECTION:PROFILE], [SECTION:EXPERIENCE], etc. that indicate document structure.
+            
             Guidelines:
-            1. **Accuracy**: Copy names, dates, and titles exactly as they appear.
-            2. **Skills**: 
+            1. **Professional Profile/Summary (HIGHEST PRIORITY)**:
+               - Look for sections marked [SECTION:PROFILE] or headers like "PROFESSIONAL PROFILE", "SUMMARY", "OBJECTIVE", "ABOUT ME"
+               - Extract the FIRST substantial paragraph or 2-3 sentences after the profile header
+               - This is usually located at the beginning of the CV, after contact information
+               - Extract the ACTUAL text from the CV - DO NOT use generic phrases like "To leverage my skills" or "Seeking opportunities"
+               - If no explicit profile section exists, extract the first meaningful paragraph (50+ characters) that describes the candidate
+               - The professional_profile field is CRITICAL for job matching - extract it accurately
+            
+            2. **Accuracy**: Copy names, dates, and titles exactly as they appear.
+            
+            3. **Skills**: 
+               - Look for [SECTION:SKILLS] or "SKILLS", "TECHNICAL SKILLS" sections
                - Split concatenated skills (e.g. 'Java/Python' -> ['Java', 'Python']).
-               - categorize them logically (Languages, Frameworks, Tools).
+               - Categorize them logically (Languages, Frameworks, Tools).
                - Ignore generic headers like "Technical Skills" as skill items.
-            3. **Experience**: Focus on the most recent and relevant roles.
-            4. **Inference**: If a section is missing (e.g. no explicit "Skills" section), infer skills from the project descriptions or work history.
+               - If no skills section, infer from work experience and projects
+            
+            4. **Experience**: 
+               - Look for [SECTION:EXPERIENCE] or "EXPERIENCE", "WORK EXPERIENCE" sections
+               - Focus on the most recent and relevant roles.
+               - Extract job titles, companies, durations, and responsibilities accurately
+            
+            5. **Education**:
+               - Look for [SECTION:EDUCATION] or "EDUCATION", "QUALIFICATIONS" sections
+               - Extract degrees, institutions, and years
+            
+            6. **Handling Messy Text**:
+               - Text may have line breaks in wrong places - reconstruct sentences when needed
+               - Ignore PDF artifacts like "(cid:XXX)" patterns
+               - Section markers [SECTION:XXX] indicate document structure - use them
+               - If text seems garbled, try to extract meaningful information from what's available
+            
+            7. **Inference**: If a section is missing (e.g. no explicit "Skills" section), infer from project descriptions or work history.
+            
+            IMPORTANT: The professional_profile field MUST contain actual text from the CV, not generic placeholder text. If you cannot find a profile/summary section, extract the first meaningful paragraph that describes the candidate's background or career goals.
             """
 
-            # Prepare contents
+            # Prepare contents - Use text extraction (more reliable than PDF bytes)
             contents = []
             
-            # 1. Add File Content (Multimodal) if available
-            if self.file_path and os.path.exists(self.file_path) and self.file_path.lower().endswith('.pdf'):
-                try:
-                    with open(self.file_path, "rb") as f:
-                        file_bytes = f.read()
-                    contents.append({
-                        "mime_type": "application/pdf",
-                        "data": file_bytes
-                    })
-                except Exception as e:
-                    print(f"Failed to read PDF file for AI: {e}")
-                    # Fallback to text if file read fails
-                    if self.raw_text:
-                        contents.append(self.raw_text[:50000])
-            elif self.raw_text:
-                # Text-only fallback
-                contents.append(self.raw_text[:50000])
+            # Extract text first (more reliable than passing PDF directly)
+            if not self.raw_text:
+                self.extract_text()
+            
+            # Use extracted text for AI parsing
+            if self.raw_text:
+                # Truncate to avoid token limits (Gemini has context limits)
+                text_content = self.raw_text[:50000] if len(self.raw_text) > 50000 else self.raw_text
+                # Combine prompt and text in a single message
+                full_prompt = f"{prompt}\n\nCV Content:\n{text_content}"
+                contents.append(full_prompt)
             else:
-                # Try extracting text if not yet done
-                if not self.raw_text:
-                    self.extract_text()
-                if self.raw_text:
-                    contents.append(self.raw_text[:50000])
-                else:
-                    return None # No data to parse
-
-            # 2. Add Prompt
-            contents.append(prompt)
+                # If text extraction failed, we can't parse
+                print("No text extracted from CV, cannot parse with AI")
+                return None
 
             # 3. Call API with Structured Output
             # Use gemini-1.5-flash for speed/cost, or gemini-1.5-pro for complex layouts
-            response = client.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=contents,
-                config={
-                    'response_mime_type': 'application/json',
-                    'response_schema': CVData
-                }
-            )
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=contents,
+                    config={
+                        'response_mime_type': 'application/json',
+                        'response_schema': CVData
+                    }
+                )
+            except Exception as api_error:
+                # Log the error for debugging
+                print(f"Gemini API call failed: {api_error}")
+                # If structured output fails, try without schema
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=contents
+                    )
+                    # Parse JSON from text response
+                    text_resp = response.text
+                    data = json.loads(text_resp.strip())
+                    cv_data = CVData(**data)
+                    if not cv_data.raw_text:
+                        cv_data.raw_text = self.raw_text or ""
+                    return cv_data
+                except Exception as fallback_error:
+                    print(f"Fallback parsing also failed: {fallback_error}")
+                    raise api_error  # Re-raise original error
             
             # 4. Parse Response
             # The SDK should return a parsed object if response_schema is used, 
@@ -268,6 +305,15 @@ class CVParser:
                      # We can leave it empty or try to extract it now.
                      self.extract_text()
                      cv_data.raw_text = self.raw_text
+                
+                # If professional_profile is empty or generic, try rule-based extraction
+                if not cv_data.professional_profile or len(cv_data.professional_profile.strip()) < 20:
+                    print("AI parsing returned empty/generic professional_profile, trying rule-based extraction")
+                    fallback_profile = self._extract_professional_profile_fallback(self.raw_text or "")
+                    if fallback_profile:
+                        cv_data.professional_profile = fallback_profile
+                        print(f"Rule-based extraction found profile: {fallback_profile[:100]}...")
+                
                 return cv_data
                 
             # Fallback: Parse text manually
@@ -284,6 +330,14 @@ class CVParser:
             # Ensure raw_text is preserved
             if not cv_data.raw_text:
                 cv_data.raw_text = self.raw_text or ""
+            
+            # If professional_profile is empty or generic, try rule-based extraction
+            if not cv_data.professional_profile or len(cv_data.professional_profile.strip()) < 20:
+                print("AI parsing returned empty/generic professional_profile, trying rule-based extraction")
+                fallback_profile = self._extract_professional_profile_fallback(self.raw_text or "")
+                if fallback_profile:
+                    cv_data.professional_profile = fallback_profile
+                    print(f"Rule-based extraction found profile: {fallback_profile[:100]}...")
                 
             return cv_data
             
@@ -421,23 +475,68 @@ class CVParser:
                             name_parts.append(w)
                     return ' '.join(name_parts)
         
-        # Strategy 2: Extract from email prefix
+        # Strategy 2: Extract from email prefix (improved)
         search_text = "\n".join(self.lines[:30])
         email_match = re.search(self.CONTACT_PATTERNS['email'], search_text)
         if email_match:
             email = email_match.group(0)
             prefix = email.split('@')[0]
-            # Clean the prefix
-            prefix = re.sub(r'[\d_\-\.]+', ' ', prefix)
-            words = prefix.split()
-            if words:
+            # Clean the prefix more intelligently - handle dots, underscores, numbers
+            # Replace common separators with spaces
+            prefix = re.sub(r'[._-]', ' ', prefix)
+            # Remove standalone numbers and numbers at start/end
+            prefix = re.sub(r'\b\d+\b', ' ', prefix)
+            prefix = re.sub(r'^\d+|\d+$', '', prefix)
+            # Remove multiple spaces
+            prefix = re.sub(r'\s+', ' ', prefix).strip()
+            words = [w for w in prefix.split() if len(w) > 1 and w.isalpha()]
+            if words and len(words) <= 5:  # Reasonable name length
                 return ' '.join(w.title() for w in words)
         
-        # Strategy 3: Fallback - just return first non-empty line
-        if self.lines:
-            return self.lines[0]
+        # Strategy 3: Extract from LinkedIn URL
+        linkedin_match = re.search(self.CONTACT_PATTERNS['linkedin'], search_text)
+        if linkedin_match:
+            linkedin_url = linkedin_match.group(0)
+            # Extract username from LinkedIn URL (e.g., linkedin.com/in/john-doe -> john-doe)
+            username_match = re.search(r'/in/([^/?]+)', linkedin_url)
+            if username_match:
+                username = username_match.group(1)
+                # Convert username to name (e.g., john-doe -> John Doe)
+                name_parts = username.replace('-', ' ').replace('_', ' ').split()
+                # Filter out non-name parts
+                name_parts = [p for p in name_parts if p.isalpha() and len(p) > 1]
+                if name_parts and len(name_parts) <= 5:
+                    return ' '.join(p.title() for p in name_parts)
         
-        return "Unknown"
+        # Strategy 4: Extract from GitHub URL
+        github_match = re.search(self.CONTACT_PATTERNS['github'], search_text)
+        if github_match:
+            github_url = github_match.group(0)
+            # Extract username from GitHub URL (e.g., github.com/johndoe -> johndoe)
+            username_match = re.search(r'github\.com/([^/?]+)', github_url)
+            if username_match:
+                username = username_match.group(1)
+                # Try to split camelCase or convert to name
+                # If it's already separated by dashes/underscores, use that
+                if '-' in username or '_' in username:
+                    name_parts = re.split(r'[-_]', username)
+                else:
+                    # Try to split camelCase
+                    name_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)', username)
+                name_parts = [p for p in name_parts if p.isalpha() and len(p) > 1]
+                if name_parts and len(name_parts) <= 5:
+                    return ' '.join(p.title() for p in name_parts)
+        
+        # Strategy 5: Fallback - just return first non-empty line (if it looks reasonable)
+        if self.lines:
+            first_line = self.lines[0].strip()
+            # Only use if it looks like it could be a name (not too long, mostly letters)
+            if len(first_line) < 50 and re.match(r'^[A-Za-z\s\-\'\.]+$', first_line):
+                words = first_line.split()
+                if 1 <= len(words) <= 5:
+                    return ' '.join(w.title() if w.islower() or w.isupper() else w for w in words)
+        
+        return ""
 
     def find_section_boundaries(self) -> Dict[str, tuple]:
         """Identify section headers and their boundaries"""
@@ -481,6 +580,164 @@ class CVParser:
             profile_lines.append(line)
         
         return " ".join(profile_lines).strip()
+    
+    def _is_generic_phrase(self, text: str) -> bool:
+        """Check if text contains only generic career phrases"""
+        if not text or len(text.strip()) < 20:
+            return False
+        
+        text_lower = text.lower().strip()
+        generic_phrases = [
+            "to leverage my skills",
+            "seeking opportunities",
+            "looking for",
+            "to utilize my",
+            "seeking a position",
+            "looking to apply",
+            "to contribute",
+            "seeking employment",
+            "to apply my",
+            "seeking a role",
+            "to leverage my skills in a challenging role",
+            "seeking a challenging position",
+            "looking for opportunities"
+        ]
+        
+        # Check if text is primarily generic phrases
+        generic_count = sum(1 for phrase in generic_phrases if phrase in text_lower)
+        # If text is short and contains generic phrases, it's likely generic
+        if len(text) < 50 and generic_count > 0:
+            return True
+        # If text is longer but mostly generic phrases
+        if generic_count >= 2:
+            return True
+        # If text is very short and matches a generic phrase exactly
+        if len(text) < 40:
+            for phrase in generic_phrases:
+                if phrase in text_lower and len(text_lower) - len(phrase) < 10:
+                    return True
+        
+        return False
+    
+    def _extract_professional_profile_fallback(self, text: str) -> Optional[str]:
+        """Rule-based extraction of professional profile/summary from CV text"""
+        if not text:
+            return None
+        
+        lines = text.split('\n')
+        profile_text = None
+        
+        # Method 1: Look for explicit section markers
+        section_markers = [
+            r'\[SECTION:PROFILE\]',
+            r'(?i)^\s*(PROFESSIONAL\s+PROFILE|PROFILE|SUMMARY|OBJECTIVE|ABOUT\s+ME|CAREER\s+OBJECTIVE|PROFESSIONAL\s+SUMMARY)\s*:?\s*$'
+        ]
+        
+        profile_start = None
+        for i, line in enumerate(lines):
+            for marker_pattern in section_markers:
+                if re.search(marker_pattern, line):
+                    profile_start = i + 1
+                    break
+            if profile_start is not None:
+                break
+        
+        if profile_start is not None:
+            # Extract text until next section or significant break
+            profile_lines = []
+            for i in range(profile_start, min(profile_start + 10, len(lines))):  # Max 10 lines
+                line = lines[i].strip()
+                # Stop at next section marker
+                if re.search(r'\[SECTION:', line):
+                    break
+                # Stop at next major section header (all caps, short)
+                if re.match(r'^[A-Z\s]{2,30}$', line) and len(line) < 40 and i > profile_start + 2:
+                    break
+                # Stop at empty line followed by section-like text
+                if not line and i < len(lines) - 1:
+                    next_line = lines[i + 1].strip()
+                    if re.match(r'^[A-Z\s]{2,30}$', next_line) and len(next_line) < 40:
+                        break
+                if line:
+                    profile_lines.append(line)
+            
+            if profile_lines:
+                profile_text = ' '.join(profile_lines).strip()
+                # Clean up: remove excessive spaces, normalize
+                profile_text = re.sub(r'\s+', ' ', profile_text)
+                if len(profile_text) > 20:  # Minimum meaningful length
+                    # Check if it's a generic phrase - if so, return None
+                    if self._is_generic_phrase(profile_text):
+                        return None
+                    return profile_text
+        
+        # Method 2: Extract first 2-3 meaningful paragraphs (after contact info, before experience)
+        if not profile_text:
+            # Find where contact info likely ends (look for email/phone patterns)
+            contact_end = 0
+            for i, line in enumerate(lines[:20]):  # Check first 20 lines
+                if re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', line):
+                    contact_end = i + 1
+                    break
+                if re.search(r'(?:\+?27|0)[\s\-]?\d{2,3}[\s\-]?\d{3}[\s\-]?\d{4}', line):
+                    contact_end = i + 1
+                    break
+            
+            # Find where experience section starts
+            experience_start = len(lines)
+            for i, line in enumerate(lines):
+                if re.search(r'(?i)(EXPERIENCE|WORK\s+EXPERIENCE|EMPLOYMENT)', line):
+                    experience_start = i
+                    break
+            
+            # Extract paragraphs between contact and experience
+            if experience_start > contact_end + 2:
+                candidate_lines = lines[contact_end:experience_start]
+                paragraphs = []
+                current_para = []
+                
+                for line in candidate_lines:
+                    line = line.strip()
+                    if not line:
+                        if current_para:
+                            paragraphs.append(' '.join(current_para))
+                            current_para = []
+                    else:
+                        # Skip section headers
+                        if not re.match(r'^[A-Z\s]{2,30}$', line) or len(line) > 40:
+                            current_para.append(line)
+                
+                if current_para:
+                    paragraphs.append(' '.join(current_para))
+                
+                # Take first 2-3 meaningful paragraphs
+                meaningful_paras = [p for p in paragraphs if len(p) > 20][:3]
+                if meaningful_paras:
+                    profile_text = ' '.join(meaningful_paras).strip()
+                    if len(profile_text) > 20:
+                        # Check if it's a generic phrase - if so, return None
+                        if self._is_generic_phrase(profile_text):
+                            return None
+                        return profile_text
+        
+        # Method 3: Extract first substantial paragraph (fallback)
+        if not profile_text:
+            for line in lines[:30]:  # Check first 30 lines
+                line = line.strip()
+                # Skip contact info, headers, short lines
+                if (len(line) > 50 and 
+                    not re.search(r'@|phone|email|linkedin|github', line.lower()) and
+                    not re.match(r'^[A-Z\s]{2,30}$', line)):
+                    profile_text = line
+                    break
+        
+        # Final check: if we found text, verify it's not generic
+        if profile_text and len(profile_text) > 20:
+            if self._is_generic_phrase(profile_text):
+                return None
+            return profile_text
+        
+        return None
 
     def extract_skills(self, sections: Dict[str, tuple]) -> Dict[str, List[str]]:
         """Extract technical skills organized by category"""
