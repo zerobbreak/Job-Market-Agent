@@ -16,6 +16,7 @@ from utils.pdf_generator import PDFGenerator
 from flask import Blueprint, request, jsonify, g, send_file
 from routes.auth_routes import login_required
 from appwrite.services.tables_db import TablesDB
+from appwrite.services.databases import Databases
 from appwrite.query import Query
 from config import Config
 import logging

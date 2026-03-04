@@ -18,7 +18,7 @@ except ImportError:
     logging.warning("jobspy not available. Job scraping features will be limited.")
     # Create a dummy function to prevent errors
     def scrape_jobs(*args, **kwargs):
-        raise ImportError("jobspy package is not installed. Please install it with: pip install git+https://github.com/engineerjoe440/jobspy.git")
+        raise ImportError("jobspy package is not installed. Please install it with: pip install python-jobspy")
 import numpy as np
 import google.genai as genai
 from tqdm import tqdm
@@ -80,6 +80,15 @@ class ScraperConfig:
     default_sites: List[str] = field(default_factory=lambda: ["indeed", "linkedin", "google", "glassdoor", "zip_recruiter"])
     default_country: str = "USA"
     
+    # Platform-specific settings (jobspy 1.1.82+)
+    linkedin_fetch_description: bool = True
+    description_format: str = "markdown"
+    enforce_annual_salary: bool = True
+    verbose_level: int = 0  # 0=errors only, 1=warnings, 2=all logs
+    default_distance: int = 50  # search radius in miles
+    default_job_type: Optional[str] = None  # fulltime, parttime, internship, contract
+    default_is_remote: Optional[bool] = None  # True to filter remote-only
+    
     # Rate limiting & Anti-blocking
     max_requests_per_minute: int = 10
     url_scraping_delay: float = 2.0
@@ -111,6 +120,10 @@ class ScraperConfig:
             cache_max_size_mb=int(os.getenv('CACHE_MAX_SIZE_MB', '100')),
             default_results_wanted=int(os.getenv('DEFAULT_RESULTS_WANTED', '20')),
             max_workers=int(os.getenv('MAX_WORKERS', '5')),
+            linkedin_fetch_description=os.getenv('LINKEDIN_FETCH_DESCRIPTION', 'true').lower() == 'true',
+            enforce_annual_salary=os.getenv('ENFORCE_ANNUAL_SALARY', 'true').lower() == 'true',
+            verbose_level=int(os.getenv('JOBSPY_VERBOSE', '0')),
+            default_distance=int(os.getenv('JOBSPY_DISTANCE', '50')),
         )
 
 
@@ -242,6 +255,202 @@ class AdvancedJobScraper:
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1'
         }
+
+    # ========================================================================
+    # PLATFORM-SPECIFIC BUILDERS (jobspy 1.1.82+)
+    # ========================================================================
+
+    def _base_params(self, search_term: str, location: str, **overrides) -> Dict[str, Any]:
+        """Build base params shared across all platforms"""
+        params = {
+            'search_term': search_term,
+            'location': location,
+            'results_wanted': overrides.get('results_wanted', self.config.default_results_wanted),
+            'hours_old': overrides.get('hours_old', self.config.default_hours_old),
+            'description_format': overrides.get('description_format', self.config.description_format),
+            'enforce_annual_salary': overrides.get('enforce_annual_salary', self.config.enforce_annual_salary),
+            'verbose': overrides.get('verbose', self.config.verbose_level),
+            'distance': overrides.get('distance', self.config.default_distance),
+        }
+        # Optional filters
+        job_type = overrides.get('job_type', self.config.default_job_type)
+        if job_type:
+            params['job_type'] = job_type
+        is_remote = overrides.get('is_remote', self.config.default_is_remote)
+        if is_remote is not None:
+            params['is_remote'] = is_remote
+        # Proxies
+        proxies = overrides.get('proxies') or self.config.proxies
+        if proxies:
+            params['proxies'] = proxies
+        return params
+
+    def _build_indeed_params(self, search_term: str, location: str, **overrides) -> Dict[str, Any]:
+        """Build optimized params for Indeed scraping.
+        Indeed is the most reliable scraper with no rate limiting.
+        Returns full descriptions natively.
+        """
+        params = self._base_params(search_term, location, **overrides)
+        params['site_name'] = ['indeed']
+        params['country_indeed'] = overrides.get('country_indeed', self.config.default_country)
+        return params
+
+    def _build_linkedin_params(self, search_term: str, location: str, **overrides) -> Dict[str, Any]:
+        """Build optimized params for LinkedIn scraping.
+        LinkedIn is the most restrictive — rate limits around page 10.
+        Proxies are strongly recommended for LinkedIn.
+        With linkedin_fetch_description=True, fetches full description + direct URL (slower).
+        """
+        params = self._base_params(search_term, location, **overrides)
+        params['site_name'] = ['linkedin']
+        params['linkedin_fetch_description'] = overrides.get(
+            'linkedin_fetch_description', self.config.linkedin_fetch_description
+        )
+        # LinkedIn company ID filtering (optional)
+        company_ids = overrides.get('linkedin_company_ids')
+        if company_ids:
+            params['linkedin_company_ids'] = company_ids
+        return params
+
+    def _build_google_params(self, search_term: str, location: str, **overrides) -> Dict[str, Any]:
+        """Build optimized params for Google Jobs scraping.
+        Google Jobs requires a specific search term format in google_search_term.
+        Returns full descriptions natively.
+        """
+        params = self._base_params(search_term, location, **overrides)
+        params['site_name'] = ['google']
+        # Google Jobs uses a special search term param for filtering
+        params['google_search_term'] = overrides.get(
+            'google_search_term',
+            f"{search_term} jobs near {location} since yesterday"
+        )
+        return params
+
+    def _build_glassdoor_params(self, search_term: str, location: str, **overrides) -> Dict[str, Any]:
+        """Build optimized params for Glassdoor scraping.
+        Glassdoor uses the same country param as Indeed.
+        Returns full descriptions natively.
+        """
+        params = self._base_params(search_term, location, **overrides)
+        params['site_name'] = ['glassdoor']
+        params['country_indeed'] = overrides.get('country_indeed', self.config.default_country)
+        return params
+
+    def _build_ziprecruiter_params(self, search_term: str, location: str, **overrides) -> Dict[str, Any]:
+        """Build optimized params for ZipRecruiter scraping.
+        ZipRecruiter supports US/Canada only.
+        Returns full descriptions natively.
+        """
+        params = self._base_params(search_term, location, **overrides)
+        params['site_name'] = ['zip_recruiter']
+        return params
+
+    def scrape_platform(self, platform: str, search_term: str, location: str, **overrides) -> List[Dict[str, Any]]:
+        """Scrape jobs from a specific platform using optimized params.
+        
+        Args:
+            platform: One of 'indeed', 'linkedin', 'google', 'glassdoor', 'zip_recruiter'
+            search_term: Job title or keywords
+            location: Location string
+            **overrides: Override any default param (e.g., results_wanted=50)
+        
+        Returns:
+            List of normalized job dictionaries
+        """
+        builders = {
+            'indeed': self._build_indeed_params,
+            'linkedin': self._build_linkedin_params,
+            'google': self._build_google_params,
+            'glassdoor': self._build_glassdoor_params,
+            'zip_recruiter': self._build_ziprecruiter_params,
+        }
+
+        builder = builders.get(platform)
+        if not builder:
+            self.logger.warning(f"Unknown platform '{platform}', falling back to default params")
+            params = self._base_params(search_term, location, **overrides)
+            params['site_name'] = [platform]
+        else:
+            params = builder(search_term, location, **overrides)
+
+        self.logger.info(f"Scraping {platform} with params: {list(params.keys())}")
+
+        if not JOBSPY_AVAILABLE:
+            self.logger.error("jobspy is not installed. Cannot scrape jobs.")
+            raise ImportError("jobspy package is required. Install with: pip install python-jobspy")
+
+        try:
+            jobs_df = scrape_jobs(**params)
+        except Exception as e:
+            if "429" in str(e):
+                self.logger.warning(f"Rate limited on {platform}. Emergency cooldown...")
+                time.sleep(30)
+                return []
+            raise
+
+        if jobs_df is None or jobs_df.empty:
+            self.logger.warning(f"No jobs returned from {platform}")
+            return []
+
+        return self._normalize_jobspy_results(jobs_df)
+
+    def _normalize_jobspy_results(self, jobs_df) -> List[Dict[str, Any]]:
+        """Convert a jobspy DataFrame to a list of normalized job dicts.
+        Captures all available fields from jobspy 1.1.82+ including
+        is_remote, company_url, currency, company_industry, etc.
+        """
+        raw_jobs = []
+        for _, row in jobs_df.iterrows():
+            # Build location string from city and state
+            city = row.get('city', row.get('CITY', ''))
+            state = row.get('state', row.get('STATE', ''))
+            location_parts = [str(p).strip() for p in [city, state] if pd.notna(p) and str(p).strip()]
+            location = ', '.join(location_parts) if location_parts else 'N/A'
+
+            # Extract emails safely (may be list or NaN)
+            emails_raw = row.get('emails', row.get('EMAILS', []))
+            emails = emails_raw if isinstance(emails_raw, list) else []
+
+            job_dict = {
+                # Core fields
+                'title': row.get('title', row.get('TITLE', 'N/A')),
+                'company': row.get('company', row.get('COMPANY', 'N/A')),
+                'location': location,
+                'url': row.get('job_url', row.get('JOB_URL', 'N/A')),
+                'description': row.get('description', row.get('DESCRIPTION', '')),
+                'source': row.get('site', row.get('SITE', 'unknown')),
+                'date_posted': row.get('date_posted', row.get('DATE_POSTED', 'N/A')),
+                'job_type': row.get('job_type', row.get('JOB_TYPE', 'N/A')),
+
+                # Salary (native from jobspy — structured, not regex-parsed)
+                'salary_min': row.get('min_amount', row.get('MIN_AMOUNT', None)),
+                'salary_max': row.get('max_amount', row.get('MAX_AMOUNT', None)),
+                'salary_interval': row.get('interval', row.get('INTERVAL', None)),
+                'salary_currency': row.get('currency', row.get('CURRENCY', 'USD')),
+                'salary_source': row.get('salary_source', row.get('SALARY_SOURCE', '')),
+
+                # New fields from jobspy 1.1.82
+                'is_remote': row.get('is_remote', row.get('IS_REMOTE', None)),
+                'company_url': row.get('company_url', row.get('COMPANY_URL', '')),
+                'company_industry': row.get('company_industry', row.get('COMPANY_INDUSTRY', '')),
+                'job_level': row.get('job_level', row.get('JOB_LEVEL', '')),
+                'job_function': row.get('job_function', row.get('JOB_FUNCTION', '')),
+                'country': row.get('country', row.get('COUNTRY', '')),
+                'emails': emails,
+            }
+
+            # Clean NaN/None values for string fields
+            for key in ['company_url', 'company_industry', 'job_level', 'job_function', 'country', 'salary_source']:
+                if pd.isna(job_dict.get(key)):
+                    job_dict[key] = ''
+
+            for key in ['is_remote']:
+                if pd.isna(job_dict.get(key)):
+                    job_dict[key] = None
+
+            raw_jobs.append(job_dict)
+
+        return raw_jobs
 
     def setup_logging(self, log_level: int):
         """Setup advanced logging without affecting global config"""
@@ -407,7 +616,25 @@ class AdvancedJobScraper:
         return cleaned_jobs
 
     def extract_salary_info(self, job: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract salary information from job description and title"""
+        """Extract salary information, preferring native jobspy data over regex."""
+        # Prefer native salary data from jobspy (structured, reliable)
+        native_min = job.get('salary_min')
+        native_max = job.get('salary_max')
+        if native_min is not None or native_max is not None:
+            try:
+                s_min = float(native_min) if native_min is not None and not pd.isna(native_min) else None
+                s_max = float(native_max) if native_max is not None and not pd.isna(native_max) else None
+                if s_min is not None or s_max is not None:
+                    return {
+                        'salary_min': int(s_min) if s_min else None,
+                        'salary_max': int(s_max) if s_max else None,
+                        'salary_currency': job.get('salary_currency', 'USD') or 'USD',
+                        'salary_period': job.get('salary_interval', 'yearly') or 'yearly',
+                    }
+            except (ValueError, TypeError):
+                pass  # Fall through to regex extraction
+
+        # Fallback: regex extraction from description/title
         salary_info = {
             'salary_min': None,
             'salary_max': None,
@@ -559,14 +786,24 @@ class AdvancedJobScraper:
                 # Default availability flag
                 job['is_closed'] = False
 
-                # First, try to scrape full job description from URL if enabled
-                if enable_url_scraping and job.get('url') and job['url'] != 'N/A':
+                # Smart URL scraping: skip if description is already substantial
+                # jobspy 1.1.82 provides full descriptions natively for most platforms
+                description_is_sufficient = len(job.get('description', '')) >= min_description_length
+                needs_url_scraping = (
+                    enable_url_scraping
+                    and job.get('url') and job['url'] != 'N/A'
+                    and not description_is_sufficient
+                )
+
+                if needs_url_scraping:
                     enhanced_description = self.scrape_full_job_description(job['url'])
                     if enhanced_description and len(enhanced_description) > len(job.get('description', '')):
                         job['description'] = enhanced_description
                         job['description_source'] = 'scraped'
                     else:
                         job['description_source'] = 'original'
+                elif description_is_sufficient:
+                    job['description_source'] = 'native'  # Full description from jobspy
                 else:
                     job['description_source'] = 'original'
                 
@@ -577,8 +814,8 @@ class AdvancedJobScraper:
                     if job['is_closed']:
                         self.logger.info(f"  Marked job as CLOSED based on page content: {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}")
 
-                # Polite delay between requests
-                if enable_url_scraping and job.get('url') and job['url'] != 'N/A':
+                # Polite delay between requests (only if we made URL requests)
+                if needs_url_scraping:
                     time.sleep(base_delay)
 
                 # If description is still insufficient and AI descriptions are enabled, try AI enhancement
@@ -1062,7 +1299,7 @@ class AdvancedJobScraper:
         # Perform scraping using jobspy directly
         scrape_start_time = time.time()
 
-        # Set default parameters for jobspy using config
+        # Set default parameters for jobspy using config (updated for jobspy 1.1.82+)
         params = {
             'search_term': search_term,
             'location': location,
@@ -1070,7 +1307,21 @@ class AdvancedJobScraper:
             'hours_old': scrape_params.get('hours_old', self.config.default_hours_old),
             'site_name': scrape_params.get('site_name', self.config.default_sites),
             'country_indeed': scrape_params.get('country_indeed', self.config.default_country),
+            # New jobspy 1.1.82 params
+            'linkedin_fetch_description': scrape_params.get('linkedin_fetch_description', self.config.linkedin_fetch_description),
+            'description_format': scrape_params.get('description_format', self.config.description_format),
+            'enforce_annual_salary': scrape_params.get('enforce_annual_salary', self.config.enforce_annual_salary),
+            'verbose': scrape_params.get('verbose', self.config.verbose_level),
+            'distance': scrape_params.get('distance', self.config.default_distance),
         }
+        
+        # Add optional filters if configured
+        job_type = scrape_params.get('job_type', self.config.default_job_type)
+        if job_type:
+            params['job_type'] = job_type
+        is_remote = scrape_params.get('is_remote', self.config.default_is_remote)
+        if is_remote is not None:
+            params['is_remote'] = is_remote
         
         # Add proxies if configured
         if self.config.proxies:
@@ -1084,14 +1335,13 @@ class AdvancedJobScraper:
                 raise ImportError("jobspy package is required for job scraping. Please install it with: pip install python-jobspy")
             
             # Scrape jobs using jobspy
-            # In safe mode, we can try to slow down via proxies or just be aware it might fail
             try:
                 jobs_df = scrape_jobs(**params)
             except Exception as e:
                 # Catch 429s specifically if they bubble up from jobspy
                 if "429" in str(e):
                     self.logger.warning("Captured 429 error from jobspy. Engaging emergency cooldown...")
-                    time.sleep(30) # Emergency cooldown
+                    time.sleep(30)
                     return []
                 raise e
 
@@ -1103,30 +1353,8 @@ class AdvancedJobScraper:
                     return recent
                 return []
 
-            # Convert DataFrame to list of dictionaries with CORRECT column names
-            # Note: jobspy returns UPPERCASE column names (SITE, TITLE, COMPANY, etc.)
-            raw_jobs = []
-            for _, row in jobs_df.iterrows():
-                # Build location string from city and state if available
-                city = row.get('CITY', row.get('city', ''))
-                state = row.get('STATE', row.get('state', ''))
-                location_parts = [str(p).strip() for p in [city, state] if pd.notna(p) and str(p).strip()]
-                location = ', '.join(location_parts) if location_parts else 'N/A'
-                
-                job_dict = {
-                    'title': row.get('TITLE', row.get('title', 'N/A')),
-                    'company': row.get('COMPANY', row.get('company', 'N/A')),
-                    'location': location,
-                    'url': row.get('JOB_URL', row.get('job_url', 'N/A')),
-                    'description': row.get('DESCRIPTION', row.get('description', '')),
-                    'source': row.get('SITE', row.get('site', 'unknown')),
-                    'date_posted': row.get('DATE_POSTED', row.get('date_posted', 'N/A')),
-                    'job_type': row.get('JOB_TYPE', row.get('job_type', 'N/A')),
-                    'salary_min': row.get('MIN_AMOUNT', row.get('min_amount', None)),
-                    'salary_max': row.get('MAX_AMOUNT', row.get('max_amount', None)),
-                    'salary_interval': row.get('INTERVAL', row.get('interval', None)),
-                }
-                raw_jobs.append(job_dict)
+            # Use shared normalization to capture all jobspy 1.1.82 fields
+            raw_jobs = self._normalize_jobspy_results(jobs_df)
 
             # Track metrics
             self.metrics.total_jobs_scraped = len(raw_jobs)

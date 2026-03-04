@@ -4,7 +4,7 @@ google-genai
 python-dotenv
 cachetools
 tqdm
-python-jobspy
+python-jobspy==1.1.82
 pandas
 numpy
 beautifulsoup4
@@ -18,8 +18,12 @@ markdown
 pypdf
 rich
 appwrite
-Flask
-flask-cors
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-multipart
+slowapi
+python-json-logger
 gunicorn
 tenacity
 playwright

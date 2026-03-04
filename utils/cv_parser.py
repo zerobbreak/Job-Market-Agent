@@ -11,6 +11,13 @@ import os
 import google.genai as genai
 from pydantic import BaseModel, Field
 
+# Try to import python-docx for DOCX support
+try:
+    import docx
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
+
 # --- Pydantic Models for Structured Output ---
 
 class ContactInfo(BaseModel):
@@ -164,29 +171,56 @@ class CVParser:
         return cleaned_skills
         
     def extract_text(self) -> str:
-        """Extract text from PDF preserving structure, or return provided raw text"""
+        """Extract text from file preserving structure, or return provided raw text"""
         if self.raw_text and not self.file_path:
             # Sanitize provided raw text too
             self.raw_text = self._sanitize_pdf_text(self.raw_text)
             self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
             return self.raw_text
 
-        if self.file_path and self.file_path.lower().endswith('.pdf'):
+        if not self.file_path:
+            return ""
+
+        ext = os.path.splitext(self.file_path)[1].lower()
+        if ext == '.pdf':
             text_parts = []
             try:
                 with pdfplumber.open(self.file_path) as pdf:
                     for page in pdf.pages:
-                        # Extract text with layout preservation
                         page_text = page.extract_text()
                         if page_text:
                             text_parts.append(page_text)
                 self.raw_text = "\n".join(text_parts)
             except Exception as e:
                 print(f"pdfplumber extraction failed: {e}")
-                # Fallback handled by caller or kept empty if raw_text was provided
+        elif ext == '.docx':
+            self.raw_text = self._extract_docx_text()
         
+        self.raw_text = self._sanitize_pdf_text(self.raw_text)
         self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
         return self.raw_text
+
+    def _extract_docx_text(self) -> str:
+        """Extract text from DOCX using python-docx with XML fallback"""
+        if not DOCX_AVAILABLE:
+            # Fallback to direct XML extraction if zipfile is available
+            try:
+                import zipfile
+                import xml.etree.ElementTree as ET
+                with zipfile.ZipFile(self.file_path) as z:
+                    xml_content = z.read("word/document.xml")
+                    tree = ET.fromstring(xml_content)
+                    ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                    texts = tree.findall('.//w:t', ns)
+                    return "\n".join([t.text for t in texts if t.text])
+            except:
+                return ""
+
+        try:
+            doc = docx.Document(self.file_path)
+            return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        except Exception:
+            return ""
     
     def parse_with_ai(self) -> Optional[CVData]:
         """Parse CV using Google Gemini AI (Multimodal & Structured)"""

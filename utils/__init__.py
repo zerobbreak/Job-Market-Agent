@@ -9,11 +9,8 @@ from .scraping import (
     ScraperConfig,
     extract_skills_from_description,
     semantic_skill_match,
-    discover_new_jobs,
     extract_job_keywords,
-    keyword_gap_analysis,
-    check_api_status,
-    API_CONFIG
+    keyword_gap_analysis
 )
 from .cv_tailoring import CVTailoringEngine
 
@@ -25,11 +22,8 @@ __all__ = [
     'ScraperConfig',
     'extract_skills_from_description',
     'semantic_skill_match',
-    'discover_new_jobs',
     'extract_job_keywords',
     'keyword_gap_analysis',
-    'check_api_status',
-    'API_CONFIG',
     
     # CV Tailoring
     'CVTailoringEngine'
