@@ -131,6 +131,9 @@ async def analyze_cv(
             ai_analysis=ai_analysis,
         )
     except Exception as e:
+        import traceback
+        with open("traceback_analyze_cv.txt", "w") as tf:
+            tf.write(traceback.format_exc())
         logger.error("Error analyzing CV: %s", e)
         raise ExternalServiceError("CV Analysis", str(e))
 
