@@ -192,6 +192,7 @@ def ensure_database_schema():
         _create_attr(Config.COLLECTION_ID_PROFILES, 'phone', 50)
         _create_attr(Config.COLLECTION_ID_PROFILES, 'location', 255)
         _create_attr(Config.COLLECTION_ID_PROFILES, 'user_id', 50, True)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'ai_analysis', 2500, False)
         # Do not auto-create large optional columns here; some deployed tables are at column limits.
         # Profile writes are sanitized at repository layer for schema compatibility.
         _create_index(Config.COLLECTION_ID_PROFILES, 'user_id_index', ['user_id'])

@@ -138,6 +138,7 @@ async def analyze_cv(
             "career_goals": str(profile.get("career_goals", "") or "").strip(),
             "cv_filename": filename,
             "cv_hash": file_hash,
+            "ai_analysis": json.dumps(ai_analysis) if ai_analysis else None,
         }
 
         save_status = "saved"
