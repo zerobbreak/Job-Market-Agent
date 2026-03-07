@@ -79,7 +79,7 @@ class ProfileService:
             # Need to rehydrate pipeline/parse profile logic here or call a helper
             pass 
 
-        return {"success": True, "profile": structured}
+        return {"success": True, **structured}
 
     def _empty_profile(self) -> Dict[str, Any]:
         return {
@@ -96,7 +96,46 @@ class ProfileService:
             "notification_threshold": 70,
         }
 
-    async def update_profile(self, user_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def list_profiles(self, user_id: str) -> list:
+        """List all CV profiles for the given user."""
+        try:
+            from appwrite.query import Query
+            results = self.profile_repo.list([Query.equal("user_id", user_id)])
+            if not results:
+                results = self.profile_repo.list([Query.equal("userId", user_id)])
+            return results if results else []
+        except Exception as e:
+            logger.error("Error listing profiles for user %s: %s", user_id, e)
+            return []
+
+    async def activate_profile(self, user_id: str, profile_id: str) -> bool:
+        """Set a profile as active, deactivating all others."""
+        try:
+            # Deactivate all profiles for this user
+            profiles = await self.list_profiles(user_id)
+            for p in profiles:
+                if p.get("$id") != profile_id:
+                    self.profile_repo.update(p["$id"], {"isActive": False})
+            # Activate the target profile
+            result = self.profile_repo.update(profile_id, {"isActive": True})
+            return result is not None
+        except Exception as e:
+            logger.error("Error activating profile %s: %s", profile_id, e)
+            return False
+
+    async def delete_profile(self, user_id: str, profile_id: str) -> bool:
+        """Delete a profile, checking it belongs to the user first."""
+        try:
+            profile = self.profile_repo.get(profile_id)
+            if not profile or profile.get("user_id") != user_id:
+                return False
+            return self.profile_repo.delete(profile_id)
+        except Exception as e:
+            logger.error("Error deleting profile %s: %s", profile_id, e)
+            return False
+
+    async def update_profile(self, user_id: str, data: dict) -> dict:
+
         """Update user profile with validation."""
         profile = self.profile_repo.get_by_user_id(user_id)
         if not profile:
@@ -174,3 +213,5 @@ class ProfileService:
         prefix = re.sub(r"\s+", " ", prefix).strip()
         words = [w for w in prefix.split() if len(w) > 1 and w.isalpha()]
         return " ".join(w.title() for w in words) if words else "UNKNOWN"
+
+

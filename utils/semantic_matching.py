@@ -30,13 +30,13 @@ class SemanticJobMatcher:
     - Vector similarity search for accurate matching
     """
     
-    def __init__(self, use_embeddings: bool = True, model: str = "text-embedding-004"):
+    def __init__(self, use_embeddings: bool = True, model: str = "gemini-embedding-001"):
         """
         Initialize the semantic matcher.
         
         Args:
             use_embeddings: Whether to use Gemini embeddings (requires API key)
-            model: Gemini embedding model to use (e.g. "text-embedding-004")
+            model: Gemini embedding model to use (e.g. "gemini-embedding-001")
         """
         # Decide if we can use embeddings based on Gemini client availability
         self.use_embeddings = use_embeddings and get_gemini_client() is not None

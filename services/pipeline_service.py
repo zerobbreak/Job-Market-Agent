@@ -35,6 +35,9 @@ store_lock = threading.Lock()
 # Initialize Matcher
 matcher = SemanticMatcher()
 
+# Flag to prevent multiple schema checks in the same process
+_schema_ensured = False
+
 def parse_profile(profile_output):
     """Clean and normalize profile data"""
     if isinstance(profile_output, dict):
@@ -88,53 +91,120 @@ def parse_profile(profile_output):
 
 def ensure_database_schema():
     """Ensure Appwrite schema exists."""
+    global _schema_ensured
+    if _schema_ensured:
+        return
+
     try:
         api_key = Config.APPWRITE_API_KEY
         if not api_key:
             logger.warning("APPWRITE_API_KEY not found. Schema checks skipped.")
             return
 
+        if os.getenv("SKIP_SCHEMA_CHECK") == "true":
+            logger.info("SKIP_SCHEMA_CHECK is set. Skipping schema ensuring.")
+            _schema_ensured = True
+            return
+
         admin_client = Client()
         admin_client.set_endpoint(Config.APPWRITE_ENDPOINT)
         admin_client.set_project(Config.APPWRITE_PROJECT_ID)
         admin_client.set_key(api_key)
-        # Schema operations still use the old Databases API
-        # TablesDB is for data operations (list_rows, create_row, etc.)
-        admin_db = Databases(admin_client)
+        
+        # Modern TablesDB API for schema and data
+        tablesDB = TablesDB(admin_client)
 
-        def _create_attr(db, db_id, coll_id, attr_id, size, required=False):
+        # Cache for existing columns and indexes to avoid repetitive API calls
+        collection_cache = {}
+
+        def _get_collection_info(coll_id):
+            if coll_id in collection_cache:
+                return collection_cache[coll_id]
+            
             try:
-                # Schema operations use the old Databases API
-                # Use keyword arguments for optional parameters to ensure correct method signature
-                db.create_string_attribute(
-                    db_id, 
+                # Use list_columns (modern API)
+                cols_result = tablesDB.list_columns(Config.DATABASE_ID, coll_id)
+                columns = {col['key'] for col in cols_result.get('columns', [])}
+                
+                idxs_result = tablesDB.list_indexes(Config.DATABASE_ID, coll_id)
+                indexes = {idx['key'] for idx in idxs_result.get('indexes', [])}
+                
+                info = {'columns': columns, 'indexes': indexes}
+                collection_cache[coll_id] = info
+                return info
+            except Exception as e:
+                logger.error(f"Error fetching collection info for {coll_id}: {e}")
+                return {'columns': set(), 'indexes': set()}
+
+        def _create_attr(coll_id, attr_id, size, required=False):
+            info = _get_collection_info(coll_id)
+            if attr_id in info['columns']:
+                return
+            
+            try:
+                logger.info(f"Creating column {attr_id} in {coll_id}...")
+                tablesDB.create_string_column(
+                    Config.DATABASE_ID, 
                     coll_id, 
                     attr_id, 
                     size=size, 
                     required=required
                 )
+                # Update cache
+                info['columns'].add(attr_id)
             except Exception as e:
-                if '409' not in str(e) and 'already exists' not in str(e).lower():
-                    logger.error(f"Failed to create attribute '{attr_id}': {e}")
+                # Handle "already exists" error gracefully if it somehow bypassed the check
+                if "already exists" in str(e).lower():
+                    info['columns'].add(attr_id)
+                    return
+                logger.error(f"Failed to create column '{attr_id}': {e}")
 
-        try:
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'education', 2000)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'experience_level', 255)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'career_goals', 2000)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'strengths', 2500)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'cv_hash', 64)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'name', 255)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'email', 255)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'phone', 50)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'location', 255)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'work_experience', 10000, False)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_PROFILES, 'projects', 10000, False)
-
-            # Jobs Collection Schema
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'status', 50, False)
-            # Integer attribute
+        def _create_index(coll_id, index_key, attr_ids, index_type='key'):
+            info = _get_collection_info(coll_id)
+            if index_key in info['indexes']:
+                return
+            
             try:
-                admin_db.create_integer_attribute(
+                logger.info(f"Creating index {index_key} on {coll_id}...")
+                tablesDB.create_index(
+                    Config.DATABASE_ID,
+                    coll_id,
+                    index_key,
+                    index_type,
+                    attr_ids
+                )
+                # Update cache
+                info['indexes'].add(index_key)
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    info['indexes'].add(index_key)
+                    return
+                logger.error(f"Failed to create index '{index_key}' on {coll_id}: {e}")
+
+        # Profiles Collection Schema
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'education', 2000)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'experience_level', 255)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'career_goals', 2000)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'strengths', 2500)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'cv_hash', 64)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'name', 255)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'email', 255)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'phone', 50)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'location', 255)
+        _create_attr(Config.COLLECTION_ID_PROFILES, 'user_id', 50, True)
+        # Do not auto-create large optional columns here; some deployed tables are at column limits.
+        # Profile writes are sanitized at repository layer for schema compatibility.
+        _create_index(Config.COLLECTION_ID_PROFILES, 'user_id_index', ['user_id'])
+        _create_index(Config.COLLECTION_ID_PROFILES, 'userId_index', ['userId'])
+
+        # Jobs Collection Schema
+        _create_attr(Config.COLLECTION_ID_JOBS, 'status', 50, False)
+        
+        # Integer attribute
+        job_info = _get_collection_info(Config.COLLECTION_ID_JOBS)
+        if 'progress' not in job_info['columns']:
+            try:
+                tablesDB.create_integer_column(
                     Config.DATABASE_ID, 
                     Config.COLLECTION_ID_JOBS, 
                     'progress', 
@@ -143,19 +213,61 @@ def ensure_database_schema():
                     max=100, 
                     default=0
                 )
-            except Exception: pass
+                job_info['columns'].add('progress')
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    job_info['columns'].add('progress')
+                else:
+                    logger.error(f"Failed to create integer column 'progress': {e}")
 
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'phase', 255, False)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'job_data', 10000, False) # JSON string
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'result', 10000, False) # JSON string
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'template_type', 50, False)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'user_id', 50, True)
-            _create_attr(admin_db, Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, 'error', 5000, False)
-            
-        except Exception as e:
-            logger.error(f"Schema update error: {e}")
+        _create_attr(Config.COLLECTION_ID_JOBS, 'phase', 255, False)
+        _create_attr(Config.COLLECTION_ID_JOBS, 'job_data', 10000, False)
+        _create_attr(Config.COLLECTION_ID_JOBS, 'result', 10000, False)
+        _create_attr(Config.COLLECTION_ID_JOBS, 'template_type', 50, False)
+        _create_attr(Config.COLLECTION_ID_JOBS, 'user_id', 50, False)
+        _create_attr(Config.COLLECTION_ID_JOBS, 'error', 5000, False)
+        _create_index(Config.COLLECTION_ID_JOBS, 'user_id_index', ['user_id'])
+
+        # Matches Collection Schema
+        _create_attr(Config.COLLECTION_ID_MATCHES, 'user_id', 50, True)
+        _create_attr(Config.COLLECTION_ID_MATCHES, 'location', 255, False)
+        _create_attr(Config.COLLECTION_ID_MATCHES, 'matches', 10000, False)
+        _create_attr(Config.COLLECTION_ID_MATCHES, 'last_seen', 50, False)
+        _create_index(Config.COLLECTION_ID_MATCHES, 'user_id_index', ['user_id'])
+        _create_index(Config.COLLECTION_ID_MATCHES, 'userId_index', ['userId'])
+
+        # Applications Collection Schema
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'user_id', 50, True)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'company', 255, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'role', 255, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'job_url', 500, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'location', 255, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'status', 50, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'date_created', 50, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'date_updated', 50, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'cv_storage_id', 50, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'cover_letter_storage_id', 50, False)
+        _create_attr(Config.COLLECTION_ID_APPLICATIONS, 'job_description', 5000, False)
+        _create_index(Config.COLLECTION_ID_APPLICATIONS, 'user_id_index', ['user_id'])
+        _create_index(Config.COLLECTION_ID_APPLICATIONS, 'userId_index', ['userId'])
         
-        logger.info("Database schema ensured (Basic Check)")
+        # Integer columns for Applications
+        app_info = _get_collection_info(Config.COLLECTION_ID_APPLICATIONS)
+        for int_col in ['match_score', 'ats_score', 'views']:
+            if int_col not in app_info['columns']:
+                try:
+                    tablesDB.create_integer_column(Config.DATABASE_ID, Config.COLLECTION_ID_APPLICATIONS, int_col, required=False)
+                    app_info['columns'].add(int_col)
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        app_info['columns'].add(int_col)
+                    else:
+                        logger.error(f"Failed to create integer column '{int_col}': {e}")
+        
+        _create_index(Config.COLLECTION_ID_APPLICATIONS, 'match_score_index', ['match_score'])
+        
+        logger.info("Database schema ensured (Modern Check with Indexes)")
+        _schema_ensured = True
     except Exception as e:
         logger.error(f"ensure_database_schema error: {e}")
 
@@ -168,7 +280,7 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> 'JobApplication
         existing_profiles = tablesDB.list_rows(
             Config.DATABASE_ID,
             Config.COLLECTION_ID_PROFILES,
-            queries=[Query.equal('userId', session_id)]
+            queries=[Query.equal('user_id', session_id)]
         )
 
         if existing_profiles.get('total', 0) == 0:
@@ -373,87 +485,31 @@ class JobApplicationPipeline:
         logger.info(f"Starting PDF text extraction from: {path}")
         extracted_texts = []
         
-        # Method 1: pdfplumber (best for layout preservation)
+        # Method 1: pymupdf4llm (best method from medium article, great markdown translation)
         try:
-            import pdfplumber  # type: ignore[import-untyped]
-            text_parts = []
-            with pdfplumber.open(path) as pdf:
-                page_count = len(pdf.pages)
-                logger.info(f"PDF has {page_count} page(s)")
-                for i, page in enumerate(pdf.pages):
-                    # Try multiple extraction strategies for better structure preservation
-                    page_text = None
-                    
-                    # Strategy 1: Layout-based extraction (preserves structure)
-                    try:
-                        page_text = page.extract_text(layout=True, x_tolerance=3, y_tolerance=3)
-                    except:
-                        pass
-                    
-                    # Strategy 2: Simple extraction if layout fails
-                    if not page_text or len(page_text.strip()) < 50:
-                        try:
-                            page_text = page.extract_text()
-                        except:
-                            pass
-                    
-                    # Strategy 3: Extract by words and reconstruct (best for structure)
-                    if not page_text or len(page_text.strip()) < 50:
-                        try:
-                            words = page.extract_words()
-                            if words:
-                                # Group words by vertical position to preserve paragraphs
-                                lines = {}
-                                for word in words:
-                                    y = round(word['top'])
-                                    if y not in lines:
-                                        lines[y] = []
-                                    lines[y].append((word['x0'], word['text']))
-                                
-                                # Sort by y position, then by x position within each line
-                                sorted_lines = sorted(lines.items(), key=lambda x: -x[0])  # Top to bottom
-                                page_lines = []
-                                for y, words_in_line in sorted_lines:
-                                    words_in_line.sort(key=lambda x: x[0])  # Left to right
-                                    line_text = ' '.join([w[1] for w in words_in_line])
-                                    if line_text.strip():
-                                        page_lines.append(line_text)
-                                
-                                page_text = '\n'.join(page_lines)
-                        except:
-                            pass
-                    
-                    if page_text:
-                        text_parts.append(page_text)
-                    
-                    # Also try extracting tables if present
-                    tables = page.extract_tables()
-                    if tables:
-                        logger.debug(f"Found {len(tables)} table(s) on page {i+1}")
-                        for table in tables:
-                            if table:
-                                table_text = "\n".join([" | ".join([str(cell or "") for cell in row]) for row in table])
-                                if table_text.strip():
-                                    text_parts.append("\n[TABLE]\n" + table_text + "\n[/TABLE]\n")
-            
-            text = "\n".join(text_parts)
+            import pymupdf4llm
+            text = pymupdf4llm.to_markdown(path)
             
             # Detect and mark common CV sections for better parsing
             text = self._add_section_markers(text)
             
             if text and len(text.strip()) >= 200:
                 preview = text[:500].replace('\n', ' ').strip()
-                logger.info(f"Successfully extracted {len(text)} characters using pdfplumber (preview: {preview}...)")
+                logger.info(f"Successfully extracted {len(text)} characters using pymupdf4llm (preview: {preview}...)")
                 logger.debug(f"Full extracted text preview (first 1000 chars):\n{text[:1000]}")
                 return text
             elif text:
-                logger.warning(f"pdfplumber extracted only {len(text)} characters (below threshold)")
-                extracted_texts.append(("pdfplumber", text))
+                logger.warning(f"pymupdf4llm extracted only {len(text)} characters (below threshold)")
+                extracted_texts.append(("pymupdf4llm", text))
         except ImportError:
-            logger.warning("pdfplumber not available, trying other methods")
+            logger.warning("pymupdf4llm not available, trying other methods")
         except Exception as e:
-            logger.warning(f"pdfplumber extraction failed: {e}")
-            logger.debug(traceback.format_exc())
+            logger.warning(f"pymupdf4llm extraction failed: {e}")
+            try:
+                import traceback
+                logger.debug(traceback.format_exc())
+            except:
+                pass
         
         # Method 2: pypdf (good for simple PDFs)
         try:
@@ -928,18 +984,10 @@ class JobApplicationPipeline:
                 return self.profile
 
     def search_jobs(self, query, location, max_results, use_cache: bool = True):
-        """Search for jobs using the scraper.
-
-        Args:
-            query: Search query string.
-            location: Location string.
-            max_results: Maximum number of jobs to return.
-            use_cache: Whether to allow the scraper to use its on-disk cache.
-                       For force-refresh flows (e.g. Live Feed), this should be False
-                       so that we always hit the live job boards.
-        """
+        """Search for jobs using the scraper."""
         try:
-            return self.scraper.scrape_jobs(
+            logger.info(f"Starting job search: query='{query}', location='{location}', max_results={max_results}, use_cache={use_cache}")
+            jobs = self.scraper.scrape_jobs(
                 site_name=['linkedin', 'indeed'],
                 search_term=query,
                 location=location,
@@ -947,8 +995,11 @@ class JobApplicationPipeline:
                 country_indeed=location,
                 use_cache=use_cache,
             )
+            logger.info(f"Job search completed: {len(jobs) if jobs else 0} jobs found for query '{query}'")
+            return jobs
         except Exception as e:
             logger.error(f"Error searching jobs: {e}")
+            logger.debug(traceback.format_exc())
             return []
 
     def generate_application_package(self, job, template_type=None):
@@ -1118,3 +1169,4 @@ class JobApplicationPipeline:
         print("\n" + "=" * 80)
         print("✅ PIPELINE COMPLETED")
         print("=" * 80)
+

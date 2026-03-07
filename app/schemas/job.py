@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 class JobSearchRequest(BaseModel):
     """Request body for job search."""
 
-    query: str = Field(..., min_length=2, max_length=200, description="Job search query")
+    query: str = Field(default="", max_length=200, description="Job search query")
     location: str = Field(default="South Africa", max_length=100)
     max_results: int = Field(default=20, ge=1, le=100)
     use_cache: bool = True

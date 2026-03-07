@@ -33,7 +33,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Initialize Gemini client lazily
-# The client gets the API key from the environment variable `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+# The client gets the API key from the environment variable `GEMINI_API_KEY`
 _client = None
 _client_initialized = False
 
@@ -47,9 +47,9 @@ def get_gemini_client():
     _client_initialized = True
     
     try:
-        # Check both GEMINI_API_KEY and GOOGLE_API_KEY (code supports both)
-        gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
-        if gemini_api_key and gemini_api_key.strip() and gemini_api_key != 'your_google_api_key_here':
+        # Use GEMINI_API_KEY only
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
+        if gemini_api_key and gemini_api_key.strip() and gemini_api_key != 'your_gemini_api_key_here':
             _client = genai.Client(api_key=gemini_api_key)
             logging.info("Gemini client initialized successfully.")
         else:
@@ -99,7 +99,7 @@ class ScraperConfig:
     # AI settings
     enable_ai_descriptions: bool = True
     min_description_length: int = 100
-    ai_model: str = "gemini-2.0-flash"
+    ai_model: str = "gemini-2.5-flash"
     ai_temperature: float = 0.7
     ai_max_tokens: int = 2000
     
@@ -1431,10 +1431,10 @@ def check_api_status():
     try:
         gemini_client = get_gemini_client()
         if gemini_client is None:
-            return False, "Gemini client not initialized. Please set GEMINI_API_KEY or GOOGLE_API_KEY environment variable."
+            return False, "Gemini client not initialized. Please set GEMINI_API_KEY environment variable."
         # Simple test request to check API availability
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents="Hello",
             config={'max_output_tokens': 10}  # Minimal response
         )
@@ -2066,3 +2066,5 @@ if __name__ == "__main__":
         print(f"\n✓ Exported jobs to files")
     else:
         print("No jobs found. Try adjusting your search parameters.")
+
+

@@ -38,6 +38,7 @@ class MatchRepository(AppwriteRepository):
         match_doc_id = f"match_{user_id}"
         data = {
             "user_id": user_id,
+            "userId": user_id,
             "location": location,
             "matches": self._serialize(matches),
             "last_seen": datetime.now().isoformat(),

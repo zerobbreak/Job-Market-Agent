@@ -16,23 +16,28 @@ pip install -r requirements.txt
 
 # Set up your API key
 cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+# Edit .env and add your GEMINI_API_KEY
 ```
 
-### Basic Usage
+### Basic Usage (FastAPI Service)
 
-Run the automated pipeline:
+Run the FastAPI backend service (canonical runtime):
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Production-style command:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Legacy CLI pipeline entrypoint is still present for compatibility:
 
 ```bash
 python main.py
 ```
-
-This will:
-1. Load your CV from `cvs/CV.pdf`
-2. Search for "Python Developer" jobs in "South Africa"
-3. Generate 3 optimized applications (CV + cover letter)
-4. Create interview preparation materials
-5. Save everything to the `applications/` folder
 
 ## 📋 Command Line Options
 
@@ -107,7 +112,7 @@ Job-Market-Agent/
 
 ```bash
 # Required
-GOOGLE_API_KEY=your_google_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # Optional
 CV_FILE_PATH=cvs/CV.pdf
@@ -206,10 +211,10 @@ The system uses a **consolidated agent architecture**:
 ### "CV not found"
 Make sure your CV is at `cvs/CV.pdf` or specify the path with `--cv`
 
-### "GOOGLE_API_KEY not found"
+### "GEMINI_API_KEY not found"
 Create a `.env` file and add your API key:
 ```bash
-GOOGLE_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
 ```
 
 ### "No jobs found"
@@ -231,3 +236,4 @@ See [LICENSE](LICENSE) file for details.
 ---
 
 **Made with ❤️ for job seekers in South Africa**
+

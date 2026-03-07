@@ -57,15 +57,18 @@ class JobService:
         pipeline = JobApplicationPipeline()
         location_str = (request.location or profile_data.get("location") or "South Africa").strip()
 
-        # Generate smart query logic (ported from job_routes.py)
-        skills = profile_data.get("skills", [])
-        top_skill = (skills + ["Developer"])[0]
-        exp_level = profile_data.get("experience_level", "")
-        role_title = profile_data.get("career_goals", f"{top_skill} Developer")
+        # 3. Generate query logic
+        search_query = request.query.strip() if request.query else ""
         
-        search_query = f"{exp_level} {role_title}".strip()
-        if len(search_query) > 60:
-             search_query = f"{exp_level} {top_skill} Developer".strip()
+        if not search_query:
+            skills = profile_data.get("skills", [])
+            top_skill = (skills + ["Developer"])[0]
+            exp_level = profile_data.get("experience_level", "")
+            role_title = profile_data.get("career_goals", f"{top_skill} Developer")
+            
+            search_query = f"{exp_level} {role_title}".strip()
+            if len(search_query) > 60:
+                 search_query = f"{exp_level} {top_skill} Developer".strip()
 
         logger.info("Starting fresh matching for user %s with query: %s", user_id, search_query)
 

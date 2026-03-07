@@ -2,7 +2,6 @@ agno
 google-generativeai
 google-genai
 python-dotenv
-cachetools
 tqdm
 python-jobspy==1.1.82
 pandas
@@ -11,12 +10,11 @@ beautifulsoup4
 requests
 scikit-learn
 
-pdfplumber
+pymupdf4llm
 reportlab==4.0.9
 xhtml2pdf==0.2.14
 markdown
 pypdf
-rich
 appwrite
 fastapi
 uvicorn[standard]

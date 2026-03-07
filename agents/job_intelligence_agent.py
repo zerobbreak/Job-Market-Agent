@@ -236,3 +236,4 @@ Be strategic, data-driven, and South Africa-aware in all recommendations.""",
 # Restore GEMINI_API_KEY if it was set
 if gemini_key_backup:
     os.environ['GEMINI_API_KEY'] = gemini_key_backup
+

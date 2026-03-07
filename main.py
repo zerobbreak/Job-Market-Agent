@@ -25,11 +25,11 @@ from config import Config
 # Load environment variables
 load_dotenv()
 
-# Polyfill API keys
-if os.getenv('GOOGLE_API_KEY') and not os.getenv('GEMINI_API_KEY'):
-    os.environ['GEMINI_API_KEY'] = os.getenv('GOOGLE_API_KEY')
-if os.getenv('GEMINI_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
-    os.environ['GOOGLE_API_KEY'] = os.getenv('GEMINI_API_KEY')
+# Canonical API key configuration
+if os.getenv('GOOGLE_API_KEY'):
+    logging.getLogger(__name__).warning(
+        'GOOGLE_API_KEY is deprecated and ignored. Use GEMINI_API_KEY only.'
+    )
 
 # Configure logging
 logging.basicConfig(
@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--max-jobs', type=int, default=5, help='Maximum number of jobs to apply for')
     parser.add_argument('--template', type=str, choices=['modern', 'minimalist', 'academic'], default='modern', help='CV template to use')
     parser.add_argument('--ensure-schema', action='store_true', help='Ensure Appwrite database schema exists')
-    
+
     args = parser.parse_args()
 
     # 1. Ensure Schema if requested
@@ -64,11 +64,11 @@ def main():
         sys.exit(1)
     query = args.query or os.getenv('SEARCH_QUERY', 'Python Developer')
     location = args.location or os.getenv('LOCATION', 'South Africa')
-    
+
     # 3. Initialize Pipeline
     try:
         pipeline = JobApplicationPipeline(cv_path=cv_path)
-        
+
         # 4. Run Pipeline
         pipeline.run(
             query=query,
@@ -76,10 +76,10 @@ def main():
             max_applications=args.max_jobs,
             template=args.template
         )
-        
+
         # 5. Summary
         pipeline.print_summary()
-        
+
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
         import traceback

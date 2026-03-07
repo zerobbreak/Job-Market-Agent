@@ -257,3 +257,4 @@ Your output directly impacts candidate success. Be strategic, ethical, and resul
 # Restore GEMINI_API_KEY if it was set
 if gemini_key_backup:
     os.environ['GEMINI_API_KEY'] = gemini_key_backup
+

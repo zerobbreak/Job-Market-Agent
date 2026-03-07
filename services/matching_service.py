@@ -26,7 +26,7 @@ class SemanticMatcher:
     """
 
     def __init__(self):
-        self.api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+        self.api_key = os.getenv('GEMINI_API_KEY')
         self.client = None
         self._setup_client()
         # Rate Limiting: 10 requests per minute
@@ -66,9 +66,9 @@ class SemanticMatcher:
         self._wait_for_rate_limit()
         
         try:
-            # text-embedding-004 is optimized for retrieval/similarity
+            # gemini-embedding-001 is optimized for retrieval/similarity
             response = self.client.models.embed_content(
-                model="text-embedding-004",
+                model="gemini-embedding-001",
                 contents=text
             )
             return np.array(response.embeddings[0].values)

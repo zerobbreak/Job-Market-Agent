@@ -74,6 +74,7 @@ class CVAnalysisResponse(BaseModel):
     """Response from CV analysis endpoint."""
 
     success: bool = True
+    profile: Dict[str, Any] = {}
     cv_details: Dict[str, Any] = {}
     ai_analysis: Optional[Dict[str, Any]] = None
 

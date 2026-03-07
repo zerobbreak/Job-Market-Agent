@@ -138,7 +138,7 @@ _matcher_instance = None
 def get_matcher(use_embeddings: bool = True) -> AdvancedJobMatcher:
     """Get or create a global matcher instance.
 
-    Uses Gemini embeddings when GEMINI_API_KEY/GOOGLE_API_KEY is set,
+    Uses Gemini embeddings when GEMINI_API_KEY is set,
     otherwise falls back to TF-IDF.
     """
     global _matcher_instance
@@ -162,6 +162,6 @@ def match_student_to_jobs_ml(student_profile: Dict[str, Any], jobs: List[Dict[st
         return []
     
     # Use semantic matching when Gemini key is available
-    use_embeddings = bool(os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY'))
+    use_embeddings = bool(os.getenv('GEMINI_API_KEY'))
     matcher = get_matcher(use_embeddings=use_embeddings)
     return matcher.match_jobs(student_profile, jobs, min_score=0.0)

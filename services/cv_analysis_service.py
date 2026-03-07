@@ -16,20 +16,25 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
-class SkillGap(BaseModel):
+class BaseGeminiModel(BaseModel):
+    """Base model for Gemini compatibility"""
+    model_config = {"extra": "allow"}
+
+
+class SkillGap(BaseGeminiModel):
     """A single skill gap with impact and suggestion."""
 
-    title: str = Field(..., description="Short name of the skill gap (e.g. LLM Orchestration)")
-    impact: str = Field(..., description="One of: High, Medium, Low")
-    description: str = Field(..., description="Actionable suggestion to address the gap")
+    title: Optional[str] = Field(None, description="Short name of the skill gap (e.g. LLM Orchestration)")
+    impact: Optional[str] = Field(None, description="One of: High, Medium, Low")
+    description: Optional[str] = Field(None, description="Actionable suggestion to address the gap")
 
 
-class CVAnalysisResult(BaseModel):
+class CVAnalysisResult(BaseGeminiModel):
     """Structured AI analysis result for CV match readiness and skill gaps."""
 
-    match_readiness_score: int = Field(..., ge=0, le=100, description="0-100 percentage")
-    match_readiness_message: str = Field(
-        ...,
+    match_readiness_score: Optional[int] = Field(0, description="0-100 percentage")
+    match_readiness_message: Optional[str] = Field(
+        "",
         description="1-2 sentence assessment of competitiveness for target roles",
     )
     skill_gaps: List[SkillGap] = Field(
@@ -46,9 +51,9 @@ def generate_ai_analysis(
     Generate AI analysis (match readiness %, assessment, skill gaps) from profile
     and optional job matches. Returns None if Gemini is unavailable or fails.
     """
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        logger.warning("GEMINI_API_KEY / GOOGLE_API_KEY not set; skipping AI analysis")
+        logger.warning("GEMINI_API_KEY not set; skipping AI analysis")
         return None
 
     try:
@@ -122,7 +127,6 @@ Output valid JSON only."""
             contents=contents,
             config={
                 "response_mime_type": "application/json",
-                "response_schema": CVAnalysisResult,
             },
         )
     except Exception as e:
@@ -174,3 +178,5 @@ Output valid JSON only."""
     except Exception as e:
         logger.warning(f"Failed to parse CVAnalysisResult: {e}")
         return None
+
+

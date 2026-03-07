@@ -4,12 +4,15 @@ Extracts structured information using Google Gemini AI with a rule-based fallbac
 """
 
 import re
-import pdfplumber
+import logging
+import pymupdf4llm
 from typing import Dict, List, Optional, Union
 import json
 import os
 import google.genai as genai
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 # Try to import python-docx for DOCX support
 try:
@@ -20,7 +23,13 @@ except ImportError:
 
 # --- Pydantic Models for Structured Output ---
 
-class ContactInfo(BaseModel):
+from typing import Any
+
+class BaseGeminiModel(BaseModel):
+    """Base model for Gemini compatibility"""
+    model_config = {"extra": "allow"}
+
+class ContactInfo(BaseGeminiModel):
     """Contact information structure"""
     name: Optional[str] = Field(None, description="Full name of the candidate")
     phone: Optional[str] = Field(None, description="Phone number")
@@ -30,35 +39,35 @@ class ContactInfo(BaseModel):
     portfolio: Optional[str] = Field(None, description="Portfolio website URL")
     github: Optional[str] = Field(None, description="GitHub profile URL")
 
-class Education(BaseModel):
+class Education(BaseGeminiModel):
     """Education entry structure"""
-    degree: str = Field(..., description="Degree obtained (e.g. BSc Computer Science)")
-    institution: str = Field(..., description="University or Institution name")
+    degree: Optional[str] = Field(None, description="Degree obtained (e.g. BSc Computer Science)")
+    institution: Optional[str] = Field(None, description="University or Institution name")
     year: Optional[str] = Field(None, description="Year of graduation or duration (e.g. 2020-2023)")
-    details: List[str] = Field(default_factory=list, description="Additional details or achievements")
+    details: Any = Field(default_factory=list, description="Additional details or achievements")
 
-class WorkExperience(BaseModel):
+class WorkExperience(BaseGeminiModel):
     """Work experience entry structure"""
-    title: str = Field(..., description="Job title")
-    company: str = Field(..., description="Company name")
+    title: Optional[str] = Field(None, description="Job title")
+    company: Optional[str] = Field(None, description="Company name")
     duration: Optional[str] = Field(None, description="Employment duration (e.g. Jan 2020 - Present)")
-    responsibilities: List[str] = Field(default_factory=list, description="List of responsibilities and achievements")
+    responsibilities: Any = Field(default_factory=list, description="List of responsibilities and achievements")
 
-class Project(BaseModel):
+class Project(BaseGeminiModel):
     """Project entry structure"""
-    name: str = Field(..., description="Project name")
-    description: str = Field(..., description="Brief description of the project")
-    technologies: List[str] = Field(default_factory=list, description="Technologies used")
-    details: List[str] = Field(default_factory=list, description="Additional details")
+    name: Optional[str] = Field(None, description="Project name")
+    description: Optional[str] = Field(None, description="Brief description of the project")
+    technologies: Any = Field(default_factory=list, description="Technologies used")
+    details: Any = Field(default_factory=list, description="Additional details")
 
-class CVData(BaseModel):
+class CVData(BaseGeminiModel):
     """Complete CV data structure"""
-    contact_info: ContactInfo
+    contact_info: Optional[ContactInfo] = Field(default_factory=ContactInfo)
     professional_profile: Optional[str] = Field(None, description="Professional summary or objective")
-    technical_skills: Dict[str, List[str]] = Field(default_factory=dict, description="Skills grouped by category (e.g. Languages, Frameworks)")
-    education: List[Education] = Field(default_factory=list)
-    work_experience: List[WorkExperience] = Field(default_factory=list)
-    projects: List[Project] = Field(default_factory=list)
+    technical_skills: Any = Field(default_factory=dict, description="Skills grouped by category (e.g. Languages, Frameworks)")
+    education: Any = Field(default_factory=list)
+    work_experience: Any = Field(default_factory=list)
+    projects: Any = Field(default_factory=list)
     raw_text: str = Field("", description="Raw text content of the CV")
 
 class CVParser:
@@ -183,16 +192,10 @@ class CVParser:
 
         ext = os.path.splitext(self.file_path)[1].lower()
         if ext == '.pdf':
-            text_parts = []
             try:
-                with pdfplumber.open(self.file_path) as pdf:
-                    for page in pdf.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text_parts.append(page_text)
-                self.raw_text = "\n".join(text_parts)
+                self.raw_text = pymupdf4llm.to_markdown(self.file_path)
             except Exception as e:
-                print(f"pdfplumber extraction failed: {e}")
+                logger.warning("pymupdf4llm extraction failed: %s", e)
         elif ext == '.docx':
             self.raw_text = self._extract_docx_text()
         
@@ -224,7 +227,7 @@ class CVParser:
     
     def parse_with_ai(self) -> Optional[CVData]:
         """Parse CV using Google Gemini AI (Multimodal & Structured)"""
-        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+        api_key = os.getenv('GEMINI_API_KEY')
         if not api_key:
             return None
 
@@ -290,7 +293,7 @@ class CVParser:
                 contents.append(full_prompt)
             else:
                 # If text extraction failed, we can't parse
-                print("No text extracted from CV, cannot parse with AI")
+                logger.warning("[PIPELINE] AI parsing failed, switching to rule parser: no CV text extracted")
                 return None
 
             # 3. Call API with Structured Output
@@ -300,13 +303,12 @@ class CVParser:
                     model="gemini-2.5-flash",
                     contents=contents,
                     config={
-                        'response_mime_type': 'application/json',
-                        'response_schema': CVData
+                        'response_mime_type': 'application/json'
                     }
                 )
             except Exception as api_error:
                 # Log the error for debugging
-                print(f"Gemini API call failed: {api_error}")
+                logger.warning("Gemini API call failed: %s", api_error)
                 # If structured output fails, try without schema
                 try:
                     response = client.models.generate_content(
@@ -321,13 +323,11 @@ class CVParser:
                         cv_data.raw_text = self.raw_text or ""
                     return cv_data
                 except Exception as fallback_error:
-                    print(f"Fallback parsing also failed: {fallback_error}")
+                    logger.warning("Fallback parsing also failed: %s", fallback_error)
                     raise api_error  # Re-raise original error
             
             # 4. Parse Response
-            # The SDK should return a parsed object if response_schema is used, 
-            # or we parse the text manually if it returns raw JSON string.
-            # Newer SDKs might return a `parsed` attribute.
+            # Parse JSON response text manually and validate with Pydantic.
             
             if hasattr(response, 'parsed') and response.parsed:
                 cv_data = response.parsed
@@ -342,11 +342,11 @@ class CVParser:
                 
                 # If professional_profile is empty or generic, try rule-based extraction
                 if not cv_data.professional_profile or len(cv_data.professional_profile.strip()) < 20:
-                    print("AI parsing returned empty/generic professional_profile, trying rule-based extraction")
+                    logger.info("[PIPELINE] AI profile summary weak; applying rule-based profile summary extraction")
                     fallback_profile = self._extract_professional_profile_fallback(self.raw_text or "")
                     if fallback_profile:
                         cv_data.professional_profile = fallback_profile
-                        print(f"Rule-based extraction found profile: {fallback_profile[:100]}...")
+                        logger.info("[PIPELINE] Rule-based profile summary extraction succeeded")
                 
                 return cv_data
                 
@@ -367,16 +367,16 @@ class CVParser:
             
             # If professional_profile is empty or generic, try rule-based extraction
             if not cv_data.professional_profile or len(cv_data.professional_profile.strip()) < 20:
-                print("AI parsing returned empty/generic professional_profile, trying rule-based extraction")
+                logger.info("[PIPELINE] AI profile summary weak; applying rule-based profile summary extraction")
                 fallback_profile = self._extract_professional_profile_fallback(self.raw_text or "")
                 if fallback_profile:
                     cv_data.professional_profile = fallback_profile
-                    print(f"Rule-based extraction found profile: {fallback_profile[:100]}...")
+                    logger.info("[PIPELINE] Rule-based profile summary extraction succeeded")
                 
             return cv_data
             
         except Exception as e:
-            print(f"AI Parsing failed: {e}")
+            logger.warning("[PIPELINE] AI parsing failed, switching to rule parser: %s", e)
             return None
 
     def _clean_skills(self, skills_dict: Dict[str, List[str]]) -> Dict[str, List[str]]:
@@ -1055,20 +1055,26 @@ class CVParser:
         return cv_data
 
     def parse(self) -> CVData:
-        """Main parsing method - tries AI first, falls back to rules"""
-        # Always ensure text is extracted first (if we have no file path, or just to have raw_text available)
+        """Main parsing method - tries AI first, falls back to rules."""
+        if not self.raw_text and self.file_path:
+            self.extract_text()
+
         if not self.lines and self.raw_text:
-            self.lines = [line.strip() for line in self.raw_text.split('\n') if line.strip()]
-            
-        # Try AI Parsing first
+            self.lines = [line.strip() for line in self.raw_text.split("\n") if line.strip()]
+
+        logger.info("[PIPELINE] CV loaded")
+        logger.info("[PIPELINE] Text extracted")
+
         ai_result = self.parse_with_ai()
         if ai_result:
-            print("Successfully parsed CV with Gemini AI")
+            logger.info("[PIPELINE] Profile parsed successfully")
             return ai_result
-            
-        print("AI parsing unavailable or failed, falling back to rule-based parser")
-        return self.parse_with_rules()
-    
+
+        logger.warning("[PIPELINE] AI parsing failed, switching to rule parser")
+        rule_result = self.parse_with_rules()
+        logger.info("[PIPELINE] Profile parsed successfully")
+        return rule_result
+
     def to_dict(self, cv_data: CVData) -> dict:
         """Convert CV data to dictionary"""
         return cv_data.model_dump()
@@ -1076,3 +1082,6 @@ class CVParser:
     def to_json(self, cv_data: CVData, indent: int = 2) -> str:
         """Convert CV data to JSON string"""
         return cv_data.model_dump_json(indent=indent)
+
+
+

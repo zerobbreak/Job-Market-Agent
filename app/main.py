@@ -51,11 +51,17 @@ async def lifespan(app: FastAPI):
     # Start background task manager
     try:
         from services.task_manager import task_manager
+        from services.pipeline_service import ensure_database_schema
 
+        # Only run schema check if not explicitly skipped
+        if os.getenv("SKIP_SCHEMA_CHECK") != "true":
+            logger.info("Ensuring Database Schema... (Set SKIP_SCHEMA_CHECK=true to skip in development)")
+            ensure_database_schema()
+        
         task_manager.start()
         logger.info("Task Manager started")
     except Exception as e:
-        logger.warning("Failed to start Task Manager: %s", e)
+        logger.warning("Failed to start services: %s", e)
 
     # Fix Windows Unicode
     if sys.platform == "win32":

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from appwrite.client import Client
 from appwrite.id import ID
@@ -72,6 +72,28 @@ class ApplicationRepository(AppwriteRepository):
             queries.append(Query.equal("status", status))
 
         return self.list(queries)
+
+    def list_for_user(
+        self, user_id: str, limit: int = 10, offset: int = 0
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """List applications with pagination and total count."""
+        queries = [
+            Query.equal("user_id", user_id),
+            Query.order_desc("date_created"),
+            Query.limit(limit),
+            Query.offset(offset),
+        ]
+        
+        try:
+            result = self.db.list_rows(
+                self.database_id, self.collection_id, queries=queries
+            )
+            rows = result.get("rows", result.get("documents", []))
+            total = result.get("total", 0)
+            return rows, total
+        except Exception as e:
+            logger.error("Error listing applications for user_id %s: %s", user_id, e)
+            return [], 0
 
     def track_view(self, app_id: str) -> bool:
         """Increment view count."""

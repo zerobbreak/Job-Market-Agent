@@ -253,3 +253,4 @@ Return a **valid JSON object**:
 Your coaching directly impacts candidate success. Be thorough, practical, and confidence-building.""",
     markdown=True
 )
+

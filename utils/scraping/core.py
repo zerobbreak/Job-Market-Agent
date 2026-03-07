@@ -186,7 +186,7 @@ class AdvancedJobScraper:
             self.logger.error(f"Error saving to cache: {e}")
 
     async def run_search(self, search_term: str, location: str, platforms: Optional[List[str]] = None, use_cache: bool = True) -> List[Dict[str, Any]]:
-        """Run a full search across multiple platforms."""
+        """Run a full search across multiple platforms (Async)."""
         start_time = time.time()
         platforms = platforms or self.config.default_platforms
         
@@ -211,6 +211,49 @@ class AdvancedJobScraper:
         self.metrics.total_jobs_scraped = len(unique_jobs)
         self.metrics.scraping_time_seconds = time.time() - start_time
         
+        if use_cache:
+            self.save_to_cache(cache_key, unique_jobs)
+            
+        return unique_jobs
+
+    def scrape_jobs(self, site_name: List[str], search_term: str, location: str, results_wanted: int, **kwargs) -> List[Dict[str, Any]]:
+        """
+        Synchronous compatibility wrapper for run_search.
+        Used by JobApplicationPipeline and legacy routes.
+        """
+        import asyncio
+        try:
+            # Try to get the existing loop if it exists (e.g. running in an async context)
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # This is tricky because scrape_jobs is called from sync threads sometimes.
+                # Use a new loop in a thread or just run it synchronously if possible.
+                # Since scraper.scrape_platform is sync anyway, we can just do it sync here.
+                return self._run_search_sync(search_term, location, site_name, kwargs.get('use_cache', True))
+            else:
+                return loop.run_until_complete(self.run_search(search_term, location, site_name, kwargs.get('use_cache', True)))
+        except RuntimeError:
+            # No loop in this thread
+            return asyncio.run(self.run_search(search_term, location, site_name, kwargs.get('use_cache', True)))
+
+    def _run_search_sync(self, search_term: str, location: str, platforms: List[str], use_cache: bool = True) -> List[Dict[str, Any]]:
+        """Synchronous version of search logic."""
+        start_time = time.time()
+        
+        if use_cache:
+            cache_key = self.get_cache_key(search_term, location, platforms)
+            cached = self.load_from_cache(cache_key)
+            if cached:
+                return cached
+
+        all_jobs = []
+        # Even the 'async' run_search uses ThreadPoolExecutor which is compatible with sync
+        with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
+            futures = [executor.submit(self.scrape_platform, p, search_term, location) for p in platforms]
+            for future in as_completed(futures):
+                all_jobs.extend(future.result())
+
+        unique_jobs = self.deduplicate_jobs(all_jobs)
         if use_cache:
             self.save_to_cache(cache_key, unique_jobs)
             

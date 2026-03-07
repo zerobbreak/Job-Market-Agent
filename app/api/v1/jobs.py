@@ -56,19 +56,28 @@ async def search_jobs(
 
 @router.get("/matches", response_model=JobMatchResponse)
 async def get_cached_matches(user: CurrentUser, match_repo: MatchRepo):
-    """Get cached job matches for the current user."""
-    doc = match_repo.get_user_matches(user.id)
-    if not doc:
-        return JobMatchResponse(matches=[], total=0, cached=True)
-    
-    matches = match_repo._deserialize(doc.get("matches", "[]"))
-    match_repo.update_last_seen(doc["$id"])
-    
-    return JobMatchResponse(
-        matches=matches,
-        total=len(matches),
-        cached=True,
-    )
+    """Internal helper to retrieve cached matches."""
+    try:
+        doc = match_repo.get_user_matches(user.id)
+        if not doc:
+            return JobMatchResponse(matches=[], total=0, cached=True)
+        
+        matches = match_repo._deserialize(doc.get("matches", "[]"))
+        match_repo.update_last_seen(doc["$id"])
+        
+        return JobMatchResponse(
+            matches=matches,
+            total=len(matches),
+            cached=True,
+        )
+    except Exception as e:
+        logger.error("Error retrieving cached matches for user %s: %s", user.id, e)
+        return JobMatchResponse(
+            success=False,
+            matches=[],
+            total=0,
+            cached=True
+        )
 
 
 @router.post("/matches", response_model=JobMatchResponse)
@@ -85,22 +94,31 @@ async def get_or_refresh_matches(
     if not body.force_refresh:
         return await get_cached_matches(user, match_repo)
 
-    # For now, we'll keep it synchronous in the service or move to background
-    # But to match the schema and frontend expectations:
-    result = await job_service.search_and_match(user.id, JobSearchRequest(
-        location=body.location,
-        max_results=body.max_results,
-        use_cache=False
-    ))
-    
-    if result.get("success") and result.get("matches"):
-        match_repo.cache_matches(user.id, body.location or "South Africa", result["matches"])
+    try:
+        # 1. Trigger fresh search and matching
+        # No explicit query passed; service will generate one from profile
+        result = await job_service.search_and_match(user.id, JobSearchRequest(
+            location=body.location,
+            max_results=body.max_results,
+            use_cache=False
+        ))
+        
+        if result.get("success") and result.get("matches"):
+            match_repo.cache_matches(user.id, body.location or "South Africa", result["matches"])
 
-    return JobMatchResponse(
-        matches=result.get("matches", []),
-        total=result.get("total_matches", 0),
-        cached=False,
-    )
+        return JobMatchResponse(
+            matches=result.get("matches", []),
+            total=result.get("total_matches", 0),
+            cached=False,
+        )
+    except Exception as e:
+        logger.error("Error refreshing matches for user %s: %s", user.id, e, exc_info=True)
+        return JobMatchResponse(
+            success=False,
+            matches=[],
+            total=0,
+            cached=False
+        )
 
 
 # ── Feedback ──────────────────────────────────────────────────────────────────

@@ -264,3 +264,4 @@ Return a **valid JSON object** with this exact structure:
 Your analysis directly feeds job matching, CV optimization, and interview prep. Be thorough, honest, and actionable.""",
     markdown=True
 )
+
