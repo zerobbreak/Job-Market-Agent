@@ -8,24 +8,18 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from appwrite.client import Client
-from appwrite.query import Query
-
 from app.core.config import Settings
-from app.repositories.base import AppwriteRepository
+from app.repositories.postgres_base import PostgresRepository
+from app.repositories.query import Query
 
 logger = logging.getLogger(__name__)
 
 
-class MatchRepository(AppwriteRepository):
+class MatchRepository(PostgresRepository):
     """Repository for 'matches' collection."""
 
-    def __init__(self, client: Client, settings: Settings):
-        super().__init__(
-            client=client,
-            database_id=settings.database_id,
-            collection_id=settings.collection_id_matches,
-        )
+    def __init__(self, settings: Settings):
+        super().__init__(collection=settings.collection_id_matches)
 
     def get_user_matches(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve the most recent matches for a user."""

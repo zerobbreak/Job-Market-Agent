@@ -37,14 +37,15 @@ class Settings(BaseSettings):
     signed_url_expiry_seconds: int = 3600
     otp_expiry_seconds: int = 300
 
-    # -- Appwrite --------------------------------------------------------
+    # -- Appwrite (Auth only — JWT validation via Account API) -----------
     appwrite_api_endpoint: str = Field(default="https://cloud.appwrite.io/v1")
     appwrite_project_id: str = Field(default="")
-    appwrite_api_key: str = Field(default="")
-    appwrite_db_id: str = Field(default="job-market-db", alias="APPWRITE_DB_ID")
-    appwrite_bucket_id: str = Field(default="cv-bucket", alias="APPWRITE_BUCKET_ID")
 
-    # Collection IDs (kept as constants, overridable via env)
+    # -- Database (Postgres) ----------------------------------------------
+    database_url: str = Field(default="", alias="DATABASE_URL")
+
+    # Collection names within the shared `documents` table (kept as constants,
+    # overridable via env) — carried over from the Appwrite collection IDs.
     collection_id_jobs: str = "jobs"
     collection_id_applications: str = "applications"
     collection_id_profiles: str = "profiles"
@@ -54,10 +55,16 @@ class Settings(BaseSettings):
     # -- AI / LLM --------------------------------------------------------
     gemini_api_key: str = Field(default="")
 
-    # -- Files -----------------------------------------------------------
+    # -- Files -------------------------------------------------------------
     upload_folder: str = Field(default="uploads")
     max_file_size: int = Field(default=10 * 1024 * 1024, description="10 MB")
     allowed_extensions: str = "pdf,doc,docx"
+
+    # -- Storage (local volume, e.g. a mounted Railway Volume) -------------
+    storage_volume_path: str = Field(default="storage", alias="STORAGE_VOLUME_PATH")
+
+    # Public base URL this API is reachable at — used to build signed file URLs.
+    api_base_url: str = Field(default="http://localhost:8000", alias="API_BASE_URL")
 
     # -- Job Search Defaults --------------------------------------------
     cv_file_path: str = "cvs/CV.pdf"
@@ -81,16 +88,6 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> List[str]:
         """Parse comma-separated CORS origins into a list."""
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
-
-    @property
-    def database_id(self) -> str:
-        """Alias for appwrite_db_id - used by repositories."""
-        return self.appwrite_db_id
-
-    @property
-    def bucket_id(self) -> str:
-        """Alias for appwrite_bucket_id - used by storage repo."""
-        return self.appwrite_bucket_id
 
     @property
     def allowed_extension_set(self) -> set:
@@ -138,6 +135,9 @@ class Settings(BaseSettings):
         # Remove legacy key from process env so SDKs do not prefer it.
         if "GOOGLE_API_KEY" in os.environ:
             os.environ.pop("GOOGLE_API_KEY", None)
+
+        if self.is_production and not self.database_url:
+            raise ValueError("DATABASE_URL must be set in production.")
 
     model_config = {
         "env_file": ".env",

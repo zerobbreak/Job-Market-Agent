@@ -8,25 +8,18 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from appwrite.client import Client
-from appwrite.id import ID
-from appwrite.query import Query
-
 from app.core.config import Settings
-from app.repositories.base import AppwriteRepository
+from app.repositories.postgres_base import PostgresRepository
+from app.repositories.query import Query
 
 logger = logging.getLogger(__name__)
 
 
-class ApplicationRepository(AppwriteRepository):
+class ApplicationRepository(PostgresRepository):
     """Repository for 'applications' collection."""
 
-    def __init__(self, client: Client, settings: Settings):
-        super().__init__(
-            client=client,
-            database_id=settings.database_id,
-            collection_id=settings.collection_id_applications,
-        )
+    def __init__(self, settings: Settings):
+        super().__init__(collection=settings.collection_id_applications)
 
     def save_application(
         self,
@@ -77,20 +70,10 @@ class ApplicationRepository(AppwriteRepository):
         self, user_id: str, limit: int = 10, offset: int = 0
     ) -> Tuple[List[Dict[str, Any]], int]:
         """List applications with pagination and total count."""
-        queries = [
-            Query.equal("user_id", user_id),
-            Query.order_desc("date_created"),
-            Query.limit(limit),
-            Query.offset(offset),
-        ]
-        
         try:
-            result = self.db.list_rows(
-                self.database_id, self.collection_id, queries=queries
-            )
-            rows = result.get("rows", result.get("documents", []))
-            total = result.get("total", 0)
-            return rows, total
+            docs = self.list([Query.equal("user_id", user_id), Query.order_desc("date_created")])
+            total = len(docs)
+            return docs[offset : offset + limit], total
         except Exception as e:
             logger.error("Error listing applications for user_id %s: %s", user_id, e)
             return [], 0
@@ -100,6 +83,6 @@ class ApplicationRepository(AppwriteRepository):
         doc = self.get(app_id)
         if not doc:
             return False
-        
+
         current_views = doc.get("views", 0) or 0
         return self.update(app_id, {"views": current_views + 1}) is not None

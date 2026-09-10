@@ -7,23 +7,17 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from appwrite.client import Client
-
 from app.core.config import Settings
-from app.repositories.base import AppwriteRepository
+from app.repositories.postgres_base import PostgresRepository
 
 logger = logging.getLogger(__name__)
 
 
-class JobRepository(AppwriteRepository):
-    """Repository for 'jobs' collection."""
+class JobRepository(PostgresRepository):
+    """Repository for the 'jobs' collection."""
 
-    def __init__(self, client: Client, settings: Settings):
-        super().__init__(
-            client=client,
-            database_id=settings.database_id,
-            collection_id=settings.collection_id_jobs,
-        )
+    def __init__(self, settings: Settings):
+        super().__init__(collection=settings.collection_id_jobs)
 
     def save_state(self, job_id: str, state: Dict[str, Any]) -> bool:
         """Ported from job_store.py:save_job_state."""

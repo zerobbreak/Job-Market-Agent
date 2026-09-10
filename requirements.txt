@@ -26,3 +26,6 @@ gunicorn
 tenacity
 playwright
 playwright-stealth
+sqlalchemy
+psycopg2-binary
+alembic
