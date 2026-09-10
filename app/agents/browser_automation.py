@@ -14,7 +14,7 @@ except ImportError:
     HAS_STEALTH = False
 
 from .utils import human_delay, simulate_human_browsing
-from services.job_store import get_recent_failures
+from app.services.job_store import get_recent_failures
 
 logger = logging.getLogger(__name__)
 

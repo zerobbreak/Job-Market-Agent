@@ -7,7 +7,7 @@ With robust fallback using CVBuilder when AI fails
 import os
 from datetime import datetime
 from .scraping import extract_job_keywords
-from agents import application_writer
+from app.agents import application_writer
 from .cv_templates import CVTemplates, CVBuilder
 from .pdf_generator import PDFGenerator
 

@@ -16,15 +16,17 @@ from appwrite.client import Client
 from appwrite.query import Query
 from appwrite.id import ID
 from appwrite.input_file import InputFile
-from config import Config
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+settings = get_settings()
+
 # Appwrite Client Initialization
 _client = Client()
-_client.set_endpoint(Config.APPWRITE_ENDPOINT)
-_client.set_project(Config.APPWRITE_PROJECT_ID)
-_client.set_key(Config.APPWRITE_API_KEY)
+_client.set_endpoint(settings.appwrite_api_endpoint)
+_client.set_project(settings.appwrite_project_id)
+_client.set_key(settings.appwrite_api_key)
 
 _db = TablesDB(_client)
 _storage = Storage(_client)
@@ -53,8 +55,8 @@ def _upload_file(file_path: str) -> Optional[str]:
     if not file_path or not os.path.exists(file_path):
         return None
     try:
-        # Use Config.BUCKET_ID_CVS or a default 'application_files' bucket
-        bucket_id = getattr(Config, 'BUCKET_ID_CVS', 'application_files')
+        # Use settings.bucket_id or a default 'application_files' bucket
+        bucket_id = settings.bucket_id or 'application_files'
         result = _storage.create_file(
             bucket_id=bucket_id,
             file_id=ID.unique(),
@@ -92,9 +94,9 @@ def save_job_state(job_id: str, state: dict) -> bool:
         }
         
         try:
-            _db.update_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
+            _db.update_row(settings.database_id, settings.collection_id_jobs, job_id, data=data)
         except Exception:
-            _db.create_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, document_id=job_id, data=data)
+            _db.create_row(settings.database_id, settings.collection_id_jobs, document_id=job_id, data=data)
         
         return True
     except Exception as e:
@@ -104,7 +106,7 @@ def save_job_state(job_id: str, state: dict) -> bool:
 def load_job_state(job_id: str) -> dict | None:
     """Load job processing state from Appwrite"""
     try:
-        doc = _db.get_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id)
+        doc = _db.get_row(settings.database_id, settings.collection_id_jobs, job_id)
         return {
             'status': doc.get('status'),
             'progress': doc.get('progress'),
@@ -124,7 +126,7 @@ def load_job_state(job_id: str) -> dict | None:
 def delete_job_state(job_id: str):
     """Delete job state from Appwrite"""
     try:
-        _db.delete_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id)
+        _db.delete_row(settings.database_id, settings.collection_id_jobs, job_id)
     except Exception as e:
         logger.error(f"Failed to delete job state {job_id}: {e}")
 
@@ -142,7 +144,7 @@ def update_job_progress(job_id: str, progress: int, status: str = None, phase: s
             data['status'] = 'done'
             data['progress'] = 100
             
-        _db.update_row(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, job_id, data=data)
+        _db.update_row(settings.database_id, settings.collection_id_jobs, job_id, data=data)
         logger.info(f"Job {job_id}: {progress}% - {phase or status}")
     except Exception as e:
         logger.error(f"Failed to update progress for {job_id}: {e}")
@@ -153,7 +155,7 @@ def get_recent_failures(limit: int = 5) -> int:
     """Get count of recent consecutive failures"""
     try:
         queries = [Query.equal('status', 'error'), Query.order_desc('$createdAt'), Query.limit(limit)]
-        result = _db.list_rows(Config.DATABASE_ID, Config.COLLECTION_ID_JOBS, queries=queries)
+        result = _db.list_rows(settings.database_id, settings.collection_id_jobs, queries=queries)
         return result.get('total', 0)
     except Exception:
         return 0
@@ -195,8 +197,8 @@ def save_application(job_data: Dict[str, Any], cv_path: str, cover_letter_path: 
         }
         
         result = _db.create_row(
-            Config.DATABASE_ID,
-            Config.COLLECTION_ID_APPLICATIONS,
+            settings.database_id,
+            settings.collection_id_applications,
             document_id=ID.unique(),
             data=data
         )
@@ -218,8 +220,8 @@ def update_application_status(app_id: str, status: str, additional_data: Dict[st
         # Note: additional_data processing can be added here if schema permits
         
         _db.update_row(
-            Config.DATABASE_ID,
-            Config.COLLECTION_ID_APPLICATIONS,
+            settings.database_id,
+            settings.collection_id_applications,
             app_id,
             data=data
         )
@@ -234,8 +236,8 @@ def get_applications(status: Optional[str] = None) -> List[Dict[str, Any]]:
             queries.append(Query.equal('status', status))
             
         result = _db.list_rows(
-            Config.DATABASE_ID,
-            Config.COLLECTION_ID_APPLICATIONS,
+            settings.database_id,
+            settings.collection_id_applications,
             queries=queries
         )
         # TablesDB returns 'rows' instead of 'documents' in the new API
@@ -251,8 +253,8 @@ def get_application_stats() -> Dict[str, int]:
         # Appwrite limitation: No direct group_by in simple API. 
         # For small datasets, client-side aggregation is acceptable.
         result = _db.list_rows(
-             Config.DATABASE_ID,
-             Config.COLLECTION_ID_APPLICATIONS,
+             settings.database_id,
+             settings.collection_id_applications,
              queries=[Query.limit(5000)]
         )
         # TablesDB returns 'rows' instead of 'documents' in the new API
@@ -275,8 +277,8 @@ def get_engagement_analytics(days: int = 30) -> Dict[str, Any]:
             Query.limit(5000)
         ]
         result = _db.list_rows(
-            Config.DATABASE_ID,
-            Config.COLLECTION_ID_APPLICATIONS,
+            settings.database_id,
+            settings.collection_id_applications,
             queries=queries
         )
         
@@ -300,8 +302,8 @@ def get_application_heatmap() -> Dict[str, Any]:
     """Get application heatmap data (activity by day of week)"""
     try:
         result = _db.list_rows(
-            Config.DATABASE_ID,
-            Config.COLLECTION_ID_APPLICATIONS,
+            settings.database_id,
+            settings.collection_id_applications,
             queries=[Query.limit(5000)]
         )
         
@@ -324,11 +326,11 @@ def get_application_heatmap() -> Dict[str, Any]:
 def track_view(app_id: str):
     """Increment view count for an application"""
     try:
-        doc = _db.get_row(Config.DATABASE_ID, Config.COLLECTION_ID_APPLICATIONS, app_id)
+        doc = _db.get_row(settings.database_id, settings.collection_id_applications, app_id)
         current_views = doc.get('views', 0) or 0
         _db.update_row(
-            Config.DATABASE_ID,
-            Config.COLLECTION_ID_APPLICATIONS,
+            settings.database_id,
+            settings.collection_id_applications,
             app_id,
             data={'views': current_views + 1}
         )

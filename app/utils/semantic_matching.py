@@ -14,7 +14,7 @@ import json
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 
-from utils.scraping import get_gemini_client
+from app.utils.scraping import get_gemini_client
 
 logger = logging.getLogger(__name__)
 

@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 from app.core.config import settings
-from agents import interview_prep_agent
-from utils.pdf_generator import PDFGenerator
+from app.agents import interview_prep_agent
+from app.utils.pdf_generator import PDFGenerator
 
 logger = logging.getLogger(__name__)
 

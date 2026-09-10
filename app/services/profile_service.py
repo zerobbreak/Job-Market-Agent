@@ -189,7 +189,7 @@ class ProfileService:
         }
 
         # Orchestrate AI analysis
-        from services.cv_analysis_service import generate_ai_analysis
+        from app.services.cv_analysis_service import generate_ai_analysis
         
         # We might need matches to properly analyze (context)
         # matches_sample = match_repo.get_user_matches(user_id)

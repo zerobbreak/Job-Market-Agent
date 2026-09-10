@@ -63,7 +63,7 @@ async def get_engagement_analytics(
     """Get engagement analytics over a period."""
     try:
         # Import here to avoid circular imports during migration
-        from services.job_store import get_engagement_analytics as _get_engagement
+        from app.services.job_store import get_engagement_analytics as _get_engagement
 
         analytics = _get_engagement(days=days)
         return EngagementAnalyticsResponse(analytics=analytics)
@@ -76,7 +76,7 @@ async def get_engagement_analytics(
 async def get_application_heatmap(user: CurrentUser):
     """Get application activity heatmap data."""
     try:
-        from services.job_store import get_application_heatmap as _get_heatmap
+        from app.services.job_store import get_application_heatmap as _get_heatmap
 
         heatmap = _get_heatmap()
         return HeatmapResponse(heatmap=heatmap)
@@ -89,7 +89,7 @@ async def get_application_heatmap(user: CurrentUser):
 async def track_application_view(body: TrackViewRequest, user: CurrentUser):
     """Track a view on an application."""
     try:
-        from services.job_store import track_view
+        from app.services.job_store import track_view
 
         track_view(body.application_id)
         return SuccessResponse()
@@ -105,7 +105,7 @@ async def update_analytics_status(
 ):
     """Update application status in analytics."""
     try:
-        from services.job_store import update_application_status
+        from app.services.job_store import update_application_status
 
         update_application_status(body.application_id, body.status, body.additional_data)
         return SuccessResponse()

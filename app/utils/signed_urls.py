@@ -4,14 +4,16 @@ import time
 import os
 from urllib.parse import urlencode
 from flask import request
-from config import Config
+from app.core.config import get_settings
+
+settings = get_settings()
 
 def generate_signed_url(file_id: str, bucket_id: str, file_type: str = 'storage', 
                        expires_in: int = 3600, base_url: str = None) -> str:
     """
     Generate a cryptographically signed URL for secure file downloads.
     """
-    secret = Config.SIGNED_URL_SECRET
+    secret = settings.effective_signed_url_secret
     expires_at = int(time.time()) + expires_in
     
     payload = f"{file_type}|{file_id}|{bucket_id}|{expires_at}"
@@ -49,7 +51,7 @@ def validate_signed_url(file_id: str, bucket_id: str, file_type: str,
     if int(time.time()) > int(expires):
         return False
     
-    secret = Config.SIGNED_URL_SECRET
+    secret = settings.effective_signed_url_secret
     payload = f"{file_type}|{file_id}|{bucket_id}|{expires}"
     
     expected_signature = hmac.new(

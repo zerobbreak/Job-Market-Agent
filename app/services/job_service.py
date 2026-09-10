@@ -51,8 +51,8 @@ class JobService:
         }
 
         # 2. Orchestrate search via existing pipeline (to be refactored later)
-        from services.pipeline_service import JobApplicationPipeline
-        from services.matching_service import SemanticMatcher
+        from app.services.pipeline_service import JobApplicationPipeline
+        from app.services.matching_service import SemanticMatcher
 
         pipeline = JobApplicationPipeline()
         location_str = (request.location or profile_data.get("location") or "South Africa").strip()

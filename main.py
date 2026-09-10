@@ -19,8 +19,7 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
 # Local imports
-from services.pipeline_service import JobApplicationPipeline, ensure_database_schema
-from config import Config
+from app.services.pipeline_service import JobApplicationPipeline, ensure_database_schema
 
 # Load environment variables
 load_dotenv()

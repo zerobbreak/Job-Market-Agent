@@ -12,7 +12,7 @@ backend_path = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_path))
 
 try:
-    from services.pipeline_service import ensure_database_schema
+    from app.services.pipeline_service import ensure_database_schema
     from app.core.config import get_settings
     
     def run_init():

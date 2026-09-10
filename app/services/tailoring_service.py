@@ -5,9 +5,9 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 
-from utils.cv_tailoring import CVTailoringEngine
-from utils.cv_parser import CVParser
-from utils.pdf_generator import PDFGenerator
+from app.utils.cv_tailoring import CVTailoringEngine
+from app.utils.cv_parser import CVParser
+from app.utils.pdf_generator import PDFGenerator
 
 logger = logging.getLogger(__name__)
 

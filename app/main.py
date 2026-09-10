@@ -50,8 +50,8 @@ async def lifespan(app: FastAPI):
 
     # Start background task manager
     try:
-        from services.task_manager import task_manager
-        from services.pipeline_service import ensure_database_schema
+        from app.services.task_manager import task_manager
+        from app.services.pipeline_service import ensure_database_schema
 
         # Only run schema check if not explicitly skipped
         if os.getenv("SKIP_SCHEMA_CHECK") != "true":
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ─────────────────────────────────────────────────────
     try:
-        from services.task_manager import task_manager
+        from app.services.task_manager import task_manager
 
         task_manager.stop()
         logger.info("Task Manager stopped")

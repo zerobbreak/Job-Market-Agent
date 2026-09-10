@@ -11,18 +11,20 @@ from datetime import datetime, timedelta
 from appwrite.services.tables_db import TablesDB
 from appwrite.client import Client
 from appwrite.query import Query
-from config import Config
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+settings = get_settings()
 
 class TaskManager:
     def __init__(self):
         self._stop_event = threading.Event()
         self._thread = None
         self.client = Client()
-        self.client.set_endpoint(Config.APPWRITE_ENDPOINT)
-        self.client.set_project(Config.APPWRITE_PROJECT_ID)
-        self.client.set_key(Config.APPWRITE_API_KEY)
+        self.client.set_endpoint(settings.appwrite_api_endpoint)
+        self.client.set_project(settings.appwrite_project_id)
+        self.client.set_key(settings.appwrite_api_key)
         self.tablesDB = TablesDB(self.client)
         self.active_tasks = 0
         self.total_tasks_processed = 0
@@ -98,8 +100,8 @@ class TaskManager:
             ]
             
             result = self.tablesDB.list_rows(
-                Config.DATABASE_ID, 
-                Config.COLLECTION_ID_JOBS, 
+                settings.database_id, 
+                settings.collection_id_jobs, 
                 queries=queries
             )
             
@@ -129,8 +131,8 @@ class TaskManager:
         try:
             logger.warning(f"Marking job {job_id} as failed: {reason}")
             self.tablesDB.update_row(
-                Config.DATABASE_ID,
-                Config.COLLECTION_ID_JOBS,
+                settings.database_id,
+                settings.collection_id_jobs,
                 job_id,
                 data={
                     'status': 'error',

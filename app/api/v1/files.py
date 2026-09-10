@@ -35,7 +35,7 @@ async def generate_signed_url(
     file_type: str = "storage",
 ):
     """Generate a signed download URL for a file."""
-    from utils.signed_urls import generate_signed_url as _generate
+    from app.utils.signed_urls import generate_signed_url as _generate
 
     url = _generate(file_id, bucket_id, file_type)
     return {"success": True, "url": url}
@@ -49,7 +49,7 @@ async def generate_signed_url_get(
     file_type: str = Query(default="storage"),
 ):
     """Generate a signed download URL (GET variant)."""
-    from utils.signed_urls import generate_signed_url as _generate
+    from app.utils.signed_urls import generate_signed_url as _generate
 
     url = _generate(file_id, bucket_id, file_type)
     return {"success": True, "url": url}
@@ -67,7 +67,7 @@ async def download_signed(
     settings: Settings = Depends(get_settings),
 ):
     """Download a file using a signed URL (public, no auth required)."""
-    from utils.signed_urls import validate_signed_url
+    from app.utils.signed_urls import validate_signed_url
 
     if not validate_signed_url(file_id, bucket_id, file_type, int(expires), signature):
         raise ForbiddenError("Invalid or expired signature")
@@ -124,8 +124,8 @@ def _download_storage_file(file_id: str, bucket_id: str, settings: Settings):
 
 def _download_preview_file(job_id: str, doc_type: str):
     """Generate and return a preview PDF from job state."""
-    from services.job_store import load_job_state
-    from utils.pdf_generator import PDFGenerator
+    from app.services.job_store import load_job_state
+    from app.utils.pdf_generator import PDFGenerator
 
     job_info = load_job_state(job_id)
     if not job_info:

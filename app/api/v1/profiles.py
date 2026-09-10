@@ -98,8 +98,8 @@ async def analyze_cv(
 
     try:
         from app.core.config import get_settings
-        from services.cv_analysis_service import generate_ai_analysis
-        from services.pipeline_service import JobApplicationPipeline, parse_profile
+        from app.services.cv_analysis_service import generate_ai_analysis
+        from app.services.pipeline_service import JobApplicationPipeline, parse_profile
 
         content = await cv_file.read()
         if not content:

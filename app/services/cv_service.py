@@ -48,8 +48,8 @@ class CVService:
             self.job_repo.update_progress(job_id, 10, "processing", "Initializing tailoring...")
 
             # 2. Tailoring logic (using existing CVTailoringEngine for now)
-            from utils.cv_tailoring import CVTailoringEngine
-            from utils.pdf_generator import PDFGenerator
+            from app.utils.cv_tailoring import CVTailoringEngine
+            from app.utils.pdf_generator import PDFGenerator
 
             engine = CVTailoringEngine(cv_text, profile_data)
             
@@ -90,7 +90,7 @@ class CVService:
         result = state.get("result", {})
         template_type = state.get("template_type", "modern")
         
-        from utils.pdf_generator import PDFGenerator
+        from app.utils.pdf_generator import PDFGenerator
         generator = PDFGenerator()
         
         import tempfile
