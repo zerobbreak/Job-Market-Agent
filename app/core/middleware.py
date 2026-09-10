@@ -79,8 +79,6 @@ def setup_middleware(app: FastAPI, settings: Settings) -> None:
         allow_headers=[
             "Content-Type",
             "Authorization",
-            "X-Appwrite-Project",
-            "X-Appwrite-JWT",
             "Accept",
             "Origin",
             "X-Requested-With",

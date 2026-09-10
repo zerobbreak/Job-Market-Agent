@@ -15,7 +15,6 @@ reportlab==4.0.9
 xhtml2pdf==0.2.14
 markdown
 pypdf
-appwrite
 fastapi
 uvicorn[standard]
 pydantic-settings
@@ -29,3 +28,5 @@ playwright-stealth
 sqlalchemy
 psycopg2-binary
 alembic
+asyncpg
+fastapi-users[sqlalchemy]

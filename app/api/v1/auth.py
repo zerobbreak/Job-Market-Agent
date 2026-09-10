@@ -1,49 +1,30 @@
 """
-Auth router — JWT validation and OTP generation.
-
-Ported from: routes/auth_routes.py
+Auth router — registration, JWT login, password reset/verification
+(fastapi-users), plus a small /auth/me endpoint kept for frontend
+compatibility with the previous Appwrite-based response shape.
 """
 
 from __future__ import annotations
 
 import logging
-import threading
-import time
-import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.core.config import Settings, get_settings
 from app.core.dependencies import CurrentUser
-from app.schemas.auth import OTPResponse, UserInfo
+from app.core.security import auth_backend, fastapi_users
+from app.schemas.auth import UserCreate, UserInfo, UserRead, UserUpdate
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
 
-# In-memory OTP store (same as original — consider Redis for production)
-_otp_store: dict = {}
-_otp_lock = threading.Lock()
+router.include_router(fastapi_users.get_auth_router(auth_backend), prefix="/jwt")
+router.include_router(fastapi_users.get_register_router(UserRead, UserCreate))
+router.include_router(fastapi_users.get_reset_password_router())
+router.include_router(fastapi_users.get_verify_router(UserRead))
+router.include_router(fastapi_users.get_users_router(UserRead, UserUpdate), prefix="/users")
 
 
 @router.get("/me", response_model=UserInfo)
 async def get_me(user: CurrentUser):
     """Return the current authenticated user's basic info."""
     return UserInfo(id=user.id, email=user.email, name=user.name)
-
-
-@router.post("/otp", response_model=OTPResponse)
-async def generate_otp(
-    user: CurrentUser,
-    settings: Settings = Depends(get_settings),
-):
-    """Generate a one-time password token for the current user."""
-    otp = str(uuid.uuid4())
-
-    with _otp_lock:
-        now = time.time()
-        _otp_store[otp] = {
-            "jwt": user.client._jwt if hasattr(user.client, "_jwt") else "",
-            "expires": now + settings.otp_expiry_seconds,
-        }
-
-    return OTPResponse(token=otp)

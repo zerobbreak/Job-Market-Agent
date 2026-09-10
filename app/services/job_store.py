@@ -1,76 +1,46 @@
 """
-Persistent Job Store for Apply with AI Preview Jobs using Appwrite
+Persistent Job Store for Apply with AI Preview Jobs, backed by Postgres.
 Implements battle-tested patterns: persistent state, auto-resume, granular progress tracking,
-and now includes Application Tracking and Analytics.
+and Application Tracking and Analytics.
 """
 
-import os
-import json
-import time
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
-from appwrite.services.tables_db import TablesDB  # type: ignore
-from appwrite.services.storage import Storage
-from appwrite.client import Client
-from appwrite.query import Query
-from appwrite.id import ID
-from appwrite.input_file import InputFile
+
 from app.core.config import get_settings
+from app.repositories.postgres_base import PostgresRepository
+from app.repositories.query import Query
+from app.repositories.storage_repo import StorageRepository
 
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-# Appwrite Client Initialization
-_client = Client()
-_client.set_endpoint(settings.appwrite_api_endpoint)
-_client.set_project(settings.appwrite_project_id)
-_client.set_key(settings.appwrite_api_key)
-
-_db = TablesDB(_client)
-_storage = Storage(_client)
+_jobs_repo = PostgresRepository(collection=settings.collection_id_jobs)
+_applications_repo = PostgresRepository(collection=settings.collection_id_applications)
+_storage_repo = StorageRepository(settings)
 
 # --- Helper Functions ---
 
 def _serialize_data(data):
-    """Safely serialize data for Appwrite string attributes"""
-    if data is None:
-        return None
-    if isinstance(data, (dict, list)):
-        return json.dumps(data)
-    return str(data)
+    """Safely serialize data for storage"""
+    return _jobs_repo._serialize(data)
 
 def _deserialize_data(data):
-    """Safely deserialize data from Appwrite"""
-    if not data:
-        return None
-    try:
-        return json.loads(data)
-    except:
-        return data
+    """Safely deserialize data from storage"""
+    return _jobs_repo._deserialize(data)
 
 def _upload_file(file_path: str) -> Optional[str]:
-    """Upload a file to Appwrite Storage and return file ID"""
-    if not file_path or not os.path.exists(file_path):
+    """Upload a file to storage and return its file id"""
+    if not file_path:
         return None
-    try:
-        # Use settings.bucket_id or a default 'application_files' bucket
-        bucket_id = settings.bucket_id or 'application_files'
-        result = _storage.create_file(
-            bucket_id=bucket_id,
-            file_id=ID.unique(),
-            file=InputFile.from_path(file_path)
-        )
-        return result['$id']
-    except Exception as e:
-        logger.error(f"Failed to upload file {file_path}: {e}")
-        return None
+    return _storage_repo.upload_file(file_path, bucket_id="applications")
 
 # --- Job State Management (Existing) ---
 
 def save_job_state(job_id: str, state: dict) -> bool:
-    """Save job processing state to Appwrite"""
+    """Save job processing state"""
     try:
         job_info = state.get('job_data')
         if isinstance(job_info, dict):
@@ -92,21 +62,25 @@ def save_job_state(job_id: str, state: dict) -> bool:
             'user_id': state.get('user_id', ''),
             'error': state.get('error', '')
         }
-        
-        try:
-            _db.update_row(settings.database_id, settings.collection_id_jobs, job_id, data=data)
-        except Exception:
-            _db.create_row(settings.database_id, settings.collection_id_jobs, document_id=job_id, data=data)
-        
+
+        if _jobs_repo.get(job_id):
+            _jobs_repo.update(job_id, data)
+        else:
+            _jobs_repo.create(data, document_id=job_id)
+
         return True
     except Exception as e:
         logger.error(f"Failed to save job state for {job_id}: {e}")
         return False
 
 def load_job_state(job_id: str) -> dict | None:
-    """Load job processing state from Appwrite"""
+    """Load job processing state"""
     try:
-        doc = _db.get_row(settings.database_id, settings.collection_id_jobs, job_id)
+        doc = _jobs_repo.get(job_id)
+        if not doc:
+            return None
+
+        updated_at_str = doc.get('$updatedAt')
         return {
             'status': doc.get('status'),
             'progress': doc.get('progress'),
@@ -116,35 +90,35 @@ def load_job_state(job_id: str) -> dict | None:
             'template_type': doc.get('template_type'),
             'user_id': doc.get('user_id'),
             'error': doc.get('error'),
-            'last_updated': datetime.fromisoformat(doc.get('$updatedAt').replace('Z', '+00:00')).timestamp() if doc.get('$updatedAt') else time.time()
+            'last_updated': datetime.fromisoformat(updated_at_str).timestamp() if updated_at_str else datetime.now().timestamp()
         }
     except Exception as e:
-        if '404' not in str(e):
-            logger.error(f"Failed to load job state for {job_id}: {e}")
+        logger.error(f"Failed to load job state for {job_id}: {e}")
         return None
 
 def delete_job_state(job_id: str):
-    """Delete job state from Appwrite"""
+    """Delete job state"""
     try:
-        _db.delete_row(settings.database_id, settings.collection_id_jobs, job_id)
+        _jobs_repo.delete(job_id)
     except Exception as e:
         logger.error(f"Failed to delete job state {job_id}: {e}")
 
 def update_job_progress(job_id: str, progress: int, status: str = None, phase: str = None, error: str = None, result: dict = None):
-    """Update job progress in Appwrite"""
+    """Update job progress"""
     try:
         data = {'progress': int(progress)}
         if status: data['status'] = status
         if phase: data['phase'] = phase
-        if error: 
+        if error:
             data['error'] = error
             data['status'] = 'error'
         if result:
             data['result'] = _serialize_data(result)
             data['status'] = 'done'
             data['progress'] = 100
-            
-        _db.update_row(settings.database_id, settings.collection_id_jobs, job_id, data=data)
+
+        if not _jobs_repo.update(job_id, data):
+            raise RuntimeError(f"Job {job_id} not found for progress update")
         logger.info(f"Job {job_id}: {progress}% - {phase or status}")
     except Exception as e:
         logger.error(f"Failed to update progress for {job_id}: {e}")
@@ -155,31 +129,29 @@ def get_recent_failures(limit: int = 5) -> int:
     """Get count of recent consecutive failures"""
     try:
         queries = [Query.equal('status', 'error'), Query.order_desc('$createdAt'), Query.limit(limit)]
-        result = _db.list_rows(settings.database_id, settings.collection_id_jobs, queries=queries)
-        return result.get('total', 0)
+        return len(_jobs_repo.list(queries))
     except Exception:
         return 0
 
 # --- Application Tracking & Analytics (New Migration) ---
 
-def save_application(job_data: Dict[str, Any], cv_path: str, cover_letter_path: Optional[str] = None, 
-                     ats_score: Optional[int] = None, metadata_path: Optional[str] = None, 
+def save_application(job_data: Dict[str, Any], cv_path: str, cover_letter_path: Optional[str] = None,
+                     ats_score: Optional[int] = None, metadata_path: Optional[str] = None,
                      app_dir: Optional[str] = None, user_id: str = 'anonymous_user') -> Optional[str]:
     """
-    Save a new application record to Appwrite.
+    Save a new application record.
     Migrated from ApplicationTracker.add_application.
     """
     try:
         # Upload files
         cv_file_id = _upload_file(cv_path)
         cl_file_id = _upload_file(cover_letter_path) if cover_letter_path else None
-        
+
         now = datetime.now().isoformat()
-        
-        # Map to Appwrite collection schema
+
         data = {
             'company': job_data.get('company', 'Unknown'),
-            'role': job_data.get('title', 'Unknown'), # Mapping 'title' to 'role'
+            'role': job_data.get('title', 'Unknown'),  # Mapping 'title' to 'role'
             'job_url': job_data.get('url', ''),
             'location': job_data.get('location', ''),
             'status': 'generated',
@@ -195,17 +167,14 @@ def save_application(job_data: Dict[str, Any], cv_path: str, cover_letter_path: 
             'user_id': user_id,
             'views': 0
         }
-        
-        result = _db.create_row(
-            settings.database_id,
-            settings.collection_id_applications,
-            document_id=ID.unique(),
-            data=data
-        )
-        
+
+        result = _applications_repo.create(data)
+        if not result:
+            raise RuntimeError("Application create returned no result")
+
         logger.info(f"Application tracked: {data['company']} - {data['role']} (ID: {result['$id']})")
         return result['$id']
-        
+
     except Exception as e:
         logger.error(f"Failed to save application: {e}")
         return None
@@ -218,13 +187,8 @@ def update_application_status(app_id: str, status: str, additional_data: Dict[st
             'date_updated': datetime.now().isoformat()
         }
         # Note: additional_data processing can be added here if schema permits
-        
-        _db.update_row(
-            settings.database_id,
-            settings.collection_id_applications,
-            app_id,
-            data=data
-        )
+
+        _applications_repo.update(app_id, data)
     except Exception as e:
         logger.error(f"Failed to update application status {app_id}: {e}")
 
@@ -234,15 +198,8 @@ def get_applications(status: Optional[str] = None) -> List[Dict[str, Any]]:
         queries = [Query.order_desc('date_created')]
         if status:
             queries.append(Query.equal('status', status))
-            
-        result = _db.list_rows(
-            settings.database_id,
-            settings.collection_id_applications,
-            queries=queries
-        )
-        # TablesDB returns 'rows' instead of 'documents' in the new API
-        rows = result.get('rows', result.get('documents', []))
-        return [doc for doc in rows]
+
+        return _applications_repo.list(queries)
     except Exception as e:
         logger.error(f"Failed to get applications: {e}")
         return []
@@ -250,15 +207,7 @@ def get_applications(status: Optional[str] = None) -> List[Dict[str, Any]]:
 def get_application_stats() -> Dict[str, int]:
     """Get application statistics"""
     try:
-        # Appwrite limitation: No direct group_by in simple API. 
-        # For small datasets, client-side aggregation is acceptable.
-        result = _db.list_rows(
-             settings.database_id,
-             settings.collection_id_applications,
-             queries=[Query.limit(5000)]
-        )
-        # TablesDB returns 'rows' instead of 'documents' in the new API
-        docs = result.get('rows', result.get('documents', []))
+        docs = _applications_repo.list([Query.limit(5000)])
         stats = {'total': len(docs)}
         for doc in docs:
             s = doc.get('status', 'unknown')
@@ -276,22 +225,16 @@ def get_engagement_analytics(days: int = 30) -> Dict[str, Any]:
             Query.greater_than_equal('date_created', cutoff),
             Query.limit(5000)
         ]
-        result = _db.list_rows(
-            settings.database_id,
-            settings.collection_id_applications,
-            queries=queries
-        )
-        
-        # TablesDB returns 'rows' instead of 'documents' in the new API
-        rows = result.get('rows', result.get('documents', []))
+        rows = _applications_repo.list(queries)
+
         daily_counts = {}
         for doc in rows:
             # Assuming ISO format YYYY-MM-DD...
-            date_str = doc['date_created'][:10] 
+            date_str = doc['date_created'][:10]
             daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
-            
+
         return {
-            'total_applications': result['total'],
+            'total_applications': len(rows),
             'daily_activity': [{'date': k, 'count': v} for k, v in daily_counts.items()]
         }
     except Exception as e:
@@ -301,23 +244,16 @@ def get_engagement_analytics(days: int = 30) -> Dict[str, Any]:
 def get_application_heatmap() -> Dict[str, Any]:
     """Get application heatmap data (activity by day of week)"""
     try:
-        result = _db.list_rows(
-            settings.database_id,
-            settings.collection_id_applications,
-            queries=[Query.limit(5000)]
-        )
-        
-        # TablesDB returns 'rows' instead of 'documents' in the new API
-        rows = result.get('rows', result.get('documents', []))
-        heatmap = {} 
+        rows = _applications_repo.list([Query.limit(5000)])
+        heatmap = {}
         for doc in rows:
-             try:
-                 dt = datetime.fromisoformat(doc['date_created'])
-                 day = dt.strftime('%A')
-                 heatmap[day] = heatmap.get(day, 0) + 1
-             except:
-                 pass
-             
+            try:
+                dt = datetime.fromisoformat(doc['date_created'])
+                day = dt.strftime('%A')
+                heatmap[day] = heatmap.get(day, 0) + 1
+            except Exception:
+                pass
+
         return heatmap
     except Exception as e:
         logger.error(f"Failed to get heatmap: {e}")
@@ -326,13 +262,10 @@ def get_application_heatmap() -> Dict[str, Any]:
 def track_view(app_id: str):
     """Increment view count for an application"""
     try:
-        doc = _db.get_row(settings.database_id, settings.collection_id_applications, app_id)
+        doc = _applications_repo.get(app_id)
+        if not doc:
+            return
         current_views = doc.get('views', 0) or 0
-        _db.update_row(
-            settings.database_id,
-            settings.collection_id_applications,
-            app_id,
-            data={'views': current_views + 1}
-        )
+        _applications_repo.update(app_id, {'views': current_views + 1})
     except Exception as e:
         logger.error(f"Failed to track view for {app_id}: {e}")

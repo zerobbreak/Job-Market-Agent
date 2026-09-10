@@ -7,14 +7,10 @@ Ported from: routes/file_routes.py
 from __future__ import annotations
 
 import logging
-import os
 import tempfile
 
-import requests as _req
-from appwrite.client import Client
-from appwrite.services.storage import Storage
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 
 from app.core.config import Settings, get_settings
 from app.core.dependencies import CurrentUser
@@ -84,42 +80,27 @@ async def download_signed(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _download_storage_file(file_id: str, bucket_id: str, settings: Settings):
-    """Stream a file from Appwrite Storage."""
+    """Stream a file from local volume storage."""
+    from app.repositories.storage_repo import StorageRepository
+
     try:
-        client = Client()
-        client.set_endpoint(settings.appwrite_api_endpoint)
-        client.set_project(settings.appwrite_project_id)
-        client.set_key(settings.appwrite_api_key)
+        storage_repo = StorageRepository(settings)
+        file_path = storage_repo.get_file_path(file_id)
+        if not file_path:
+            raise NotFoundError("File")
 
-        storage = Storage(client)
-        file_info = storage.get_file(bucket_id, file_id)
-        filename = file_info.get("name", "download")
+        info = storage_repo.get_file_info(file_id) or {}
+        filename = info.get("filename") or "download"
 
-        url = f"{settings.appwrite_api_endpoint}/storage/buckets/{bucket_id}/files/{file_id}/download"
-        headers = {
-            "X-Appwrite-Project": settings.appwrite_project_id,
-            "X-Appwrite-Key": settings.appwrite_api_key,
-        }
-
-        r = _req.get(url, headers=headers, stream=True)
-        if r.status_code != 200:
-            raise ExternalServiceError("Appwrite Storage", f"HTTP {r.status_code}")
-
-        def generate():
-            for chunk in r.iter_content(chunk_size=8192):
-                yield chunk
-
-        return StreamingResponse(
-            generate(),
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Content-Type": "application/octet-stream",
-            },
+        return FileResponse(
+            file_path,
+            filename=filename,
+            media_type=info.get("content_type") or "application/octet-stream",
         )
-    except ExternalServiceError:
+    except NotFoundError:
         raise
     except Exception as e:
-        raise ExternalServiceError("Appwrite Storage", str(e))
+        raise ExternalServiceError("Storage", str(e))
 
 
 def _download_preview_file(job_id: str, doc_type: str):

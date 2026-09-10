@@ -46,4 +46,3 @@ def setup_logging(settings: Settings) -> None:
     # Quiet noisy libraries
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("appwrite").setLevel(logging.WARNING)

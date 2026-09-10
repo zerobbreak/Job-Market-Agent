@@ -8,11 +8,9 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from appwrite.client import Client
-from appwrite.query import Query
-
 from app.core.config import Settings
-from app.repositories.base import AppwriteRepository
+from app.repositories.postgres_base import PostgresRepository
+from app.repositories.query import Query
 
 logger = logging.getLogger(__name__)
 
@@ -50,31 +48,17 @@ PROFILE_ALLOWED_FIELDS = {
 }
 
 
-class ProfileRepository(AppwriteRepository):
+class ProfileRepository(PostgresRepository):
     """Repository for 'profiles' collection."""
 
-    def __init__(self, client: Client, settings: Settings):
-        super().__init__(
-            client=client,
-            database_id=settings.database_id,
-            collection_id=settings.collection_id_profiles,
-        )
+    def __init__(self, settings: Settings):
+        super().__init__(collection=settings.collection_id_profiles)
 
     def _sanitize_profile_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
         clean = {k: v for k, v in data.items() if k in PROFILE_ALLOWED_FIELDS}
         dropped = sorted([k for k in data.keys() if k not in clean])
         if dropped:
             logger.warning("Dropping non-profile fields: %s", ", ".join(dropped))
-        return clean
-
-    def _sanitize_against_existing_row(self, data: Dict[str, Any], row: Dict[str, Any]) -> Dict[str, Any]:
-        """When schema-read scopes are missing, use existing row keys as safe update fields."""
-        row_keys = {k for k in row.keys() if not k.startswith("$")}
-        row_keys.add("user_id")
-        clean = {k: v for k, v in data.items() if k in row_keys}
-        dropped = sorted([k for k in data.keys() if k not in clean])
-        if dropped:
-            logger.warning("Dropping fields not present on existing profile row: %s", ", ".join(dropped))
         return clean
 
     def get_by_user_id(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -98,7 +82,6 @@ class ProfileRepository(AppwriteRepository):
         payload = self._sanitize_profile_payload(payload)
 
         if profile:
-            payload = self._sanitize_against_existing_row(payload, profile)
             return self.update(profile["$id"], payload)
 
         return self.create(payload)

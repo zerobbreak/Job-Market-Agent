@@ -30,34 +30,34 @@ OptionalUser = Annotated[AuthenticatedUser | None, Depends(get_optional_user)]
 # --- Repository Dependencies ---
 
 
-def get_job_repo(user: CurrentUser, settings: SettingsDep):
+def get_job_repo(settings: SettingsDep):
     from app.repositories.job_repo import JobRepository
 
-    return JobRepository(user.client, settings)
+    return JobRepository(settings)
 
 
-def get_app_repo(user: CurrentUser, settings: SettingsDep):
+def get_app_repo(settings: SettingsDep):
     from app.repositories.application_repo import ApplicationRepository
 
-    return ApplicationRepository(user.client, settings)
+    return ApplicationRepository(settings)
 
 
-def get_profile_repo(user: CurrentUser, settings: SettingsDep):
+def get_profile_repo(settings: SettingsDep):
     from app.repositories.profile_repo import ProfileRepository
 
-    return ProfileRepository(user.client, settings)
+    return ProfileRepository(settings)
 
 
-def get_match_repo(user: CurrentUser, settings: SettingsDep):
+def get_match_repo(settings: SettingsDep):
     from app.repositories.match_repo import MatchRepository
 
-    return MatchRepository(user.client, settings)
+    return MatchRepository(settings)
 
 
-def get_storage_repo(user: CurrentUser, settings: SettingsDep):
+def get_storage_repo(settings: SettingsDep):
     from app.repositories.storage_repo import StorageRepository
 
-    return StorageRepository(user.client, settings)
+    return StorageRepository(settings)
 
 JobRepo = Annotated["JobRepository", Depends(get_job_repo)]
 AppRepo = Annotated["ApplicationRepository", Depends(get_app_repo)]

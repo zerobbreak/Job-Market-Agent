@@ -30,16 +30,13 @@ class Settings(BaseSettings):
     debug: bool = False
     port: int = 8000
 
-    # -- Security --------------------------------------------------------
+    # -- Security ----------------------------------------------------------
+    # Also used to sign auth JWTs and password-reset/verification tokens
+    # (see app/core/security.py) — set a real random value in production.
     secret_key: str = Field(default="change-me-in-production")
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:8000")
     signed_url_secret: Optional[str] = None
     signed_url_expiry_seconds: int = 3600
-    otp_expiry_seconds: int = 300
-
-    # -- Appwrite (Auth only — JWT validation via Account API) -----------
-    appwrite_api_endpoint: str = Field(default="https://cloud.appwrite.io/v1")
-    appwrite_project_id: str = Field(default="")
 
     # -- Database (Postgres) ----------------------------------------------
     database_url: str = Field(default="", alias="DATABASE_URL")

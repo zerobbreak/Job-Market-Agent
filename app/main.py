@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     # Ensure required directories exist
     os.makedirs(settings.upload_folder, exist_ok=True)
     os.makedirs(settings.scraper_cache_dir, exist_ok=True)
+    os.makedirs(settings.storage_volume_path, exist_ok=True)
     os.makedirs("applications", exist_ok=True)
 
     # Start background task manager

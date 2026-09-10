@@ -1,9 +1,7 @@
 import hmac
 import hashlib
 import time
-import os
 from urllib.parse import urlencode
-from flask import request
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -33,11 +31,8 @@ def generate_signed_url(file_id: str, bucket_id: str, file_type: str = 'storage'
     }
     
     if not base_url:
-        try:
-            base_url = request.host_url.rstrip('/')
-        except RuntimeError:
-            base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
-    
+        base_url = settings.api_base_url.rstrip('/')
+
     if not base_url.startswith('http'):
         base_url = f"http://{base_url}"
     

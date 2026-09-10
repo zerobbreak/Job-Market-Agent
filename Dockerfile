@@ -32,7 +32,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p applications cvs job_cache uploads
+RUN mkdir -p applications cvs job_cache uploads storage
 
 # Expose port (Railway will set the PORT environment variable)
 EXPOSE 8000

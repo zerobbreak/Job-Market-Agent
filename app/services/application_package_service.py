@@ -104,17 +104,14 @@ class ApplicationPackageService:
             if cv_success:
                 cv_storage_id = self.storage_repo.upload_file(
                     file_path=str(cv_pdf_path),
-                    bucket_id=self.settings.bucket_id_cvs
+                    bucket_id="cvs",
                 )
-            
+
             cl_storage_id = None
             if cl_success:
                 cl_storage_id = self.storage_repo.upload_file(
                     file_path=str(cl_pdf_path),
-                    bucket_id=self.settings.bucket_id_cvs # Assuming CLs go to same bucket or a CL bucket
-                ) or self.storage_repo.upload_file(
-                    file_path=str(cl_pdf_path),
-                    bucket_id=getattr(self.settings, 'bucket_id_covers', self.settings.bucket_id_cvs)
+                    bucket_id="cover_letters",
                 )
 
             # 6. Save Metadata locally (optional but kept for heritage)

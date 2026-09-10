@@ -16,12 +16,6 @@ from app.utils.pdf_generator import PDFGenerator
 from app.utils.scraping import extract_skills_from_description
 from app.utils.ai_retries import retry_ai_call
 from app.services.matching_service import SemanticMatcher
-from appwrite.services.tables_db import TablesDB  # type: ignore
-from appwrite.services.databases import Databases  # type: ignore  # Still needed for schema operations
-from appwrite.services.storage import Storage  # type: ignore
-from appwrite.query import Query  # type: ignore
-from appwrite.id import ID  # type: ignore
-from appwrite.client import Client  # type: ignore
 import threading
 from dataclasses import asdict
 
@@ -92,221 +86,49 @@ def parse_profile(profile_output):
 
 
 def ensure_database_schema():
-    """Ensure Appwrite schema exists."""
+    """Ensure the Postgres schema exists (idempotent)."""
     global _schema_ensured
     if _schema_ensured:
         return
 
+    if os.getenv("SKIP_SCHEMA_CHECK") == "true":
+        logger.info("SKIP_SCHEMA_CHECK is set. Skipping schema ensuring.")
+        _schema_ensured = True
+        return
+
     try:
-        api_key = settings.appwrite_api_key
-        if not api_key:
-            logger.warning("APPWRITE_API_KEY not found. Schema checks skipped.")
-            return
+        from app.core.database import init_db
 
-        if os.getenv("SKIP_SCHEMA_CHECK") == "true":
-            logger.info("SKIP_SCHEMA_CHECK is set. Skipping schema ensuring.")
-            _schema_ensured = True
-            return
-
-        admin_client = Client()
-        admin_client.set_endpoint(settings.appwrite_api_endpoint)
-        admin_client.set_project(settings.appwrite_project_id)
-        admin_client.set_key(api_key)
-        
-        # Modern TablesDB API for schema and data
-        tablesDB = TablesDB(admin_client)
-
-        # Cache for existing columns and indexes to avoid repetitive API calls
-        collection_cache = {}
-
-        def _get_collection_info(coll_id):
-            if coll_id in collection_cache:
-                return collection_cache[coll_id]
-            
-            try:
-                # Use list_columns (modern API)
-                cols_result = tablesDB.list_columns(settings.database_id, coll_id)
-                columns = {col['key'] for col in cols_result.get('columns', [])}
-                
-                idxs_result = tablesDB.list_indexes(settings.database_id, coll_id)
-                indexes = {idx['key'] for idx in idxs_result.get('indexes', [])}
-                
-                info = {'columns': columns, 'indexes': indexes}
-                collection_cache[coll_id] = info
-                return info
-            except Exception as e:
-                logger.error(f"Error fetching collection info for {coll_id}: {e}")
-                return {'columns': set(), 'indexes': set()}
-
-        def _create_attr(coll_id, attr_id, size, required=False):
-            info = _get_collection_info(coll_id)
-            if attr_id in info['columns']:
-                return
-            
-            try:
-                logger.info(f"Creating column {attr_id} in {coll_id}...")
-                tablesDB.create_string_column(
-                    settings.database_id, 
-                    coll_id, 
-                    attr_id, 
-                    size=size, 
-                    required=required
-                )
-                # Update cache
-                info['columns'].add(attr_id)
-            except Exception as e:
-                # Handle "already exists" error gracefully if it somehow bypassed the check
-                if "already exists" in str(e).lower():
-                    info['columns'].add(attr_id)
-                    return
-                logger.error(f"Failed to create column '{attr_id}': {e}")
-
-        def _create_index(coll_id, index_key, attr_ids, index_type='key'):
-            info = _get_collection_info(coll_id)
-            if index_key in info['indexes']:
-                return
-            
-            try:
-                logger.info(f"Creating index {index_key} on {coll_id}...")
-                tablesDB.create_index(
-                    settings.database_id,
-                    coll_id,
-                    index_key,
-                    index_type,
-                    attr_ids
-                )
-                # Update cache
-                info['indexes'].add(index_key)
-            except Exception as e:
-                if "already exists" in str(e).lower():
-                    info['indexes'].add(index_key)
-                    return
-                logger.error(f"Failed to create index '{index_key}' on {coll_id}: {e}")
-
-        # Profiles Collection Schema
-        _create_attr(settings.collection_id_profiles, 'education', 2000)
-        _create_attr(settings.collection_id_profiles, 'experience_level', 255)
-        _create_attr(settings.collection_id_profiles, 'career_goals', 2000)
-        _create_attr(settings.collection_id_profiles, 'strengths', 2500)
-        _create_attr(settings.collection_id_profiles, 'cv_hash', 64)
-        _create_attr(settings.collection_id_profiles, 'name', 255)
-        _create_attr(settings.collection_id_profiles, 'email', 255)
-        _create_attr(settings.collection_id_profiles, 'phone', 50)
-        _create_attr(settings.collection_id_profiles, 'location', 255)
-        _create_attr(settings.collection_id_profiles, 'user_id', 50, True)
-        _create_attr(settings.collection_id_profiles, 'ai_analysis', 2500, False)
-        # Do not auto-create large optional columns here; some deployed tables are at column limits.
-        # Profile writes are sanitized at repository layer for schema compatibility.
-        _create_index(settings.collection_id_profiles, 'user_id_index', ['user_id'])
-        _create_index(settings.collection_id_profiles, 'userId_index', ['userId'])
-
-        # Jobs Collection Schema
-        _create_attr(settings.collection_id_jobs, 'status', 50, False)
-        
-        # Integer attribute
-        job_info = _get_collection_info(settings.collection_id_jobs)
-        if 'progress' not in job_info['columns']:
-            try:
-                tablesDB.create_integer_column(
-                    settings.database_id, 
-                    settings.collection_id_jobs, 
-                    'progress', 
-                    required=False, 
-                    min=0, 
-                    max=100, 
-                    default=0
-                )
-                job_info['columns'].add('progress')
-            except Exception as e:
-                if "already exists" in str(e).lower():
-                    job_info['columns'].add('progress')
-                else:
-                    logger.error(f"Failed to create integer column 'progress': {e}")
-
-        _create_attr(settings.collection_id_jobs, 'phase', 255, False)
-        _create_attr(settings.collection_id_jobs, 'job_data', 10000, False)
-        _create_attr(settings.collection_id_jobs, 'result', 10000, False)
-        _create_attr(settings.collection_id_jobs, 'template_type', 50, False)
-        _create_attr(settings.collection_id_jobs, 'user_id', 50, False)
-        _create_attr(settings.collection_id_jobs, 'error', 5000, False)
-        _create_index(settings.collection_id_jobs, 'user_id_index', ['user_id'])
-
-        # Matches Collection Schema
-        _create_attr(settings.collection_id_matches, 'user_id', 50, True)
-        _create_attr(settings.collection_id_matches, 'location', 255, False)
-        _create_attr(settings.collection_id_matches, 'matches', 10000, False)
-        _create_attr(settings.collection_id_matches, 'last_seen', 50, False)
-        _create_index(settings.collection_id_matches, 'user_id_index', ['user_id'])
-        _create_index(settings.collection_id_matches, 'userId_index', ['userId'])
-
-        # Applications Collection Schema
-        _create_attr(settings.collection_id_applications, 'user_id', 50, True)
-        _create_attr(settings.collection_id_applications, 'company', 255, False)
-        _create_attr(settings.collection_id_applications, 'role', 255, False)
-        _create_attr(settings.collection_id_applications, 'job_url', 500, False)
-        _create_attr(settings.collection_id_applications, 'location', 255, False)
-        _create_attr(settings.collection_id_applications, 'status', 50, False)
-        _create_attr(settings.collection_id_applications, 'date_created', 50, False)
-        _create_attr(settings.collection_id_applications, 'date_updated', 50, False)
-        _create_attr(settings.collection_id_applications, 'cv_storage_id', 50, False)
-        _create_attr(settings.collection_id_applications, 'cover_letter_storage_id', 50, False)
-        _create_attr(settings.collection_id_applications, 'job_description', 5000, False)
-        _create_index(settings.collection_id_applications, 'user_id_index', ['user_id'])
-        _create_index(settings.collection_id_applications, 'userId_index', ['userId'])
-        
-        # Integer columns for Applications
-        app_info = _get_collection_info(settings.collection_id_applications)
-        for int_col in ['match_score', 'ats_score', 'views']:
-            if int_col not in app_info['columns']:
-                try:
-                    tablesDB.create_integer_column(settings.database_id, settings.collection_id_applications, int_col, required=False)
-                    app_info['columns'].add(int_col)
-                except Exception as e:
-                    if "already exists" in str(e).lower():
-                        app_info['columns'].add(int_col)
-                    else:
-                        logger.error(f"Failed to create integer column '{int_col}': {e}")
-        
-        _create_index(settings.collection_id_applications, 'match_score_index', ['match_score'])
-        
-        logger.info("Database schema ensured (Modern Check with Indexes)")
+        init_db()
+        logger.info("Database schema ensured (Postgres)")
         _schema_ensured = True
     except Exception as e:
         logger.error(f"ensure_database_schema error: {e}")
 
-def _rehydrate_pipeline_from_profile(session_id: str, client) -> 'JobApplicationPipeline | None':
+def _rehydrate_pipeline_from_profile(session_id: str) -> 'JobApplicationPipeline | None':
     try:
         logger.info(f"Attempting rehydration for user {session_id}")
-        tablesDB = TablesDB(client)
-        storage = Storage(client)
-        
-        existing_profiles = tablesDB.list_rows(
-            settings.database_id,
-            settings.collection_id_profiles,
-            queries=[Query.equal('user_id', session_id)]
-        )
+        from app.repositories.profile_repo import ProfileRepository
+        from app.repositories.storage_repo import StorageRepository
 
-        if existing_profiles.get('total', 0) == 0:
+        profile_repo = ProfileRepository(settings)
+        storage_repo = StorageRepository(settings)
+
+        doc = profile_repo.get_by_user_id(session_id)
+        if not doc:
             logger.info("No profile document found in DB")
             return None
-        
-        # TablesDB returns 'rows' instead of 'documents' in the new API
-        rows = existing_profiles.get('rows', existing_profiles.get('documents', []))
-        if not rows:
-            logger.info("No profile rows found in DB")
-            return None
-            
-        doc = rows[0]
+
         file_id = doc.get('cv_file_id')
         cv_text = doc.get('cv_text')
-        
+
         logger.info(f"Rehydration: file_id={file_id}, cv_text length={len(cv_text) if cv_text else 0}")
-        
+
         if cv_text:
             logger.info("Rehydrating from stored cv_text")
             pipeline = JobApplicationPipeline()
             pipeline.build_profile(cv_text)
-            
+
             with store_lock:
                 pipeline_store[session_id] = pipeline
                 profile_store[session_id] = {
@@ -317,31 +139,15 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> 'JobApplication
                     'file_id': file_id
                 }
             return pipeline
-        
+
         if file_id:
-            logger.info(f"Downloading CV file {file_id} for rehydration")
+            logger.info(f"Loading CV file {file_id} for rehydration")
             try:
-                tmp_dir = settings.upload_folder
-                os.makedirs(tmp_dir, exist_ok=True)
-                tmp_name = f"rehydrated_{session_id}_{file_id}.pdf"
-                cv_path = os.path.join(tmp_dir, tmp_name)
-                
-                # Check if file exists and is valid size (>1KB)
-                if not os.path.exists(cv_path) or os.path.getsize(cv_path) < 1024:
-                    logger.info(f"Starting download of file {file_id} from bucket {settings.bucket_id}...")
-                    try:
-                         data = storage.get_file_download(bucket_id=settings.bucket_id, file_id=file_id)
-                         with open(cv_path, 'wb') as f:
-                             f.write(data)
-                         logger.info(f"Download completed: {cv_path} ({os.path.getsize(cv_path)} bytes)")
-                    except Exception as download_error:
-                         logger.error(f"Download failed for file_id {file_id}: {download_error}")
-                         import traceback
-                         logger.error(traceback.format_exc())
-                         return None
-                else:
-                     logger.info(f"Using cached file: {cv_path}")
-                
+                cv_path = storage_repo.get_file_path(file_id)
+                if not cv_path:
+                    logger.error(f"Stored file not found for file_id {file_id}")
+                    return None
+
                 pipeline = JobApplicationPipeline(cv_path=cv_path)
                 logger.info("Loading CV content...")
                 cv_content = pipeline.load_cv()
@@ -351,7 +157,7 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> 'JobApplication
                 logger.info("Building profile from CV...")
                 pipeline.build_profile(cv_content)
                 logger.info("Profile built successfully.")
-                
+
                 with store_lock:
                     pipeline_store[session_id] = pipeline
                     profile_store[session_id] = {
@@ -364,12 +170,12 @@ def _rehydrate_pipeline_from_profile(session_id: str, client) -> 'JobApplication
                 logger.info(f"Rehydration successful: stored {len(cv_content)} chars in profile_store")
                 return pipeline
             except Exception as e:
-                logger.error(f"Download rehydration failed: {e}")
+                logger.error(f"Rehydration from file failed: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
         else:
             logger.warning("No file_id found in profile document - cannot rehydrate from file")
-                
+
         return None
     except Exception as e:
         logger.error(f"Rehydration overall failure: {e}")

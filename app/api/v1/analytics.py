@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 import logging
 
-from appwrite.id import ID
-from appwrite.services.tables_db import TablesDB
 from fastapi import APIRouter, Depends
 
 from app.core.config import Settings, get_settings
@@ -37,22 +35,21 @@ async def track_event(
 ):
     """Record an analytics event."""
     try:
-        tables_db = TablesDB(user.client)
-        tables_db.create_row(
-            settings.appwrite_db_id,
-            settings.collection_id_analytics,
-            ID.unique(),
-            data={
-                "userId": user.id,
+        from app.repositories.postgres_base import PostgresRepository
+
+        repo = PostgresRepository(collection=settings.collection_id_analytics)
+        repo.create(
+            {
+                "user_id": user.id,
                 "event": body.event,
                 "properties": json.dumps(body.properties),
                 "page": body.page or "",
-            },
+            }
         )
         return SuccessResponse()
     except Exception as e:
         logger.error("Error tracking event: %s", e)
-        raise ExternalServiceError("Appwrite", str(e))
+        raise ExternalServiceError("Database", str(e))
 
 
 @router.get("/engagement", response_model=EngagementAnalyticsResponse)

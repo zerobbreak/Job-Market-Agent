@@ -99,7 +99,7 @@ class ProfileService:
     async def list_profiles(self, user_id: str) -> list:
         """List all CV profiles for the given user."""
         try:
-            from appwrite.query import Query
+            from app.repositories.query import Query
             results = self.profile_repo.list([Query.equal("user_id", user_id)])
             if not results:
                 results = self.profile_repo.list([Query.equal("userId", user_id)])
