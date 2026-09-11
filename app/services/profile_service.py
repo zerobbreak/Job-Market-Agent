@@ -124,12 +124,19 @@ class ProfileService:
             return False
 
     async def delete_profile(self, user_id: str, profile_id: str) -> bool:
-        """Delete a profile, checking it belongs to the user first."""
+        """Delete a profile and its associated CV file, checking it belongs to the user first."""
         try:
             profile = self.profile_repo.get(profile_id)
             if not profile or profile.get("user_id") != user_id:
                 return False
-            return self.profile_repo.delete(profile_id)
+
+            deleted = self.profile_repo.delete(profile_id)
+            if deleted:
+                cv_file_id = profile.get("cv_file_id")
+                if cv_file_id:
+                    self.storage_repo.delete_file(cv_file_id, bucket_id="cvs")
+
+            return deleted
         except Exception as e:
             logger.error("Error deleting profile %s: %s", profile_id, e)
             return False

@@ -16,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.core.dependencies import CurrentUser, ProfileRepo, ProfileServiceDep, get_cv_service
+from app.core.dependencies import CurrentUser, ProfileRepo, ProfileServiceDep, StorageRepo, get_cv_service
 from app.core.exceptions import (
     BadRequestError,
     ExternalServiceError,
@@ -90,6 +90,7 @@ async def analyze_cv(
     user: CurrentUser,
     profile_service: ProfileServiceDep,
     profile_repo: ProfileRepo,
+    storage_repo: StorageRepo,
     cv_file: UploadFile = File(...),
 ):
     """Upload and analyze a CV file, then persist it for job matching."""
@@ -125,6 +126,17 @@ async def analyze_cv(
         file_hash = hashlib.sha256(content).hexdigest()
         ai_analysis = generate_ai_analysis(profile)
 
+        file_id = storage_repo.upload_file(temp_path, bucket_id="cvs")
+        if file_id:
+            logger.info("[PIPELINE] CV stored: user=%s file_id=%s", user.id, file_id)
+        else:
+            logger.warning("[PIPELINE] CV storage upload failed: user=%s", user.id)
+
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+
         profile_payload = {
             "name": str(profile.get("name", "") or "").strip(),
             "email": str(profile.get("email", "") or "").strip(),
@@ -140,6 +152,7 @@ async def analyze_cv(
             "has_cv": True,
             "cv_filename": filename,
             "cv_hash": file_hash,
+            "cv_file_id": file_id,
             "ai_analysis": json.dumps(ai_analysis) if ai_analysis else None,
         }
 
