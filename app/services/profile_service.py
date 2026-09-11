@@ -134,7 +134,7 @@ class ProfileService:
             if deleted:
                 cv_file_id = profile.get("cv_file_id")
                 if cv_file_id:
-                    self.storage_repo.delete_file(cv_file_id, bucket_id="cvs")
+                    self.storage_repo.delete_file(cv_file_id, bucket_id=f"cvs/{user_id}")
 
             return deleted
         except Exception as e:

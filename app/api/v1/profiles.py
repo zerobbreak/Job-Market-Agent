@@ -126,7 +126,7 @@ async def analyze_cv(
         file_hash = hashlib.sha256(content).hexdigest()
         ai_analysis = generate_ai_analysis(profile)
 
-        file_id = storage_repo.upload_file(temp_path, bucket_id="cvs")
+        file_id = storage_repo.upload_file(temp_path, bucket_id=f"cvs/{user.id}")
         if file_id:
             logger.info("[PIPELINE] CV stored: user=%s file_id=%s", user.id, file_id)
         else:
