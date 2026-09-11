@@ -38,9 +38,10 @@ async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────────────────
     setup_logging(settings)
     logger.info(
-        "Starting Job Market Agent API [env=%s, port=%d]",
+        "Starting Job Market Agent API [env=%s, port=%d, base_url=%s]",
         settings.environment,
         settings.port,
+        settings.effective_api_base_url,
     )
 
     # Ensure required directories exist
