@@ -35,9 +35,9 @@ class ApplicationService:
         for doc in results:
             applications.append({
                 "id": doc["$id"],
-                "jobTitle": doc.get("jobTitle", "Unknown Position"),
+                "jobTitle": doc.get("role", "Unknown Position"),
                 "company": doc.get("company", "Unknown Company"),
-                "jobUrl": doc.get("jobUrl", ""),
+                "jobUrl": doc.get("job_url", ""),
                 "location": doc.get("location", ""),
                 "status": doc.get("status", "applied"),
                 "appliedDate": doc.get("$createdAt", "").split("T")[0],
@@ -63,7 +63,7 @@ class ApplicationService:
         if not doc:
             return False, "Application not found"
 
-        if doc.get("userId") != user_id:
+        if doc.get("user_id") != user_id:
             return False, "Forbidden"
 
         success = self.app_repo.update(application_id, {"status": new_status})

@@ -18,7 +18,6 @@ from app.core.dependencies import CurrentUser, JobServiceDep, CVServiceDep, Matc
 from app.core.exceptions import ExternalServiceError, NotFoundError
 from app.schemas.common import SuccessResponse
 from app.schemas.job import (
-    JobSearchResponse,
     JobSearchRequest,
     JobMatchResponse,
     JobMatchRequest,
@@ -33,20 +32,22 @@ logger = logging.getLogger(__name__)
 
 # ── Search ────────────────────────────────────────────────────────────────────
 
-@router.post("/search", response_model=JobSearchResponse)
+@router.post("/search", response_model=JobMatchResponse)
 async def search_jobs(
     body: JobSearchRequest,
     user: CurrentUser,
     job_service: JobServiceDep,
 ):
-    """Search for jobs using jobspy scraper."""
+    """Search for jobs using jobspy scraper, scored against the user's profile."""
     # This currently still uses the legacy pipeline inside JobService
     result = await job_service.search_and_match(user.id, body)
     if not result.get("success"):
         raise ExternalServiceError("Job Search", result.get("error", "Unknown error"))
-    
-    return JobSearchResponse(
-        jobs=result.get("matches", []),
+
+    # search_and_match returns match objects (each with a nested `job`), not
+    # flat job listings, so this must use the same shape as /jobs/matches.
+    return JobMatchResponse(
+        matches=result.get("matches", []),
         total=result.get("total_matches", 0),
         cached=False,
     )

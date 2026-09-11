@@ -59,54 +59,88 @@ class SemanticMatcher:
                 logger.warning(f"Failed to init Gemini for embeddings: {e}")
 
     def get_embedding(self, text: str) -> Optional[np.ndarray]:
-        """Get vector embedding from Gemini with rate limiting"""
-        if not self.client or not text:
-            return None
-        
-        self._wait_for_rate_limit()
-        
-        try:
-            # gemini-embedding-001 is optimized for retrieval/similarity
-            response = self.client.models.embed_content(
-                model="gemini-embedding-001",
-                contents=text
-            )
-            return np.array(response.embeddings[0].values)
-        except Exception as e:
-            logger.warning(f"Embedding API error: {e}")
-            return None
+        """Get a single vector embedding from Gemini with rate limiting"""
+        vectors = self.get_embeddings_batch([text])
+        return vectors[0] if vectors else None
+
+    def get_embeddings_batch(self, texts: List[str]) -> List[Optional[np.ndarray]]:
+        """
+        Get vector embeddings for multiple texts in as few Gemini calls as
+        possible, instead of one call (and one rate-limit wait) per text.
+        """
+        if not self.client:
+            return [None] * len(texts)
+
+        results: List[Optional[np.ndarray]] = [None] * len(texts)
+        indexed = [(i, t) for i, t in enumerate(texts) if t]
+        if not indexed:
+            return results
+
+        # gemini-embedding-001 accepts a batch of contents per request.
+        batch_size = 100
+        for start in range(0, len(indexed), batch_size):
+            chunk = indexed[start:start + batch_size]
+            self._wait_for_rate_limit()
+            try:
+                response = self.client.models.embed_content(
+                    model="gemini-embedding-001",
+                    contents=[t for _, t in chunk],
+                )
+                for (i, _), embedding in zip(chunk, response.embeddings):
+                    results[i] = np.array(embedding.values)
+            except Exception as e:
+                logger.warning(f"Batch embedding API error: {e}")
+        return results
 
     def calculate_match(self, profile: Dict[str, Any], job: Dict[str, Any]) -> MatchScore:
         """
-        Calculate comprehensive match score using Hybrid Search.
+        Calculate comprehensive match score for a single job using Hybrid Search.
         """
+        profile_vec = self.get_embedding(self._profile_to_text(profile))
+        job_vec = self.get_embedding(self._job_to_text(job))
+        return self._score_from_vectors(profile, job, profile_vec, job_vec)
+
+    def calculate_matches(self, profile: Dict[str, Any], jobs: List[Dict[str, Any]]) -> List[MatchScore]:
+        """
+        Calculate match scores for many jobs against one profile, embedding
+        the profile once and all job texts in a single batched call instead
+        of two Gemini calls per job.
+        """
+        profile_vec = self.get_embedding(self._profile_to_text(profile))
+        job_vecs = self.get_embeddings_batch([self._job_to_text(job) for job in jobs])
+        return [
+            self._score_from_vectors(profile, job, profile_vec, job_vec)
+            for job, job_vec in zip(jobs, job_vecs)
+        ]
+
+    def _score_from_vectors(
+        self,
+        profile: Dict[str, Any],
+        job: Dict[str, Any],
+        profile_vec: Optional[np.ndarray],
+        job_vec: Optional[np.ndarray],
+    ) -> MatchScore:
         reasons = []
         breakdown = {}
 
         # 1. Semantic Score (Embeddings)
         semantic_score = 0.0
         try:
-            profile_text = self._profile_to_text(profile)
-            job_text = self._job_to_text(job)
-            
-            profile_vec = self.get_embedding(profile_text)
-            job_vec = self.get_embedding(job_text)
-            
             if profile_vec is not None and job_vec is not None:
                 similarity = np.dot(profile_vec, job_vec) / (np.linalg.norm(profile_vec) * np.linalg.norm(job_vec))
                 semantic_score = max(0.0, float(similarity) * 100)
-                
+
                 # Boost strong matches to separate from noise (Calibration)
                 if semantic_score > 70:
                     semantic_score = min(100, semantic_score + 15) # 74 -> 89
                 elif semantic_score < 50:
                     semantic_score = max(0, semantic_score - 10) # 41 -> 31
-                
+
                 if semantic_score > 75:
                     reasons.append("Strong semantic match with job description.")
         except Exception as e:
             logger.warning(f"Semantic match failed: {e}")
-        
+
         breakdown['semantic'] = semantic_score
 
         # 2. Skills Match (Keyword Overlap)

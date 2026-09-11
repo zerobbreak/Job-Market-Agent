@@ -165,6 +165,9 @@ job_cache/
 preview_jobs_data/
 *.log
 
+# Local file storage volume (uploaded CVs, generated application PDFs)
+storage/
+
 # Generated Applications
 applications/*.pdf
 applications/*.txt

@@ -82,14 +82,13 @@ class JobService:
         if not jobs:
             return {"success": True, "matches": [], "total_matches": 0, "message": "No jobs found"}
 
-        # 3. Semantic scoring
+        # 3. Semantic scoring (profile embedded once, job texts embedded in one batch)
         matcher = SemanticMatcher()
+        open_jobs = [job for job in jobs if not job.get("is_closed")]
+        match_results = matcher.calculate_matches(profile_data, open_jobs)
+
         matched_jobs = []
-        for job in jobs:
-            if job.get("is_closed"):
-                continue
-            
-            match_result = matcher.calculate_match(profile_data, job)
+        for job, match_result in zip(open_jobs, match_results):
             if match_result.total_score >= 0.0:  # In production we might use a threshold
                 job["match_score"] = match_result.total_score
                 job["match_reasons"] = match_result.explanation

@@ -36,7 +36,7 @@ def generate_signed_url(file_id: str, bucket_id: str, file_type: str = 'storage'
     if not base_url.startswith('http'):
         base_url = f"http://{base_url}"
     
-    return f"{base_url}/api/files/download-signed?{urlencode(params)}"
+    return f"{base_url}/api/v1/files/download-signed?{urlencode(params)}"
 
 def validate_signed_url(file_id: str, bucket_id: str, file_type: str, 
                         expires: int, signature: str) -> bool:
