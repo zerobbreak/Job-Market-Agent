@@ -86,6 +86,18 @@ async def lifespan(app: FastAPI):
     logger.info("Job Market Agent API shut down")
 
 
+OPENAPI_TAGS = [
+    {"name": "Health", "description": "Service liveness checks."},
+    {"name": "Auth", "description": "Registration, JWT login, and account management (fastapi-users)."},
+    {"name": "Profiles", "description": "Candidate profile creation and CV-derived profile data."},
+    {"name": "Jobs", "description": "Job search, matching, and auto-apply preview."},
+    {"name": "Applications", "description": "Tailored CVs, cover letters, and application tracking."},
+    {"name": "Analytics", "description": "Usage and outcome analytics."},
+    {"name": "Files", "description": "File upload/download and signed URL access."},
+    {"name": "Admin", "description": "Administrative endpoints."},
+]
+
+
 def create_app() -> FastAPI:
     """Application factory — builds the FastAPI instance."""
     settings = get_settings()
@@ -96,6 +108,7 @@ def create_app() -> FastAPI:
         version="2.0.0",
         docs_url="/docs" if not settings.is_production else None,
         redoc_url="/redoc" if not settings.is_production else None,
+        openapi_tags=OPENAPI_TAGS,
         lifespan=lifespan,
     )
 
