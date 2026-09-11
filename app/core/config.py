@@ -71,7 +71,14 @@ class Settings(BaseSettings):
     bucket_region: str = Field(default="auto", alias="BUCKET_REGION")
 
     # Public base URL this API is reachable at — used to build signed file URLs.
-    api_base_url: str = Field(default="http://localhost:8000", alias="API_BASE_URL")
+    # Left unset by default so the Railway fallback below can kick in; only
+    # set API_BASE_URL explicitly to override it (e.g. a custom domain).
+    api_base_url: str = Field(default="", alias="API_BASE_URL")
+
+    # Railway sets this automatically for any service with a public domain
+    # (e.g. "job-market-agent-production.up.railway.app") — used as a
+    # fallback for api_base_url when that isn't explicitly configured.
+    railway_public_domain: str = Field(default="", alias="RAILWAY_PUBLIC_DOMAIN")
 
     # -- Job Search Defaults --------------------------------------------
     cv_file_path: str = "cvs/CV.pdf"
@@ -108,6 +115,14 @@ class Settings(BaseSettings):
     @property
     def effective_signed_url_secret(self) -> str:
         return self.signed_url_secret or self.secret_key
+
+    @property
+    def effective_api_base_url(self) -> str:
+        if self.api_base_url:
+            return self.api_base_url
+        if self.railway_public_domain:
+            return f"https://{self.railway_public_domain}"
+        return "http://localhost:8000"
 
     @property
     def is_production(self) -> bool:

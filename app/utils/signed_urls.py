@@ -31,7 +31,7 @@ def generate_signed_url(file_id: str, bucket_id: str, file_type: str = 'storage'
     }
     
     if not base_url:
-        base_url = settings.api_base_url.rstrip('/')
+        base_url = settings.effective_api_base_url.rstrip('/')
 
     if not base_url.startswith('http'):
         base_url = f"http://{base_url}"

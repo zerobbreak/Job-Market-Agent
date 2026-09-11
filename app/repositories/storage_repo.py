@@ -154,4 +154,4 @@ class StorageRepository:
 
     def get_file_download_url(self, file_id: str, bucket_id: str = None) -> str:
         """Build the app's signed-URL download path for a stored file."""
-        return f"{self.settings.api_base_url}/api/v1/files/signed-url?file_id={file_id}&bucket_id={bucket_id or ''}"
+        return f"{self.settings.effective_api_base_url}/api/v1/files/signed-url?file_id={file_id}&bucket_id={bucket_id or ''}"
