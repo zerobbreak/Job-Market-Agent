@@ -14,7 +14,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.core.config import Settings, get_settings
-from app.core.dependencies import CurrentUser, JobServiceDep, CVServiceDep, MatchRepo, JobRepo
+from app.core.dependencies import CurrentUser, JobServiceDep, CVServiceDep, MatchRepo, JobRepo, ProfileRepo
 from app.core.exceptions import BadRequestError, ExternalServiceError, NotFoundError
 from app.schemas.common import SuccessResponse
 from app.schemas.job import (
@@ -142,6 +142,8 @@ async def start_apply_preview(
     body: ApplyPreviewRequest,
     user: CurrentUser,
     cv_service: CVServiceDep,
+    profile_repo: ProfileRepo,
+    job_repo: JobRepo,
     background_tasks: BackgroundTasks,
 ):
     """Start preview document generation (CV + cover letter) for a job."""
@@ -149,20 +151,45 @@ async def start_apply_preview(
     job_key = f"{body.job.get('title', '')}-{body.job.get('company', '')}-{user.id}"
     job_id = hashlib.md5(job_key.encode()).hexdigest()
 
-    # Get profile data for tailoring
-    from app.repositories.profile_repo import ProfileRepository
-    from app.core.dependencies import get_profile_repo, get_settings
-    
-    # We need profile repo but it's not injected here. We can use specialized injection or just get it.
-    # Actually, we should probably have ProfileService handle this.
-    
-    # For now, assuming cv_service can get what it needs or we pass it
-    # We'll need the raw CV text which is in the profile
-    
-    # Trigger background task
-    # background_tasks.add_task(cv_service.generate_preview, ...)
-    
+    profile = profile_repo.get_by_user_id(user.id)
+    cv_text = profile.get("cv_text") if profile else None
+    if not profile or not cv_text:
+        raise BadRequestError("A CV is required to generate an application preview. Please upload a CV first.")
+
+    profile_data = {
+        "name": profile.get("name", ""),
+        "email": profile.get("email", ""),
+        "skills": profile_repo._deserialize(profile.get("skills", "[]")),
+        "experience_level": profile.get("experience_level", ""),
+        "education": profile.get("education", ""),
+        "career_goals": profile.get("career_goals", ""),
+        "location": profile.get("location", ""),
+        "strengths": profile_repo._deserialize(profile.get("strengths", "[]")),
+    }
+
+    job_repo.save_state(job_id, {
+        "title": body.job.get("title", "Preview Job"),
+        "company": body.job.get("company", "Unknown"),
+        "status": "initializing",
+        "progress": 0,
+        "phase": "Starting preview generation",
+        "job_data": body.job,
+        "template_type": body.template_type,
+        "user_id": user.id,
+    })
+
+    background_tasks.add_task(
+        cv_service.generate_preview,
+        job_id,
+        user.id,
+        body.job,
+        body.template_type,
+        profile_data,
+        cv_text,
+    )
+
     return PreviewStatusResponse(
+        job_id=job_id,
         status="initializing",
         progress=0,
         phase="Starting preview generation",
@@ -172,11 +199,12 @@ async def start_apply_preview(
 @router.get("/apply-preview/{job_id}/status", response_model=PreviewStatusResponse)
 async def get_preview_status(job_id: str, user: CurrentUser, job_repo: JobRepo):
     """Get status of a preview generation job."""
-    state = job_repo.get(job_id)
+    state = job_repo.load_state(job_id)
     if not state:
         raise NotFoundError("Preview job")
 
     return PreviewStatusResponse(
+        job_id=job_id,
         status=state.get("status", "unknown"),
         progress=state.get("progress", 0),
         phase=state.get("phase"),

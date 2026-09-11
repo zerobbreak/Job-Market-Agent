@@ -136,6 +136,8 @@ async def analyze_cv(
             "strengths": json.dumps(profile.get("strengths", []) or []),
             "profile_summary": str(profile.get("summary") or profile.get("career_goals", "") or "").strip(),
             "career_goals": str(profile.get("career_goals", "") or "").strip(),
+            "cv_text": cv_content or "",
+            "has_cv": True,
             "cv_filename": filename,
             "cv_hash": file_hash,
             "ai_analysis": json.dumps(ai_analysis) if ai_analysis else None,

@@ -101,6 +101,7 @@ class PreviewStatusResponse(BaseModel):
     """Status of a preview generation job."""
 
     success: bool = True
+    job_id: Optional[str] = None
     status: str = "unknown"
     progress: int = 0
     phase: Optional[str] = None
