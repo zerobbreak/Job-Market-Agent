@@ -30,3 +30,4 @@ psycopg2-binary
 alembic
 asyncpg
 fastapi-users[sqlalchemy]
+boto3

@@ -57,8 +57,18 @@ class Settings(BaseSettings):
     max_file_size: int = Field(default=10 * 1024 * 1024, description="10 MB")
     allowed_extensions: str = "pdf,doc,docx"
 
-    # -- Storage (local volume, e.g. a mounted Railway Volume) -------------
+    # -- Storage -------------------------------------------------------------
+    # Local volume fallback (e.g. a mounted Railway Volume), used when no
+    # bucket is configured below — handy for local dev without cloud creds.
     storage_volume_path: str = Field(default="storage", alias="STORAGE_VOLUME_PATH")
+
+    # S3-compatible bucket (e.g. a Railway Bucket). When bucket_name is set,
+    # StorageRepository uploads/downloads there instead of the local volume.
+    bucket_endpoint: str = Field(default="", alias="BUCKET_ENDPOINT")
+    bucket_access_key_id: str = Field(default="", alias="BUCKET_ACCESS_KEY_ID")
+    bucket_secret_access_key: str = Field(default="", alias="BUCKET_SECRET_ACCESS_KEY")
+    bucket_name: str = Field(default="", alias="BUCKET_NAME")
+    bucket_region: str = Field(default="auto", alias="BUCKET_REGION")
 
     # Public base URL this API is reachable at — used to build signed file URLs.
     api_base_url: str = Field(default="http://localhost:8000", alias="API_BASE_URL")
