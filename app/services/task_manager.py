@@ -9,7 +9,7 @@ import time
 import logging
 from datetime import datetime
 from app.core.config import get_settings
-from app.repositories.postgres_base import PostgresRepository
+from app.repositories.job_repo import JobRepository
 from app.repositories.query import Query
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class TaskManager:
     def __init__(self):
         self._stop_event = threading.Event()
         self._thread = None
-        self._jobs_repo = PostgresRepository(collection=settings.collection_id_jobs)
+        self._jobs_repo = JobRepository(settings)
         self.active_tasks = 0
         self.total_tasks_processed = 0
         self.lock = threading.Lock()

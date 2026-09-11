@@ -59,13 +59,12 @@ async def search_jobs(
 async def get_cached_matches(user: CurrentUser, match_repo: MatchRepo):
     """Internal helper to retrieve cached matches."""
     try:
-        doc = match_repo.get_user_matches(user.id)
-        if not doc:
+        matches = match_repo.get_user_matches(user.id)
+        if not matches:
             return JobMatchResponse(matches=[], total=0, cached=True)
-        
-        matches = match_repo._deserialize(doc.get("matches", "[]"))
-        match_repo.update_last_seen(doc["$id"])
-        
+
+        match_repo.update_last_seen(user.id)
+
         return JobMatchResponse(
             matches=matches,
             total=len(matches),

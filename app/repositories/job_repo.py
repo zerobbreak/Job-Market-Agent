@@ -8,16 +8,19 @@ import logging
 from typing import Any, Dict, Optional
 
 from app.core.config import Settings
-from app.repositories.postgres_base import PostgresRepository
+from app.core.database import Job
+from app.repositories.postgres_base import TypedRepository
 
 logger = logging.getLogger(__name__)
 
 
-class JobRepository(PostgresRepository):
-    """Repository for the 'jobs' collection."""
+class JobRepository(TypedRepository):
+    """Repository for CV/cover-letter preview job state (table: jobs)."""
+
+    model = Job
 
     def __init__(self, settings: Settings):
-        super().__init__(collection=settings.collection_id_jobs)
+        super().__init__()
 
     def save_state(self, job_id: str, state: Dict[str, Any]) -> bool:
         """Ported from job_store.py:save_job_state."""

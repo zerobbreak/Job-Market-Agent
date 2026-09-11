@@ -9,7 +9,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
 from app.core.config import get_settings
-from app.repositories.postgres_base import PostgresRepository
+from app.repositories.application_repo import ApplicationRepository
+from app.repositories.job_repo import JobRepository
 from app.repositories.query import Query
 from app.repositories.storage_repo import StorageRepository
 
@@ -17,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-_jobs_repo = PostgresRepository(collection=settings.collection_id_jobs)
-_applications_repo = PostgresRepository(collection=settings.collection_id_applications)
+_jobs_repo = JobRepository(settings)
+_applications_repo = ApplicationRepository(settings)
 _storage_repo = StorageRepository(settings)
 
 # --- Helper Functions ---

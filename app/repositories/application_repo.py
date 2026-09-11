@@ -9,17 +9,20 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import Settings
-from app.repositories.postgres_base import PostgresRepository
+from app.core.database import Application
+from app.repositories.postgres_base import TypedRepository
 from app.repositories.query import Query
 
 logger = logging.getLogger(__name__)
 
 
-class ApplicationRepository(PostgresRepository):
-    """Repository for 'applications' collection."""
+class ApplicationRepository(TypedRepository):
+    """Repository for the 'applications' table."""
+
+    model = Application
 
     def __init__(self, settings: Settings):
-        super().__init__(collection=settings.collection_id_applications)
+        super().__init__()
 
     def save_application(
         self,

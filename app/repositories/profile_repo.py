@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from app.core.config import Settings
-from app.repositories.postgres_base import PostgresRepository
+from app.core.database import Profile
+from app.repositories.postgres_base import TypedRepository
 from app.repositories.query import Query
 
 logger = logging.getLogger(__name__)
@@ -48,11 +49,13 @@ PROFILE_ALLOWED_FIELDS = {
 }
 
 
-class ProfileRepository(PostgresRepository):
-    """Repository for 'profiles' collection."""
+class ProfileRepository(TypedRepository):
+    """Repository for the 'profiles' table."""
+
+    model = Profile
 
     def __init__(self, settings: Settings):
-        super().__init__(collection=settings.collection_id_profiles)
+        super().__init__()
 
     def _sanitize_profile_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
         clean = {k: v for k, v in data.items() if k in PROFILE_ALLOWED_FIELDS}
