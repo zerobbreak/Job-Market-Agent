@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }} - CV</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm 1.8cm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', 'Calibri', 'Helvetica Neue', sans-serif;
+            color: #000000;
+            line-height: 1.6;
+            font-size: 11pt;
+            background: #ffffff;
+        }
+        
+        /* Header Section - ATS-Optimized */
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #2c3e50;
+        }
+        
+        h1 {
+            font-size: 22pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            color: #1a252f;
+            letter-spacing: 1px;
+        }
+        
+        .subtitle {
+            font-size: 13pt;
+            color: #34495e;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+        
+        .contact-header {
+            font-size: 10pt;
+            line-height: 1.8;
+            color: #2c3e50;
+            margin-top: 8px;
+        }
+        
+        .contact-header span {
+            margin: 0 8px;
+        }
+        
+        .contact-header a {
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        
+        .contact-header a:hover {
+            text-decoration: underline;
+        }
+
+        /* Section Headings - Proper ATS Hierarchy */
+        h2 {
+            font-size: 13pt;
+            font-weight: 600;
+            border-bottom: 1.5px solid #2c3e50;
+            margin-top: 22px;
+            margin-bottom: 12px;
+            padding-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #1a252f;
+        }
+        
+        h2:first-of-type {
+            margin-top: 0;
+        }
+        
+        h3 {
+            font-size: 11.5pt;
+            font-weight: 600;
+            margin-top: 16px;
+            margin-bottom: 6px;
+            color: #2c3e50;
+        }
+        
+        h4 {
+            font-size: 10.5pt;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-bottom: 5px;
+            color: #34495e;
+        }
+        
+        /* Content Styling */
+        p {
+            margin-bottom: 10px;
+            text-align: left;
+            line-height: 1.7;
+        }
+        
+        ul {
+            padding-left: 22px;
+            margin-top: 8px;
+            margin-bottom: 15px;
+            list-style-type: disc;
+        }
+        
+        li {
+            margin-bottom: 6px;
+            line-height: 1.7;
+        }
+        
+        ol {
+            padding-left: 22px;
+            margin-top: 8px;
+            margin-bottom: 15px;
+        }
+        
+        ol li {
+            margin-bottom: 6px;
+            line-height: 1.7;
+        }
+
+        /* Experience/Project Formatting */
+        .experience-item, .project-item {
+            margin-bottom: 18px;
+        }
+        
+        .meta-info {
+            color: #555555;
+            font-size: 10pt;
+            font-style: italic;
+            margin-bottom: 6px;
+        }
+
+        /* Links */
+        a {
+            color: #2c3e50;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Strong emphasis */
+        strong {
+            font-weight: 600;
+        }
+
+        /* Print Optimizations */
+        @media print {
+            body {
+                font-size: 11pt;
+            }
+            
+            h2 {
+                page-break-after: avoid;
+            }
+            
+            .experience-item, .project-item {
+                page-break-inside: avoid;
+            }
+        }
+
+        /* Section spacing */
+        .section {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ name }}</h1>
+        <div class="subtitle">{{ title }}</div>
+        <div class="contact-header">
+            <span>{{ email }}</span> • 
+            <span>{{ phone }}</span> • 
+            <span>{{ location }}</span>
+            <div style="margin-top: 6px;">{{ contact_extra }}</div>
+        </div>
+    </header>
+    
+    {{ content }}
+</body>
+</html>

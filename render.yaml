@@ -4,7 +4,7 @@ services:
     name: job-market-backend
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api_server:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
     envVars:
       - key: PORT
         value: 8000

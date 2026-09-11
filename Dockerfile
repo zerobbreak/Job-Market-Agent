@@ -32,11 +32,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p applications cvs job_cache uploads
+RUN mkdir -p applications cvs job_cache uploads storage
 
 # Expose port (Railway will set the PORT environment variable)
 EXPOSE 8000
 
 # Start command using Gunicorn with shell to properly expand PORT variable
 # Railway will provide the PORT environment variable
-CMD sh -c "gunicorn main:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 4 --timeout 120 --access-logfile - --error-logfile - --log-level info"
+CMD sh -c "gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120 --access-logfile - --error-logfile - --log-level info"
