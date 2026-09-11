@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 
 from app.core.config import Settings, get_settings
 from app.core.dependencies import CurrentUser, JobServiceDep, CVServiceDep, MatchRepo, JobRepo
-from app.core.exceptions import ExternalServiceError, NotFoundError
+from app.core.exceptions import BadRequestError, ExternalServiceError, NotFoundError
 from app.schemas.common import SuccessResponse
 from app.schemas.job import (
     JobSearchRequest,
@@ -38,10 +38,14 @@ async def search_jobs(
     user: CurrentUser,
     job_service: JobServiceDep,
 ):
-    """Search for jobs using jobspy scraper, scored against the user's profile."""
+    """Search for jobs using jobspy scraper. Scored against the user's profile
+    when one exists, otherwise scored against the search query itself — a
+    profile is not required to search."""
     # This currently still uses the legacy pipeline inside JobService
     result = await job_service.search_and_match(user.id, body)
     if not result.get("success"):
+        if result.get("error_code") == "query_required":
+            raise BadRequestError(result.get("error", "A search query is required"))
         raise ExternalServiceError("Job Search", result.get("error", "Unknown error"))
 
     # search_and_match returns match objects (each with a nested `job`), not

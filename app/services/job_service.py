@@ -33,22 +33,44 @@ class JobService:
     async def search_and_match(
         self, user_id: str, request: JobSearchRequest
     ) -> Dict[str, Any]:
-        """Perform fresh job search and semantic matching."""
-        # 1. Get user profile
-        profile = self.profile_repo.get_by_user_id(user_id)
-        if not profile:
-            return {"success": False, "error": "Profile not found. Please upload a CV first."}
+        """Perform fresh job search and semantic matching.
 
-        profile_data = {
-            "name": profile.get("name", ""),
-            "email": profile.get("email", ""),
-            "skills": self.profile_repo._deserialize(profile.get("skills", "[]")),
-            "experience_level": profile.get("experience_level", ""),
-            "education": profile.get("education", ""),
-            "career_goals": profile.get("career_goals", ""),
-            "location": profile.get("location", request.location or "South Africa"),
-            "strengths": self.profile_repo._deserialize(profile.get("strengths", "[]")),
-        }
+        A profile is optional: with one, results are scored against the
+        user's skills/experience; without one, plain keyword/location
+        search still works, scored against the search query itself.
+        """
+        # 1. Get user profile (optional — search works without it)
+        profile = self.profile_repo.get_by_user_id(user_id)
+
+        if profile:
+            profile_data = {
+                "name": profile.get("name", ""),
+                "email": profile.get("email", ""),
+                "skills": self.profile_repo._deserialize(profile.get("skills", "[]")),
+                "experience_level": profile.get("experience_level", ""),
+                "education": profile.get("education", ""),
+                "career_goals": profile.get("career_goals", ""),
+                "location": profile.get("location", request.location or "South Africa"),
+                "strengths": self.profile_repo._deserialize(profile.get("strengths", "[]")),
+            }
+        else:
+            if not request.query.strip():
+                return {
+                    "success": False,
+                    "error_code": "query_required",
+                    "error": "A search query is required when no profile exists. "
+                    "Either provide a query or upload a CV first.",
+                }
+            profile_data = {
+                "name": "",
+                "email": "",
+                "skills": [],
+                "experience_level": "",
+                "education": "",
+                "career_goals": request.query.strip(),
+                "location": request.location or "South Africa",
+                "strengths": [],
+            }
 
         # 2. Orchestrate search via existing pipeline (to be refactored later)
         from app.services.pipeline_service import JobApplicationPipeline
