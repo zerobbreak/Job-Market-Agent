@@ -145,6 +145,13 @@ def create_app() -> FastAPI:
     async def api_health():
         return {"status": "running"}
 
+    # Polled by the frontend to detect a new deploy while the user is on the
+    # page (build_version changes on every deploy) so it can show a
+    # non-blocking "an update is available" notice.
+    @app.get("/api/version", tags=["Health"])
+    async def api_version():
+        return {"version": settings.build_version}
+
     return app
 
 

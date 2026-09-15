@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from functools import lru_cache
 from typing import List, Optional
 
@@ -20,6 +21,18 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
+
+# Captured once per process, so a plain restart (even without a matching
+# platform commit-sha env var below) is still enough to change build_version.
+_PROCESS_STARTED_AT = str(int(time.time()))
+
+# Checked in order — whichever the current deploy platform sets.
+_COMMIT_SHA_ENV_VARS = (
+    "RAILWAY_GIT_COMMIT_SHA",
+    "RENDER_GIT_COMMIT",
+    "VERCEL_GIT_COMMIT_SHA",
+    "GIT_COMMIT_SHA",
+)
 
 
 class Settings(BaseSettings):
@@ -127,6 +140,19 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def build_version(self) -> str:
+        """Identifier that changes on every deploy, for the frontend's update-available check.
+
+        Prefers the deploy platform's commit sha (set automatically by Railway/Render/Vercel);
+        falls back to this process's start time, which still changes on a plain restart.
+        """
+        for var in _COMMIT_SHA_ENV_VARS:
+            sha = os.getenv(var, "").strip()
+            if sha:
+                return sha[:12]
+        return _PROCESS_STARTED_AT
 
     # -- Validation ------------------------------------------------------
 
