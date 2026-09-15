@@ -76,11 +76,11 @@ async def update_profile(
         profile = await profile_service.get_current_profile(user.id)
         return ProfileResponse(profile=profile or {})
 
-    updated_profile = await profile_service.update_profile(user.id, update_data)
-    if not updated_profile:
+    result = await profile_service.update_profile(user.id, update_data)
+    if not result.get("success"):
         raise NotFoundError("Profile")
 
-    return ProfileResponse(profile=updated_profile)
+    return ProfileResponse(profile=result.get("profile") or {})
 
 
 # -- POST /profiles/cv/analyze -------------------------------------------------
